@@ -11,6 +11,7 @@ from ai.chronon.repo.hub_runner import hub
 from ai.chronon.repo.init import main as init_cmd
 from ai.chronon.repo.init_agent import init_agent
 from ai.chronon.repo.run import main as run_main
+from ai.chronon.repo.status import status
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -32,6 +33,7 @@ zipline.add_command(run_main)
 zipline.add_command(hub)
 zipline.add_command(admin)
 zipline.add_command(init_agent)
+zipline.add_command(status)
 
 admin.add_command(init_cmd)
 
