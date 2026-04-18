@@ -189,6 +189,60 @@ After enabling online serving, you may be interested in the online offline consi
 
 See details on how to do that [here](../management_in_production/Online_Offline_Consistency.md).
 
+## Status
+
+The `zipline status` command checks the current state of a deployed `GroupBy` job — either the batch upload to the KV store or the streaming consumer lag.
+
+### Upload-to-KV Status
+
+Checks whether batch data has been uploaded to the KV store by fetching the `GroupByServingInfo`:
+
+```bash
+zipline status compiled/group_bys/team/your_group_by.v1 --mode upload-to-kv
+```
+
+Sample output:
+```json
+{"batchEndDate":"2024-06-15"}
+```
+
+If the serving info cannot be fetched (e.g. batch upload hasn't run yet), the output contains an error message instead:
+```json
+{"error":"Failed to get serving info for team.your_group_by. Make sure batch upload has completed successfully."}
+```
+
+### Streaming Status
+
+Checks the Kafka consumer lag for a streaming `GroupBy`:
+
+```bash
+zipline status compiled/group_bys/team/your_group_by.v1 --mode streaming
+```
+
+Sample output:
+```json
+{"lag":42}
+```
+
+A lag of `0` means the streaming job is fully caught up. A lag of `-1` means the consumer group has no committed offsets (the streaming job likely hasn't started):
+```json
+{"lag":-1}
+```
+
+### Options
+
+| Option | Description |
+|---|---|
+| `--mode` | Required. `upload-to-kv` or `streaming`. |
+| `--repo` | Path to the chronon repo root. Default: `.` |
+| `--online-jar` | Path to the online jar. Required when `CLOUD_PROVIDER` is not set. Can also be set via `CHRONON_ONLINE_JAR` env var. |
+| `--online-class` | Api implementation class. Required for `upload-to-kv` when `CLOUD_PROVIDER` is not set. Can also be set via `CHRONON_ONLINE_CLASS` env var. |
+| `--artifact-prefix` | Remote artifact URI for cloud jar downloads. |
+| `--version` | Chronon version for cloud jar downloads. |
+| `--enable-debug` | Enables verbose debug logging. |
+
+When `CLOUD_PROVIDER` is set (e.g. `GCP`, `AWS`, `AZURE`), the required jars and online class are resolved automatically using `--artifact-prefix` and `--version`. In OSS environments without a cloud provider, you must supply `--online-jar` (and `--online-class` for `upload-to-kv`) explicitly.
+
 ## Useful tips to work with Chronon
 
 ### Getting the argument list
