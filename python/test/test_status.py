@@ -5,6 +5,8 @@ from click.testing import CliRunner
 
 from ai.chronon.repo.status import status
 
+MOCK_CHECK_CALL = "ai.chronon.repo.status.subprocess.check_call"
+
 
 @pytest.fixture
 def runner():
@@ -72,7 +74,7 @@ class TestOssPath:
         assert result.exit_code != 0
         assert "--online-class" in result.output
 
-    @patch("ai.chronon.repo.status.check_call")
+    @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)
     @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
     def test_streaming_does_not_require_online_class(self, mock_resolve, mock_env, mock_call, runner):
@@ -88,7 +90,7 @@ class TestOssPath:
 
 
 class TestCloudProviderPath:
-    @patch("ai.chronon.repo.status.check_call")
+    @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status._resolve_cloud_jars",
            return_value=("/tmp/cloud.jar:/tmp/service.jar", "ai.chronon.integrations.cloud_gcp.GcpApiImpl"))
     @patch("ai.chronon.repo.status.get_environ_arg", return_value="GCP")
@@ -97,11 +99,13 @@ class TestCloudProviderPath:
         result = runner.invoke(status, [
             "compiled/group_bys/team/my_gb",
             "--mode", "upload-to-kv",
+            "--artifact-prefix", "gs://bucket/artifacts",
+            "--version", "1.0.0",
         ])
         assert result.exit_code == 0
         cmd = mock_call.call_args[0][0]
         assert "/tmp/cloud.jar:/tmp/service.jar" in cmd
-        assert "GcpApiImpl" in cmd
+        assert "ai.chronon.integrations.cloud_gcp.GcpApiImpl" in cmd
 
     @patch("ai.chronon.repo.status.get_environ_arg", return_value="UNSUPPORTED_CLOUD")
     @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
@@ -109,6 +113,8 @@ class TestCloudProviderPath:
         result = runner.invoke(status, [
             "compiled/group_bys/team/my_gb",
             "--mode", "upload-to-kv",
+            "--artifact-prefix", "gs://bucket/artifacts",
+            "--version", "1.0.0",
         ])
         assert result.exit_code != 0
         assert "Unsupported cloud provider" in result.output
@@ -118,7 +124,7 @@ class TestCloudProviderPath:
 
 
 class TestCommandConstruction:
-    @patch("ai.chronon.repo.status.check_call")
+    @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)
     @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
     def test_upload_to_kv_includes_online_class(self, mock_resolve, mock_env, mock_call, runner):
@@ -130,9 +136,10 @@ class TestCommandConstruction:
         ])
         assert result.exit_code == 0
         cmd = mock_call.call_args[0][0]
-        assert "--online-class com.example.MyApi" in cmd
+        assert "--online-class" in cmd
+        assert "com.example.MyApi" in cmd
 
-    @patch("ai.chronon.repo.status.check_call")
+    @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)
     @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
     def test_streaming_does_not_include_online_class(self, mock_resolve, mock_env, mock_call, runner):
@@ -145,7 +152,7 @@ class TestCommandConstruction:
         cmd = mock_call.call_args[0][0]
         assert "--online-class" not in cmd
 
-    @patch("ai.chronon.repo.status.check_call")
+    @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)
     @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
     def test_enable_debug_flag_passed(self, mock_resolve, mock_env, mock_call, runner):
@@ -159,7 +166,7 @@ class TestCommandConstruction:
         cmd = mock_call.call_args[0][0]
         assert "--enable-debug" in cmd
 
-    @patch("ai.chronon.repo.status.check_call")
+    @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)
     @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
     def test_custom_repo_path_passed(self, mock_resolve, mock_env, mock_call, runner):
@@ -171,9 +178,10 @@ class TestCommandConstruction:
         ])
         assert result.exit_code == 0
         cmd = mock_call.call_args[0][0]
-        assert "--repo /custom/repo" in cmd
+        assert "--repo" in cmd
+        assert "/custom/repo" in cmd
 
-    @patch("ai.chronon.repo.status.check_call")
+    @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)
     @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
     def test_entrypoint_class_in_command(self, mock_resolve, mock_env, mock_call, runner):
@@ -186,12 +194,25 @@ class TestCommandConstruction:
         cmd = mock_call.call_args[0][0]
         assert "ai.chronon.online.status.StatusMain" in cmd
 
+    @patch(MOCK_CHECK_CALL)
+    @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)
+    @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
+    def test_command_is_a_list(self, mock_resolve, mock_env, mock_call, runner):
+        result = runner.invoke(status, [
+            "compiled/group_bys/team/my_gb",
+            "--mode", "streaming",
+            "--online-jar", "/tmp/my.jar",
+        ])
+        assert result.exit_code == 0
+        cmd = mock_call.call_args[0][0]
+        assert isinstance(cmd, list)
+
 
 # --- Env var fallback ---
 
 
 class TestEnvVarFallback:
-    @patch("ai.chronon.repo.status.check_call")
+    @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)
     @patch("ai.chronon.repo.status.resolve_conf", return_value="compiled/group_bys/team/my_gb")
     def test_chronon_online_jar_env_var_used(self, mock_resolve, mock_env, mock_call, runner):

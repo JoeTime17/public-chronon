@@ -1,4 +1,6 @@
+import logging
 import os
+import subprocess
 
 import click
 
@@ -21,7 +23,9 @@ from ai.chronon.repo.gcp import (
     ZIPLINE_GCP_SERVICE_JAR,
     GcpRunner,
 )
-from ai.chronon.repo.utils import check_call, get_environ_arg, resolve_conf
+from ai.chronon.repo.utils import get_environ_arg, resolve_conf
+
+LOG = logging.getLogger(__name__)
 
 STATUS_MODES = ["upload-to-kv", "streaming"]
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -121,9 +125,12 @@ def status(conf, mode, repo, online_jar, online_class, artifact_prefix, version,
     ]
 
     if mode == "upload-to-kv":
+        if online_jar:
+            cmd.extend(["--online-jar", online_jar])
         cmd.extend(["--online-class", online_class])
 
     if enable_debug:
         cmd.append("--enable-debug")
 
-    check_call(" ".join(cmd))
+    LOG.info("Running command: %s", " ".join(cmd))
+    subprocess.check_call(cmd, bufsize=0)
