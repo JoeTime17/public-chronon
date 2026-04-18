@@ -16,7 +16,7 @@ from ai.chronon.repo.azure_runner import (
     ZIPLINE_AZURE_SERVICE_JAR,
     AzureRunner,
 )
-from ai.chronon.repo.constants import AWS, AZURE, GCP, CLOUD_PROVIDER_KEYWORD, ZIPLINE_DIRECTORY
+from ai.chronon.repo.constants import AWS, AZURE, CLOUD_PROVIDER_KEYWORD, GCP, ZIPLINE_DIRECTORY
 from ai.chronon.repo.gcp import (
     ZIPLINE_GCP_JAR_DEFAULT,
     ZIPLINE_GCP_ONLINE_CLASS_DEFAULT,
