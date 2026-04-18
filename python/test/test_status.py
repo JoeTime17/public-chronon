@@ -46,7 +46,7 @@ class TestConfValidation:
             "--mode", "upload-to-kv",
         ])
         assert result.exit_code != 0
-        assert "group_bys" in result.output
+        assert "group_by" in result.output
 
 
 # --- OSS path (no CLOUD_PROVIDER) ---

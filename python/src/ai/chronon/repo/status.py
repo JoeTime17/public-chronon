@@ -86,10 +86,9 @@ def status(conf, mode, repo, online_jar, online_class, artifact_prefix, version,
     """
     conf = resolve_conf(repo, conf)
 
-    # TODO: support join confs in addition to group_by confs
-    if "group_bys" not in conf:
+    if "compiled/group_by" not in conf:
         raise click.BadParameter(
-            "status only supports group_by confs; path must contain 'group_bys'",
+            "status only supports group_by confs (e.g. compiled/group_bys/team/name)",
             param_hint="CONF",
         )
 
