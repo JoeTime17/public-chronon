@@ -10,6 +10,7 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.File
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 import scala.reflect.internal.util.ScalaClassLoader
 import scala.util.{Failure, Success, Try}
@@ -55,8 +56,10 @@ object StatusMain {
   }
 
   def main(baseArgs: Array[String]): Unit = {
-    println(run(baseArgs))
-    System.exit(0)
+    val result = run(baseArgs)
+    println(result)
+    val exitCode = if (result.contains(""""error":""")) 1 else 0
+    System.exit(exitCode)
   }
 
   private[online] def run(baseArgs: Array[String]): String = {
@@ -156,7 +159,7 @@ object StatusMain {
       val consumerOffsets = adminClient
         .listConsumerGroupOffsets(consumerGroup)
         .partitionsToOffsetAndMetadata()
-        .get()
+        .get(30, TimeUnit.SECONDS)
         .asScala
         .filter { case (tp, _) => tp.topic() == topic }
 
@@ -168,7 +171,7 @@ object StatusMain {
       val endOffsets = adminClient
         .listOffsets(consumerOffsets.keys.map(_ -> OffsetSpec.latest()).toMap.asJava)
         .all()
-        .get()
+        .get(30, TimeUnit.SECONDS)
         .asScala
 
       consumerOffsets.map { case (tp, om) =>

@@ -109,17 +109,17 @@ def status(conf, mode, repo, online_jar, online_class, artifact_prefix, version,
             )
         classpath = online_jar
 
-    cmd = (
-        f"java -cp {classpath} {STATUS_ENTRYPOINT}"
-        f" --mode {mode}"
-        f" --conf-path {conf}"
-        f" --repo {repo}"
-    )
+    cmd = [
+        "java", "-cp", classpath, STATUS_ENTRYPOINT,
+        "--mode", mode,
+        "--conf-path", conf,
+        "--repo", repo,
+    ]
 
     if mode == "upload-to-kv":
-        cmd += f" --online-class {online_class}"
+        cmd.extend(["--online-class", online_class])
 
     if enable_debug:
-        cmd += " --enable-debug"
+        cmd.append("--enable-debug")
 
-    check_call(cmd)
+    check_call(" ".join(cmd))
