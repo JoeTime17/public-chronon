@@ -138,6 +138,8 @@ class TestCommandConstruction:
         cmd = mock_call.call_args[0][0]
         assert "--online-class" in cmd
         assert "com.example.MyApi" in cmd
+        assert "-cp" in cmd
+        assert "/tmp/my.jar" in cmd
 
     @patch(MOCK_CHECK_CALL)
     @patch("ai.chronon.repo.status.get_environ_arg", return_value=None)

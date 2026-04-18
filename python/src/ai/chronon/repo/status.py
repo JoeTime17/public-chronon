@@ -86,7 +86,8 @@ def status(conf, mode, repo, online_jar, online_class, artifact_prefix, version,
     """
     conf = resolve_conf(repo, conf)
 
-    if "compiled/group_by" not in conf:
+    conf_parts = os.path.normpath(conf).split(os.sep)
+    if "group_bys" not in conf_parts:
         raise click.BadParameter(
             "status only supports group_by confs (e.g. compiled/group_bys/team/name)",
             param_hint="CONF",
