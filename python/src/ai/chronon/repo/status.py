@@ -92,6 +92,10 @@ def status(conf, mode, repo, online_jar, online_class, artifact_prefix, version,
     cloud_provider = get_environ_arg(CLOUD_PROVIDER_KEYWORD, ignoreError=True)
 
     if cloud_provider:
+        if not artifact_prefix:
+            raise click.UsageError("--artifact-prefix (or ARTIFACT_PREFIX) is required when CLOUD_PROVIDER is set")
+        if not version:
+            raise click.UsageError("--version (or VERSION) is required when CLOUD_PROVIDER is set")
         os.makedirs(ZIPLINE_DIRECTORY, exist_ok=True)
         classpath, online_class = _resolve_cloud_jars(
             cloud_provider, artifact_prefix, version
