@@ -198,7 +198,11 @@ The `zipline status` command checks the current state of a deployed `GroupBy` jo
 Checks whether batch data has been uploaded to the KV store by fetching the `GroupByServingInfo`:
 
 ```bash
-zipline status compiled/group_bys/team/your_group_by.v1 --mode upload-to-kv
+zipline status compiled/group_bys/team/your_group_by.v1 \
+  --repo /path/to/chronon-setup \
+  --artifact-prefix $ARTIFACT_PREFIX \
+  --version $CHRONON_VERSION \
+  --mode upload-to-kv
 ```
 
 Sample output:
@@ -216,7 +220,11 @@ If the serving info cannot be fetched (e.g. batch upload hasn't run yet), the ou
 Checks the Kafka consumer lag for a streaming `GroupBy`:
 
 ```bash
-zipline status compiled/group_bys/team/your_group_by.v1 --mode streaming
+zipline status compiled/group_bys/team/your_group_by.v1 \
+  --repo /path/to/chronon-setup \
+  --artifact-prefix $ARTIFACT_PREFIX \
+  --version $CHRONON_VERSION \
+  --mode streaming
 ```
 
 Sample output:
