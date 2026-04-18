@@ -10,7 +10,7 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.File
 import java.util.Properties
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.reflect.internal.util.ScalaClassLoader
 import scala.util.{Failure, Success, Try}
 
@@ -55,24 +55,26 @@ object StatusMain {
   }
 
   def main(baseArgs: Array[String]): Unit = {
+    println(run(baseArgs))
+    System.exit(0)
+  }
+
+  private[online] def run(baseArgs: Array[String]): String = {
     val args = new Args(baseArgs)
     if (args.enableDebug()) logger.info("Debug logging enabled")
     val fullConfPath = s"${args.repo()}/${args.confPath()}"
     val groupBy = ThriftJsonCodec.fromJsonFile[GroupBy](fullConfPath, check = false)
 
-    val result = args.mode() match {
+    args.mode() match {
       case "upload-to-kv" => uploadToKvStatus(groupBy, args)
       case "streaming"    => streamingStatus(groupBy)
     }
-
-    println(result)
-    System.exit(0)
   }
 
-  private def loadApi(args: Args): Api = {
+  private[online] def loadApi(args: Args): Api = {
     // Use the current classloader (class is on -cp), fall back to --online-jar if provided
     val cls = if (args.onlineJar.isDefined) {
-      val urls = Array(new File(args.onlineJar()).toURI.toURL)
+      val urls = Array(new File(args.onlineJar()).toURI.toURL).toIndexedSeq
       val cl = ScalaClassLoader.fromURLs(urls, StatusMain.getClass.getClassLoader)
       cl.loadClass(args.onlineClass())
     } else {
@@ -82,7 +84,7 @@ object StatusMain {
     constructor.newInstance(args.extraProps).asInstanceOf[Api]
   }
 
-  private def uploadToKvStatus(groupBy: GroupBy, args: Args): String = {
+  private[online] def uploadToKvStatus(groupBy: GroupBy, args: Args): String = {
     require(
       args.onlineClass.isDefined,
       "--online-class is required for upload-to-kv mode"
@@ -95,18 +97,17 @@ object StatusMain {
       case Success(info) =>
         s"""{"batchEndDate":"${info.batchEndDate}"}"""
       case Failure(e) =>
-        throw new RuntimeException(
-          s"Failed to get serving info for ${groupBy.metaData.name}. " +
-            "Make sure batch upload has completed successfully.",
-          e
-        )
+        val msg = s"Failed to get serving info for ${groupBy.metaData.name}. " +
+          "Make sure batch upload has completed successfully."
+        logger.error(msg, e)
+        s"""{"error":"$msg"}"""
     }
   }
 
   // TODO: currently only supports Kafka. Future work:
   //  - Pub/Sub: use oldest_unacked_message_age as lag metric
   //  - Kinesis: use Statistic.MAXIMUM on GetRecords.IteratorAgeMilliseconds as lag metric
-  private def streamingStatus(groupBy: GroupBy): String = {
+  private[online] def streamingStatus(groupBy: GroupBy): String = {
     val source = groupBy.streamingSource.getOrElse(
       throw new IllegalArgumentException(
         s"GroupBy ${groupBy.metaData.name} has no streaming source"
@@ -161,7 +162,7 @@ object StatusMain {
 
       if (consumerOffsets.isEmpty) {
         logger.warn(s"No committed offsets for consumer group '$consumerGroup' on topic '$topic'")
-        return 0L
+        return -1L
       }
 
       val endOffsets = adminClient
