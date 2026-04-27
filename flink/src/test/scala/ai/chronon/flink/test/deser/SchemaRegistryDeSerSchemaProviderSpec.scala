@@ -273,11 +273,11 @@ class SchemaRegistrySerDeSpec extends AnyFlatSpec {
     header.array() ++ avroPayload
   }
 
-  // Bug scenario 1: Reading historical data
+  // Schema evolution scenario 1: Reading historical data
   // Topic has records written with schema 1 (old) and schema 2 (new).
-  // SchemaRegistrySerDe fetches schema 2 (latest) and uses it to decode ALL records.
-  // Records written with schema 1 will be decoded with schema 2's binary layout → broken.
-  it should "demonstrate bug: old data (schema 1) decoded with latest schema (schema 2) produces error" in {
+  // SchemaRegistrySerDe fetches schema 2 (latest) as the reader schema but reads the writer
+  // schema ID from the wire header to correctly decode schema-1 messages.
+  it should "correctly decode old data (schema 1) when latest schema (schema 2) adds a nullable field" in {
     val schema1Str =
       """{ "type": "record", "name": "User", "fields": [
         |  { "name": "name", "type": "string" },
@@ -291,26 +291,19 @@ class SchemaRegistrySerDeSpec extends AnyFlatSpec {
         |  { "name": "email", "type": ["null", "string"], "default": null }
         |]}""".stripMargin
 
-    // Use a fresh MockSchemaRegistryClient so we control exactly which schemas are registered
     val freshClient = new MockSchemaRegistryClient(Seq(avroSchemaProvider).asJava)
     val subject = "evolution-test-1-value"
 
-    // Register schema 1 first, then schema 2 → schema 2 becomes "latest"
     val schema1Id = freshClient.register(subject, new AvroSchema(schema1Str))
     val schema2Id = freshClient.register(subject, new AvroSchema(schema2Str))
     assert(schema1Id != schema2Id, "Schema IDs should differ")
 
-    // Encode a record using schema 1 (the old schema)
     val codec1 = new AvroCodec(schema1Str)
     val record1 = new GenericData.Record(codec1.schema)
     record1.put("name", "John")
     record1.put("age", 30)
-    val schema1Bytes = codec1.encodeBinary(record1)
+    val wireMessage = buildWireFormatMessage(schema1Id, codec1.encodeBinary(record1))
 
-    // Build wire format message with schema 1's ID
-    val wireMessage = buildWireFormatMessage(schema1Id, schema1Bytes)
-
-    // Create SerDe — it will fetch schema 2 (latest) and use it as the ONLY decode schema
     val topicInfo = TopicInfo(
       "evolution-test-1",
       "kafka",
@@ -318,24 +311,19 @@ class SchemaRegistrySerDeSpec extends AnyFlatSpec {
     )
     val serDe = new MockSchemaRegistrySerDe(topicInfo, freshClient)
 
-    // BUG: fromBytes() will try to decode schema-1 bytes using schema-2 layout.
-    // Schema 2 expects 3 fields (name, age, email) but the bytes only contain 2 fields.
-    // The decoder will try to read a union tag for the "email" field from bytes that don't exist,
-    // causing an exception or corrupt data.
-    val caught = intercept[Exception] {
-      serDe.fromBytes(wireMessage)
-    }
-    // The exception proves the bug: schema-1 data cannot be decoded with schema-2 as the writer schema.
-    assert(caught != null,
-      "Decoding schema-1 bytes with schema-2 layout should fail because " +
-        "the binary format has no email field bytes, but the decoder expects them")
+    // Avro resolution: schema-1 bytes decoded with schema-2 as reader.
+    // The missing "email" field is filled with its default (null).
+    val mutation = serDe.fromBytes(wireMessage)
+    assert(mutation.after(0) == "John")
+    assert(mutation.after(1) == 30)
+    assert(mutation.after(2) == null, "email should be null (default from schema 2)")
   }
 
-  // Bug scenario 2: Flink started before schema upgrade
-  // Flink starts and caches schema 1 (the latest at startup time).
-  // Later, producers upgrade to schema 2 and start writing new records.
-  // SchemaRegistrySerDe still uses schema 1 to decode schema-2 data → broken.
-  it should "demonstrate bug: new data (schema 2) decoded with old cached schema (schema 1) produces error" in {
+  // Schema evolution scenario 2: Flink started before schema upgrade
+  // Flink starts and caches schema 1 as the reader (latest at startup).
+  // Later, producers upgrade to schema 2. The wire header carries schema 2's ID,
+  // so the SerDe fetches schema 2 as the writer schema and decodes correctly.
+  it should "correctly decode new data (schema 2) when Flink started with schema 1 as reader" in {
     val schema1Str =
       """{ "type": "record", "name": "Person", "fields": [
         |  { "name": "name", "type": "string" },
@@ -349,12 +337,10 @@ class SchemaRegistrySerDeSpec extends AnyFlatSpec {
         |  { "name": "email", "type": ["null", "string"], "default": null }
         |]}""".stripMargin
 
-    // Simulate Flink startup: only schema 1 is registered at this point
     val freshClient = new MockSchemaRegistryClient(Seq(avroSchemaProvider).asJava)
     val subject = "evolution-test-2-value"
     val schema1Id = freshClient.register(subject, new AvroSchema(schema1Str))
 
-    // Create SerDe at startup — it fetches schema 1 (the only/latest schema)
     val topicInfo = TopicInfo(
       "evolution-test-2",
       "kafka",
@@ -362,55 +348,31 @@ class SchemaRegistrySerDeSpec extends AnyFlatSpec {
     )
     val serDe = new MockSchemaRegistrySerDe(topicInfo, freshClient)
 
-    // Force initialization of the delegate SerDe with schema 1
-    val cachedSchema = serDe.schema
-    assert(cachedSchema != null)
+    // Force initialization — SerDe caches schema 1 as the reader schema
+    assert(serDe.schema != null)
 
-    // Now simulate a producer upgrade: encode a record using schema 2
+    // Producer upgrades to schema 2 and writes a new record
     val codec2 = new AvroCodec(schema2Str)
     val record2 = new GenericData.Record(codec2.schema)
     record2.put("name", "Alice")
     record2.put("age", 25)
     record2.put("email", "alice@test.com")
-    val schema2Bytes = codec2.encodeBinary(record2)
-
-    // Schema 2 is now registered (but SerDe already cached schema 1)
     val schema2Id = freshClient.register(subject, new AvroSchema(schema2Str))
-    val wireMessage = buildWireFormatMessage(schema2Id, schema2Bytes)
+    val wireMessage = buildWireFormatMessage(schema2Id, codec2.encodeBinary(record2))
 
-    // BUG: fromBytes() will try to decode schema-2 bytes using schema-1 layout.
-    // Schema 1 only has 2 fields (name, age), but the bytes contain 3 fields.
-    // The decoder reads name and age correctly but leaves the email bytes unconsumed.
-    // Depending on the Avro implementation this may:
-    // - silently succeed but ignore the extra bytes (data loss for the email field)
-    // - throw an exception due to unexpected trailing bytes
-    // Either way, the email field is lost — the schema has no email field.
-    try {
-      val mutation = serDe.fromBytes(wireMessage)
-      // If it doesn't throw, verify data loss: the returned schema has no email field
-      // because the SerDe is using schema 1 which only knows about name and age.
-      assert(mutation.after.length == 2,
-        "SerDe using schema 1 only returns 2 fields — email data is silently lost")
-      assert(mutation.after(0) == "Alice")
-      assert(mutation.after(1) == 25)
-      // The email field "alice@test.com" was in the bytes but is completely lost —
-      // the consumer has no way to know it existed. This is the bug.
-      println("BUG CONFIRMED: Schema-2 record decoded with schema-1 — email field silently dropped")
-    } catch {
-      case e: Exception =>
-        // Also acceptable proof of the bug: the decoder choked on extra bytes
-        println(s"BUG CONFIRMED: Schema-2 record cannot be decoded with schema-1: ${e.getMessage}")
-        assert(e != null)
-    }
+    // Avro resolution: schema-2 bytes decoded with schema-1 as reader.
+    // The extra "email" field in the writer schema is ignored (not in reader schema).
+    val mutation = serDe.fromBytes(wireMessage)
+    assert(mutation.after(0) == "Alice")
+    assert(mutation.after(1) == 25)
   }
 
-  // Bug scenario 3: Flink started before schema upgrade, new field inserted in the MIDDLE
-  // Flink starts and caches schema 1 (the latest at startup time).
-  // Later, producers upgrade to schema 3 which adds "email" BETWEEN "name" and "age".
-  // SchemaRegistrySerDe still uses schema 1 to decode schema-3 data.
-  // Because Avro binary encoding is positional, the decoder reads the email string bytes
-  // as if they were the age int → silent data corruption (wrong values, no error).
-  it should "demonstrate bug: new field inserted in middle (schema 3) decoded with old schema (schema 1) causes silent corruption" in {
+  // Schema evolution scenario 3: new field inserted in the MIDDLE (incompatible change)
+  // Flink starts and caches schema 1 as the reader. Producer registers schema 3 which
+  // inserts "email" between "name" and "age". Because the wire header carries schema 3's ID,
+  // the SerDe fetches schema 3 as the writer and uses Avro resolution to map fields by name,
+  // correctly extracting "name" and "age" despite the positional shift.
+  it should "correctly decode data when a new field is inserted in the middle (schema 3) and Flink has schema 1 as reader" in {
     val schema1Str =
       """{ "type": "record", "name": "Employee", "fields": [
         |  { "name": "name", "type": "string" },
@@ -424,12 +386,10 @@ class SchemaRegistrySerDeSpec extends AnyFlatSpec {
         |  { "name": "age", "type": "int" }
         |]}""".stripMargin
 
-    // Simulate Flink startup: only schema 1 is registered
     val freshClient = new MockSchemaRegistryClient(Seq(avroSchemaProvider).asJava)
     val subject = "evolution-test-3-value"
-    val schema1Id = freshClient.register(subject, new AvroSchema(schema1Str))
+    freshClient.register(subject, new AvroSchema(schema1Str))
 
-    // Create SerDe at startup — it fetches schema 1 (the only/latest schema)
     val topicInfo = TopicInfo(
       "evolution-test-3",
       "kafka",
@@ -437,44 +397,22 @@ class SchemaRegistrySerDeSpec extends AnyFlatSpec {
     )
     val serDe = new MockSchemaRegistrySerDe(topicInfo, freshClient)
 
-    // Force initialization of the delegate SerDe with schema 1
-    val cachedSchema = serDe.schema
-    assert(cachedSchema != null)
+    assert(serDe.schema != null)
 
-    // Now simulate a producer upgrade: encode a record using schema 3
-    // Schema 3 has email BETWEEN name and age
     val codec3 = new AvroCodec(schema3Str)
     val record3 = new GenericData.Record(codec3.schema)
     record3.put("name", "Bob")
     record3.put("email", "bob@test.com")
     record3.put("age", 35)
-    val schema3Bytes = codec3.encodeBinary(record3)
 
-    // Schema 3 binary layout:
-    //   [name bytes: "Bob"] [email bytes: "bob@test.com"] [age bytes: 35]
-    //
-    // Schema 1 decoder reads positionally:
-    //   field 1 "name" (string): reads "Bob" ✓
-    //   field 2 "age"  (int):    reads from email bytes! The decoder tries to interpret
-    //                            the first byte(s) of "bob@test.com" as a zigzag-encoded int
-    //                            → WRONG VALUE or exception (type mismatch)
-
+    // MockSchemaRegistryClient doesn't enforce compatibility by default
     val schema3Id = freshClient.register(subject, new AvroSchema(schema3Str))
-    val wireMessage = buildWireFormatMessage(schema3Id, schema3Bytes)
+    val wireMessage = buildWireFormatMessage(schema3Id, codec3.encodeBinary(record3))
 
-    try {
-      val mutation = serDe.fromBytes(wireMessage)
-      // If it doesn't throw, the "age" field is corrupted — it read email bytes as an int
-      assert(mutation.after(0) == "Bob", "name should decode correctly (it's the first field in both schemas)")
-      assert(mutation.after(1) != 35,
-        "age should be WRONG — the decoder read email string bytes as an int, producing a garbage value")
-      println(s"BUG CONFIRMED: Silent data corruption — age field is ${mutation.after(1)} instead of 35 " +
-        "(decoder read email bytes as int)")
-    } catch {
-      case e: Exception =>
-        // The decoder may also crash if the email bytes can't be interpreted as an int
-        println(s"BUG CONFIRMED: Schema-3 record (field inserted in middle) cannot be decoded with schema-1: ${e.getMessage}")
-        assert(e != null)
-    }
+    // Avro resolution maps fields by name: "name" and "age" are matched correctly,
+    // "email" (present in writer, absent in reader) is skipped.
+    val mutation = serDe.fromBytes(wireMessage)
+    assert(mutation.after(0) == "Bob")
+    assert(mutation.after(1) == 35, "age should be 35 — Avro resolution matches fields by name, not position")
   }
 }
