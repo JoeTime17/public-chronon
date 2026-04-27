@@ -93,8 +93,10 @@ class SchemaRegistrySerDe(topicInfo: TopicInfo) extends SerDe {
       val messageBytes = message.drop(5)
       delegate match {
         case avroSerDe: AvroSerDe =>
-          val writerAvroSchema = schemaRegistryClient.getSchemaById(writerSchemaId)
-            .asInstanceOf[AvroSchema].rawSchema()
+          val writerAvroSchema = schemaRegistryClient
+            .getSchemaById(writerSchemaId)
+            .asInstanceOf[AvroSchema]
+            .rawSchema()
           avroSerDe.fromBytes(messageBytes, writerAvroSchema)
         case _ =>
           // Protobuf is self-describing (field tags in every message) — no schema resolution needed

@@ -145,12 +145,12 @@ object AvroCodec {
 
   def ofThreaded(readerSchemaStr: String, writerSchemaStr: Option[String] = None): ThreadLocal[AvroCodec] = {
     val cacheKey = writerSchemaStr.fold(readerSchemaStr)(w => s"$w|$readerSchemaStr")
-    codecMap.computeIfAbsent(
-      cacheKey,
-      _ =>
-        new ThreadLocal[AvroCodec] {
-          override def initialValue(): AvroCodec = new AvroCodec(readerSchemaStr, writerSchemaStr)
-        })
+    codecMap.computeIfAbsent(cacheKey,
+                             _ =>
+                               new ThreadLocal[AvroCodec] {
+                                 override def initialValue(): AvroCodec =
+                                   new AvroCodec(readerSchemaStr, writerSchemaStr)
+                               })
   }
 
   def of(schemaStr: String): AvroCodec = ofThreaded(schemaStr).get()
