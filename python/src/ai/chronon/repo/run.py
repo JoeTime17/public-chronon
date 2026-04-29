@@ -214,6 +214,13 @@ def validate_additional_jars(ctx, param, value):
     callback=validate_additional_jars,
 )
 @click.option(
+    "--flink-deployment-mode",
+    type=click.Choice(["default", "application"]),
+    default="default",
+    show_default=True,
+    help="Flink deployment mode",
+)
+@click.option(
     "--validate",
     is_flag=True,
     help="Validate the catalyst util Spark expression evaluation logic",
@@ -285,6 +292,7 @@ def main(
     warehouse_bucket,
     no_cloud_logging,
     additional_jars,
+    flink_deployment_mode,
     debug,
     uploader,
 ):

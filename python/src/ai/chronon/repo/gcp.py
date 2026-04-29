@@ -57,6 +57,7 @@ class GcpRunner(Runner):
 
         self._args = args
         self.job_id = str(uuid.uuid4())
+        self.flink_deployment_mode = args.get("flink_deployment_mode", "default")
 
         super().__init__(args, os.path.expanduser(jar_path))
 
@@ -316,6 +317,9 @@ class GcpRunner(Runner):
             user_args["--streaming-mode"] = "check-if-job-is-running"
         elif "deploy" in args:
             user_args["--streaming-mode"] = "deploy"
+
+        if self.flink_deployment_mode and self.flink_deployment_mode != "default":
+            user_args["--flink-deployment-mode"] = self.flink_deployment_mode
 
         flag_args = {"--validate": self.validate, "--enable-debug": self.enable_debug}
 
