@@ -387,14 +387,14 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
   }
 
   private[cloud_gcp] def buildFlinkApplicationJob(mainClass: String,
-                                                   mainJarUri: String,
-                                                   launcherJarUri: String,
-                                                   jarUris: Array[String],
-                                                   flinkCheckpointUri: String,
-                                                   maybeSavePointUri: Option[String],
-                                                   maybeFlinkJarsBasePath: Option[String],
-                                                   jobProperties: Map[String, String],
-                                                   args: String*): Job.Builder = {
+                                                  mainJarUri: String,
+                                                  launcherJarUri: String,
+                                                  jarUris: Array[String],
+                                                  flinkCheckpointUri: String,
+                                                  maybeSavePointUri: Option[String],
+                                                  maybeFlinkJarsBasePath: Option[String],
+                                                  jobProperties: Map[String, String],
+                                                  args: String*): Job.Builder = {
 
     val allProperties = flinkEnvProps(flinkCheckpointUri) ++ jobProperties
 

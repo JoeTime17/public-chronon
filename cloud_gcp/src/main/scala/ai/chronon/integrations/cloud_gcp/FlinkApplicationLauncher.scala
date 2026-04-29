@@ -7,17 +7,16 @@ import java.util.UUID
 import scala.collection.mutable.ArrayBuffer
 import scala.util.matching.Regex
 
-/**
- * Launcher for Flink Application Mode on Dataproc.
- *
- * Runs as a HadoopJob on the Dataproc cluster master. Constructs and executes
- * `flink run-application -t yarn-application` via ProcessBuilder, then blocks
- * while monitoring the YARN application status. This keeps the Dataproc HadoopJob
- * in RUNNING state, preserving compatibility with existing monitoring infrastructure.
- *
- * Flink 1.17's YarnApplicationFileUploader does not support gs:// URIs for the main
- * JAR or pipeline JARs. This launcher stages GCS JARs to HDFS before submission.
- */
+/** Launcher for Flink Application Mode on Dataproc.
+  *
+  * Runs as a HadoopJob on the Dataproc cluster master. Constructs and executes
+  * `flink run-application -t yarn-application` via ProcessBuilder, then blocks
+  * while monitoring the YARN application status. This keeps the Dataproc HadoopJob
+  * in RUNNING state, preserving compatibility with existing monitoring infrastructure.
+  *
+  * Flink 1.17's YarnApplicationFileUploader does not support gs:// URIs for the main
+  * JAR or pipeline JARs. This launcher stages GCS JARs to HDFS before submission.
+  */
 object FlinkApplicationLauncher {
   private val logger = LoggerFactory.getLogger(getClass)
 
@@ -128,14 +127,13 @@ object FlinkApplicationLauncher {
     config
   }
 
-  /**
-   * Stages GCS JARs for YARN Application Mode:
-   * - Main JAR → local filesystem (flink run-application uploads it to HDFS)
-   * - Additional JARs → HDFS directly (referenced via yarn.provided.lib.dirs)
-   */
+  /** Stages GCS JARs for YARN Application Mode:
+    * - Main JAR → local filesystem (flink run-application uploads it to HDFS)
+    * - Additional JARs → HDFS directly (referenced via yarn.provided.lib.dirs)
+    */
   private[cloud_gcp] def stageGcsJars(config: LauncherConfig,
-                                       localStagingDir: String,
-                                       hdfsStagingDir: String): LauncherConfig = {
+                                      localStagingDir: String,
+                                      hdfsStagingDir: String): LauncherConfig = {
     new java.io.File(localStagingDir).mkdirs()
     runShellCommand("hadoop", "fs", "-mkdir", "-p", hdfsStagingDir)
 
@@ -180,10 +178,9 @@ object FlinkApplicationLauncher {
     }
   }
 
-  /**
-   * Ensures Flink lib/ and plugins/ directories exist on HDFS for yarn.provided.lib.dirs.
-   * Copies from local Flink installation once, then reuses the HDFS copy.
-   */
+  /** Ensures Flink lib/ and plugins/ directories exist on HDFS for yarn.provided.lib.dirs.
+    * Copies from local Flink installation once, then reuses the HDFS copy.
+    */
   private def ensureFlinkLibsOnHdfs(flinkHome: String): Seq[String] = {
     val hdfsBase = s"$HdfsStagingBase/flink-dist"
     val hdfsLib = s"$hdfsBase/lib"
