@@ -204,8 +204,9 @@ object FlinkApplicationLauncher {
   }
 
   private def resolveHdfsUri(path: String): String = {
+    var process: Process = null
     try {
-      val process = new ProcessBuilder("hdfs", "getconf", "-confKey", "fs.defaultFS")
+      process = new ProcessBuilder("hdfs", "getconf", "-confKey", "fs.defaultFS")
         .redirectErrorStream(true)
         .start()
       val reader = new BufferedReader(new InputStreamReader(process.getInputStream))
@@ -217,6 +218,11 @@ object FlinkApplicationLauncher {
       if (defaultFs.startsWith("hdfs://")) s"$defaultFs$path" else s"hdfs://$path"
     } catch {
       case _: Exception => s"hdfs://$path"
+    } finally {
+      if (process != null) {
+        process.getInputStream.close()
+        process.destroy()
+      }
     }
   }
 
@@ -279,30 +285,35 @@ object FlinkApplicationLauncher {
     }
 
     val process = pb.start()
+    try {
+      val reader = new BufferedReader(new InputStreamReader(process.getInputStream))
+      var yarnAppId: Option[String] = None
+      var line: String = null
 
-    val reader = new BufferedReader(new InputStreamReader(process.getInputStream))
-    var yarnAppId: Option[String] = None
-    var line: String = null
-
-    while ({
-      line = reader.readLine()
-      line != null
-    }) {
-      logger.info(s"[flink] $line")
-      if (yarnAppId.isEmpty) {
-        yarnAppId = YarnAppIdPattern.findFirstIn(line)
+      while ({
+        line = reader.readLine()
+        line != null
+      }) {
+        logger.info(s"[flink] $line")
+        if (yarnAppId.isEmpty) {
+          yarnAppId = YarnAppIdPattern.findFirstIn(line)
+        }
       }
-    }
 
-    val exitCode = process.waitFor()
-    (exitCode, yarnAppId)
+      val exitCode = process.waitFor()
+      (exitCode, yarnAppId)
+    } finally {
+      process.getInputStream.close()
+      process.destroy()
+    }
   }
 
   private def installShutdownHook(yarnAppId: String, localStagingDir: String, hdfsStagingDir: String): Unit = {
     Runtime.getRuntime.addShutdownHook(new Thread(() => {
       logger.info(s"Shutdown hook triggered, killing YARN application $yarnAppId")
+      var killProcess: Process = null
       try {
-        val killProcess = new ProcessBuilder("yarn", "application", "-kill", yarnAppId)
+        killProcess = new ProcessBuilder("yarn", "application", "-kill", yarnAppId)
           .redirectErrorStream(true)
           .start()
         val killReader = new BufferedReader(new InputStreamReader(killProcess.getInputStream))
@@ -317,6 +328,11 @@ object FlinkApplicationLauncher {
       } catch {
         case e: Exception =>
           logger.error(s"Failed to kill YARN application $yarnAppId", e)
+      } finally {
+        if (killProcess != null) {
+          killProcess.getInputStream.close()
+          killProcess.destroy()
+        }
       }
       cleanupLocalStaging(localStagingDir)
       cleanupHdfsStaging(hdfsStagingDir)
@@ -338,8 +354,9 @@ object FlinkApplicationLauncher {
   }
 
   private def resolveHadoopClasspath(): String = {
+    var process: Process = null
     try {
-      val process = new ProcessBuilder("hadoop", "classpath")
+      process = new ProcessBuilder("hadoop", "classpath")
         .redirectErrorStream(true)
         .start()
       val reader = new BufferedReader(new InputStreamReader(process.getInputStream))
@@ -357,6 +374,11 @@ object FlinkApplicationLauncher {
       case e: Exception =>
         logger.warn("Failed to resolve hadoop classpath, GCS URIs may not work", e)
         ""
+    } finally {
+      if (process != null) {
+        process.getInputStream.close()
+        process.destroy()
+      }
     }
   }
 
@@ -384,20 +406,26 @@ object FlinkApplicationLauncher {
     val process = new ProcessBuilder(command: _*)
       .redirectErrorStream(true)
       .start()
-    val reader = new BufferedReader(new InputStreamReader(process.getInputStream))
-    var line: String = null
-    while ({
-      line = reader.readLine()
-      line != null
-    }) {
-      logger.info(s"[${command.head}] $line")
+    try {
+      val reader = new BufferedReader(new InputStreamReader(process.getInputStream))
+      var line: String = null
+      while ({
+        line = reader.readLine()
+        line != null
+      }) {
+        logger.info(s"[${command.head}] $line")
+      }
+      process.waitFor()
+    } finally {
+      process.getInputStream.close()
+      process.destroy()
     }
-    process.waitFor()
   }
 
   private[cloud_gcp] def getYarnApplicationState(yarnAppId: String): String = {
+    var process: Process = null
     try {
-      val process = new ProcessBuilder("yarn", "application", "-status", yarnAppId)
+      process = new ProcessBuilder("yarn", "application", "-status", yarnAppId)
         .redirectErrorStream(true)
         .start()
       val reader = new BufferedReader(new InputStreamReader(process.getInputStream))
@@ -419,6 +447,11 @@ object FlinkApplicationLauncher {
       case e: Exception =>
         logger.error(s"Failed to get YARN application status for $yarnAppId", e)
         "UNKNOWN"
+    } finally {
+      if (process != null) {
+        process.getInputStream.close()
+        process.destroy()
+      }
     }
   }
 }
