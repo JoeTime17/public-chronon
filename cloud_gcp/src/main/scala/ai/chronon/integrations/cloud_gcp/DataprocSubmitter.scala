@@ -104,7 +104,8 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
     try {
       val job: Job = jobControllerClient.getJob(projectId, region, jobId)
 
-      val isFlinkJob = job.getLabelsMap.asScala.get(JobType) == Some(FlinkJobType)
+      val isFlinkJob =
+        job.getTypeJobCase == Job.TypeJobCase.FLINK_JOB || job.getLabelsMap.asScala.get(JobType).contains(FlinkJobType)
       lazy val isRunningAndHealthy =
         job.getStatus.getState == JobStatus.State.RUNNING && flinkHealthCheckFn(getFlinkUrl(jobId))
 
@@ -164,7 +165,11 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
 
           val ctx = Metrics.Context(Metrics.Environment.Orchestrator)
 
-          val jobType = job.getLabelsMap.asScala.getOrElse(JobType, "unknown")
+          val jobType = job.getTypeJobCase match {
+            case Job.TypeJobCase.SPARK_JOB => "spark"
+            case Job.TypeJobCase.FLINK_JOB => "flink"
+            case _                         => job.getLabelsMap.asScala.getOrElse(JobType, "unknown")
+          }
 
           val tags = Map(
             "job_type" -> jobType,
