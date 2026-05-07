@@ -30,7 +30,6 @@ class EmrServerlessSubmitter(
     s3LogUri: String,
     eksFlinkSubmitter: Option[K8sFlinkSubmitter] = None,
     awsRegion: String = "",
-    override val tablePartitionsDataset: String = "",
     override val dqMetricsDataset: String = "",
     override val kvStoreApiProperties: Map[String, String] = Map.empty,
     flinkEksServiceAccount: Option[String] = None,
@@ -139,6 +138,10 @@ class EmrServerlessSubmitter(
           throw new RuntimeException(s"Missing expected $EksServiceAccount"))
         val namespace =
           submissionProperties.getOrElse(EksNamespace, throw new RuntimeException(s"Missing expected $EksNamespace"))
+        val nodeSelector = submissionProperties
+          .get(EksNodeSelector)
+          .map(EmrServerlessSubmitter.parseNodeSelector)
+          .getOrElse(Map.empty)
 
         val deploymentName = eksFlinkSubmitter
           .getOrElse(
@@ -156,7 +159,8 @@ class EmrServerlessSubmitter(
             args = userArgs,
             serviceAccount = serviceAccount,
             namespace = namespace,
-            envVars = envVars
+            envVars = envVars,
+            nodeSelector = nodeSelector
           )
         s"flink:$namespace:$deploymentName"
 
@@ -462,12 +466,13 @@ class EmrServerlessSubmitter(
     val eksNamespace = this.flinkEksNamespace
       .orElse(env.get("FLINK_EKS_NAMESPACE"))
       .getOrElse(throw new IllegalArgumentException("FLINK_EKS_NAMESPACE must be set for GROUP_BY_STREAMING"))
+    val maybeNodeSelector = env.get("FLINK_EKS_NODE_SELECTOR")
     val base = Map(
       FlinkMainJarURI -> flinkJarUri,
       FlinkCheckpointUri -> s"$flinkStateUri/checkpoints",
       EksServiceAccount -> eksServiceAccount,
       EksNamespace -> eksNamespace
-    )
+    ) ++ maybeNodeSelector.map(EksNodeSelector -> _)
     val enableKinesis = env.getOrElse("ENABLE_KINESIS", "false").toBoolean
     if (enableKinesis)
       base + (FlinkKinesisConnectorJarURI -> s"$artifactPrefix/release/$version/jars/connectors_kinesis_deploy.jar")
@@ -518,6 +523,23 @@ object EmrServerlessSubmitter {
 
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
   val DefaultApplicationName = "chronon-serverless-app"
+
+  // Parses "zipline.ai/node-type=flink,kubernetes.io/arch=amd64" into the equivalent Map
+  private[aws] def parseNodeSelector(raw: String): Map[String, String] = {
+    if (raw.trim.isEmpty)
+      throw new IllegalArgumentException("nodeSelector value must not be blank")
+    raw
+      .split(",")
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map { pair =>
+        val idx = pair.indexOf('=')
+        if (idx <= 0)
+          throw new IllegalArgumentException(s"Malformed nodeSelector pair: '$pair' (expected key=value)")
+        pair.substring(0, idx).trim -> pair.substring(idx + 1).trim
+      }
+      .toMap
+  }
 
   // EMR Serverless StartJobRun API rejects any applicationConfiguration entry whose
   // properties map has more than 100 keys (service-side validation).
@@ -577,7 +599,6 @@ object EmrServerlessSubmitter {
       awsRegion: String,
       executionRoleArn: String,
       s3LogUri: String,
-      tablePartitionsDataset: String = "",
       dqMetricsDataset: String = "",
       flinkEksServiceAccount: Option[String] = None,
       flinkEksNamespace: Option[String] = None,
@@ -603,7 +624,6 @@ object EmrServerlessSubmitter {
       s3LogUri,
       eksFlinkSubmitter = Some(EksFlinkSubmitter(k8sConfig, ingressBaseUrl = ingressBaseUrl)),
       awsRegion = awsRegion,
-      tablePartitionsDataset = tablePartitionsDataset,
       dqMetricsDataset = dqMetricsDataset,
       flinkEksServiceAccount = flinkEksServiceAccount,
       flinkEksNamespace = flinkEksNamespace,
@@ -656,6 +676,7 @@ object EmrServerlessSubmitter {
         val maybeKinesisJarUri = JobSubmitter.getArgValue(args, FlinkKinesisJarUriArgKeyword)
         val maybeFlinkJarsUri = JobSubmitter.getArgValue(args, FlinkJarsUriArgKeyword)
         val maybeAdditionalJarsUri = JobSubmitter.getArgValue(args, AdditionalJarsUriArgKeyword)
+        val maybeNodeSelector = JobSubmitter.getArgValue(args, EksNodeSelectorArgKeyword)
 
         val baseJobProps = Map(
           JobId -> jobId,
@@ -667,7 +688,8 @@ object EmrServerlessSubmitter {
           EksNamespace -> eksNamespace
         ) ++ maybeKinesisJarUri.map(FlinkKinesisConnectorJarURI -> _) ++
           maybeFlinkJarsUri.map(FlinkJarsUri -> _) ++
-          maybeAdditionalJarsUri.map(AdditionalJars -> _)
+          maybeAdditionalJarsUri.map(AdditionalJars -> _) ++
+          maybeNodeSelector.map(EksNodeSelector -> _)
 
         val userPassedSavepoint = JobSubmitter.getArgValue(args, StreamingCustomSavepointArgKeyword)
         val maybeSavepointUri =

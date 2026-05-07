@@ -179,6 +179,23 @@ def submit_fetch(runner, chronon_root, conf, version, keys, name):
 # ---------------------------------------------------------------------------
 
 
+def submit_eval(runner, chronon_root, hub_url, eval_url, conf, test_data_path=None):
+    """Submit an eval job and assert success."""
+    args = [
+        "hub", "eval",
+        conf,
+        f"--repo={chronon_root}",
+        f"--hub-url={hub_url}",
+        f"--eval-url={eval_url}",
+        "--format=json",
+    ]
+    if test_data_path:
+        args += ["--test-data-path", test_data_path]
+    result = runner.invoke(zipline, args, catch_exceptions=False)
+    assert result.exit_code == 0, f"eval failed:\n{result.output}"
+    return result
+
+
 def submit_schedule(runner, chronon_root, hub_url, conf):
     """Deploy a recurring schedule for a conf."""
     result = runner.invoke(

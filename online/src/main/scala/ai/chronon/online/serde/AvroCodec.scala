@@ -29,14 +29,21 @@ import java.util.concurrent.ConcurrentHashMap
 
 import java.io.ByteArrayOutputStream
 
-class AvroCodec(val schemaStr: String) extends Serializable {
+class AvroCodec(val schemaStr: String, val writerSchemaStr: Option[String] = None) extends Serializable {
   @transient private lazy val parser = new Schema.Parser()
   @transient lazy val schema: Schema = parser.parse(schemaStr)
 
   // we reuse a lot of intermediate
   // lazy vals so that spark can serialize & ship the codec to executors
   @transient private lazy val datumWriter = new FastGenericDatumWriter[GenericRecord](schema)
-  @transient private lazy val datumReader = new FastGenericDatumReader[GenericRecord](schema)
+  @transient private lazy val datumReader = writerSchemaStr match {
+    case Some(wStr) =>
+      // Writer schema differs from reader schema — use Avro's resolution logic to handle
+      // schema evolution (fills defaults for missing fields, ignores unknown fields)
+      new FastGenericDatumReader[GenericRecord](new Schema.Parser().parse(wStr), schema)
+    case None =>
+      new FastGenericDatumReader[GenericRecord](schema)
+  }
 
   @transient private lazy val outputStream = new ByteArrayOutputStream()
   @transient private var jsonEncoder: JsonEncoder = null
@@ -136,12 +143,15 @@ object AvroCodec {
   private val codecMap: ConcurrentHashMap[String, ThreadLocal[AvroCodec]] =
     new ConcurrentHashMap[String, ThreadLocal[AvroCodec]]
 
-  def ofThreaded(schemaStr: String): ThreadLocal[AvroCodec] = codecMap.computeIfAbsent(
-    schemaStr,
-    str =>
-      new ThreadLocal[AvroCodec] {
-        override def initialValue(): AvroCodec = new AvroCodec(str)
-      })
+  def ofThreaded(readerSchemaStr: String, writerSchemaStr: Option[String] = None): ThreadLocal[AvroCodec] = {
+    val cacheKey = writerSchemaStr.fold(readerSchemaStr)(w => s"$w|$readerSchemaStr")
+    codecMap.computeIfAbsent(cacheKey,
+                             _ =>
+                               new ThreadLocal[AvroCodec] {
+                                 override def initialValue(): AvroCodec =
+                                   new AvroCodec(readerSchemaStr, writerSchemaStr)
+                               })
+  }
 
   def of(schemaStr: String): AvroCodec = ofThreaded(schemaStr).get()
 }

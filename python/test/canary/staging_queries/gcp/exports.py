@@ -48,5 +48,6 @@ def get_native_partition_export(table: str, partition_column: str):
 user_activities = get_native_partition_export("user-activities", "_PARTITIONTIME")
 checkouts = get_native_partition_export("checkouts", "_PARTITIONTIME")
 dim_listings = get_select_star_export("dim_listings", "ds")
+dim_listing_mutations = get_select_star_export("dim_listing_mutations", "ds")
 dim_merchants = get_select_star_export("dim_merchants", "ds")
 dim_users = get_select_star_export("dim_users", "ds")

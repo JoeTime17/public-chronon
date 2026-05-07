@@ -35,7 +35,6 @@ class AzureSubmitter(
     storageClient: Option[StorageClient] = None,
     flinkHealthCheckFn: Option[String] => Boolean = _ => true,
     flinkInternalJobIdFetchFn: Option[String] => Option[String] = _ => None,
-    override val tablePartitionsDataset: String = "",
     override val dqMetricsDataset: String = "",
     override val kvStoreApiProperties: Map[String, String] = Map.empty,
     override val jarName: String = "",

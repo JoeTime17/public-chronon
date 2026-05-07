@@ -3,7 +3,9 @@ package ai.chronon.api.test.planner
 import ai.chronon.api.Extensions.{WindowUtils, MetadataOps}
 import ai.chronon.api.planner.{DependencyResolver, TableDependencies}
 import ai.chronon.api.{
+  Accuracy,
   Builders,
+  DataModel,
   Operation,
   PartitionRange,
   PartitionSpec,
@@ -329,6 +331,69 @@ class TableDependenciesTest extends AnyFlatSpec with Matchers {
     val deps = TableDependencies.fromGroupBy(groupBy)
     deps should not be empty
     deps.head.getTableInfo.getPartitionColumn should equal("created_at")
+  }
+
+  "TableDependencies.fromGroupBy" should "include snapshot and mutation dependencies for temporal entity sources when the left side is events" in {
+    val entityQuery = Builders.Query(
+      startPartition = "2025-01-01",
+      partitionColumn = "ds"
+    )
+    entityQuery.setPartitionInterval(WindowUtils.Day)
+
+    val groupBy = Builders.GroupBy(
+      sources = Seq(Builders.Source.entities(
+        query = entityQuery,
+        snapshotTable = "test.dim_snapshot",
+        mutationTable = "test.dim_mutations"
+      )),
+      keyColumns = Seq("listing_id"),
+      aggregations = Seq(Builders.Aggregation(Operation.LAST, "headline", Seq(WindowUtils.Unbounded))),
+      accuracy = Accuracy.TEMPORAL
+    )
+
+    val deps = TableDependencies.fromGroupBy(groupBy, leftDataModel = Some(DataModel.EVENTS))
+
+    deps.map(_.getTableInfo.getTable) should equal(Seq("test.dim_snapshot", "test.dim_mutations"))
+    deps.head.getStartOffset should equal(WindowUtils.Day)
+    deps.head.getEndOffset should equal(WindowUtils.Day)
+    deps.head.getStartCutOff should equal("2025-01-01")
+    deps(1).getStartOffset should equal(WindowUtils.zero())
+    deps(1).getEndOffset should equal(WindowUtils.zero())
+    deps(1).getStartCutOff should equal("2025-01-01")
+  }
+
+  "TableDependencies.fromJoin" should "include mutation dependencies for temporal entity join parts when the left side is events" in {
+    val leftQuery = Builders.Query(partitionColumn = "ds")
+    val entityQuery = Builders.Query(
+      startPartition = "2025-01-01",
+      partitionColumn = "ds"
+    )
+    entityQuery.setPartitionInterval(WindowUtils.Day)
+
+    val join = Builders.Join(
+      left = Builders.Source.events(leftQuery, table = "test.left_events"),
+      joinParts = Seq(Builders.JoinPart(groupBy = Builders.GroupBy(
+        sources = Seq(Builders.Source.entities(
+          query = entityQuery,
+          snapshotTable = "test.dim_snapshot",
+          mutationTable = "test.dim_mutations"
+        )),
+        keyColumns = Seq("listing_id"),
+        aggregations = Seq(Builders.Aggregation(Operation.LAST, "headline", Seq(WindowUtils.Unbounded))),
+        accuracy = Accuracy.TEMPORAL
+      ))),
+      bootstrapParts = Seq.empty
+    )
+
+    val deps = TableDependencies.fromJoin(join)
+
+    deps.map(_.getTableInfo.getTable) should equal(
+      Seq("test.left_events", "test.dim_snapshot", "test.dim_mutations")
+    )
+    deps(1).getStartOffset should equal(WindowUtils.Day)
+    deps(1).getEndOffset should equal(WindowUtils.Day)
+    deps(2).getStartOffset should equal(WindowUtils.zero())
+    deps(2).getEndOffset should equal(WindowUtils.zero())
   }
 
   // Mirrors the three shapes the Python TableDependency dataclass can produce after

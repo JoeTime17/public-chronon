@@ -8,9 +8,7 @@ trait NodeRunner {
   def run(metadata: api.MetaData, conf: NodeContent, range: Option[PartitionRange]): Unit
 }
 
-object NodeRunner {
-  val DefaultTablePartitionsDataset = "TABLE_PARTITIONS"
-}
+object NodeRunner {}
 
 object LineageOfflineRunner {
   def readFiles(folderPath: String): Seq[Any] = {

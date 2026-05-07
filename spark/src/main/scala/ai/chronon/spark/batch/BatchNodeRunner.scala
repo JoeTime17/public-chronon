@@ -5,7 +5,7 @@ import ai.chronon.api._
 import ai.chronon.api.planner.{DependencyResolver, NodeRunner}
 import ai.chronon.api.secrets.SecretResolver
 import ai.chronon.observability.{TileStats, TileStatsType}
-import ai.chronon.online.{Api, KVStore, KvPartitions, KvPartitionsStore}
+import ai.chronon.online.{Api, KVStore}
 import ai.chronon.planner._
 import ai.chronon.spark.Extensions._
 import ai.chronon.spark.batch.iceberg.IcebergPartitionStatsExtractor
@@ -21,7 +21,7 @@ import org.slf4j.{Logger, LoggerFactory}
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
 
 class BatchNodeRunnerArgs(args: Array[String]) extends ScallopConf(args) {
@@ -43,11 +43,6 @@ class BatchNodeRunnerArgs(args: Array[String]) extends ScallopConf(args) {
     descr = "Fully qualified Online.Api based class. We expect the jar to be on the class path")
 
   val apiProps: Map[String, String] = props[String]('Z', descr = "Props to configure API Store")
-
-  val tablePartitionsDataset: ScallopOption[String] = opt[String](
-    required = true,
-    descr = "Name of table in kv store to use to keep track of partitions",
-    default = Option(NodeRunner.DefaultTablePartitionsDataset))
 
   val tableStatsDataset: ScallopOption[String] = opt[String](
     required = false,
@@ -481,11 +476,7 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
     }
   }
 
-  private def postJobActions(metadata: MetaData,
-                             range: PartitionRange,
-                             kvPartitionsStore: KvPartitionsStore,
-                             kvStore: KVStore,
-                             tableStatsDataset: Option[String]): Unit = {
+  private def postJobActions(metadata: MetaData, range: PartitionRange, tableStatsDataset: Option[String]): Unit = {
     val outputTablePartitionSpec = (for {
       meta <- Option(metadata)
       executionInfo <- Option(meta.executionInfo)
@@ -515,20 +506,6 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
         logger.error(s"After job completion, output table $outputTable has no partitions")
     }
 
-    // Use KvPartitionsStore to store partitions with semantic hash (no TTL)
-    // Expand min..max into full partition list for KV store
-    val allOutputPartitions = (firstOutputPartition, lastOutputPartition) match {
-      case (Some(first), Some(last)) => tableUtils.partitionSpec.expandRange(first, last)
-      case _                         => Seq.empty[String]
-    }
-
-    implicit val ec: ExecutionContext = ExecutionContext.global
-    val kvPartitions = KvPartitions(
-      partitions = allOutputPartitions,
-      semanticHash = Option(node.semanticHash).filter(_.nonEmpty)
-    )
-    val kvStoreUpdates = kvPartitionsStore.put(outputTable, kvPartitions)(tableUtils.partitionSpec)
-    Await.result(kvStoreUpdates, Duration.Inf)
     logger.info(s"Successfully completed batch node runner for '${metadata.name}'")
 
     // Extract and persist partition statistics to KV store - done at the very end
@@ -623,34 +600,15 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
   def runFromArgs(
       startDs: String,
       endDs: String,
-      tablePartitionsDataset: String,
       tableStatsDataset: Option[String]
   ): Int = {
     Try {
       val metadata = node.metaData
       val range = PartitionRange(startDs, endDs)(PartitionSpec.daily)
-      val kvStore = api.genKvStore
-      kvStore.create(tablePartitionsDataset)
 
       val inputTablePartitionStatuses = computeInputTablePartitionStatuses(metadata, range, tableUtils)
 
       logger.info(s"Starting batch node runner for '${metadata.name}'")
-
-      implicit val ec: ExecutionContext = ExecutionContext.global
-      val kvPartitionsStore = new KvPartitionsStore(kvStore = kvStore, dataset = tablePartitionsDataset)
-
-      val kvStoreUpdates =
-        inputTablePartitionStatuses
-          .map { tps =>
-            val partitions = (tps.firstAvailablePartition, tps.lastAvailablePartition) match {
-              case (Some(first), Some(last)) => tableUtils.partitionSpec.expandRange(first, last)
-              case _                         => Seq.empty[String]
-            }
-            kvPartitionsStore.put(tps.name, KvPartitions(partitions, System.currentTimeMillis(), tps.semanticHash))(
-              range.partitionSpec)
-          }
-
-      Await.result(Future.sequence(kvStoreUpdates), Duration.Inf)
 
       // drop table if semantic hash doesn't match
       val outputTable = node.metaData.outputTable
@@ -708,11 +666,7 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
 
         try {
 
-          postJobActions(metadata = metadata,
-                         range = range,
-                         kvPartitionsStore = kvPartitionsStore,
-                         kvStore = kvStore,
-                         tableStatsDataset = tableStatsDataset)
+          postJobActions(metadata = metadata, range = range, tableStatsDataset = tableStatsDataset)
 
           if (!isSensorNode) {
             su.setSemanticHash(outputTable, incomingSemanticHash)
@@ -747,10 +701,7 @@ object BatchNodeRunner {
     val api = instantiateApi(batchArgs.onlineClass(), batchArgs.apiProps ++ driverSecrets)
     val runner = new BatchNodeRunner(node, tableUtils, api)
     val exitCode =
-      runner.runFromArgs(batchArgs.startDs(),
-                         batchArgs.endDs(),
-                         batchArgs.tablePartitionsDataset(),
-                         batchArgs.tableStatsDataset.toOption)
+      runner.runFromArgs(batchArgs.startDs(), batchArgs.endDs(), batchArgs.tableStatsDataset.toOption)
     tableUtils.sparkSession.stop()
     System.exit(exitCode)
   }

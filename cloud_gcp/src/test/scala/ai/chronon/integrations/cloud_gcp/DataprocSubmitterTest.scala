@@ -1159,7 +1159,6 @@ class DataprocSubmitterTest extends AnyFlatSpec with MockitoSugar {
       "--start-ds=2025-08-15",
       "--end-ds=2025-11-15",
       "--online-class=ai.chronon.integrations.cloud_gcp.GcpApiImpl",
-      "--table-partitions-dataset=TABLE_PARTITIONS_thomaschow",
       "-ZGCP_PROJECT_ID=canary-443022",
       "-ZGCP_BIGTABLE_INSTANCE_ID=zipline-canary-instance",
       "-ZENABLE_UPLOAD_CLIENTS=true"

@@ -943,7 +943,8 @@ class EmrServerlessSubmitterTest extends AnyFlatSpec with Matchers with MockitoS
         args = org.mockito.ArgumentMatchers.any(),
         serviceAccount = org.mockito.ArgumentMatchers.anyString(),
         namespace = org.mockito.ArgumentMatchers.anyString(),
-        envVars = org.mockito.ArgumentMatchers.any()
+        envVars = org.mockito.ArgumentMatchers.any(),
+        nodeSelector = org.mockito.ArgumentMatchers.any()
       )
     ).thenReturn("flink-abc123")
 
@@ -1552,6 +1553,34 @@ class EmrServerlessSubmitterTest extends AnyFlatSpec with Matchers with MockitoS
     } else {
       println("Skipping status polling (set POLL_JOB_STATUS=true to enable)")
     }
+  }
+
+  "nodeSelector" should "parse multiple comma-separated key=value pairs" in {
+    EmrServerlessSubmitter.parseNodeSelector("sardine.ai/node-type=flink,kubernetes.io/arch=amd64") shouldBe Map(
+      "sardine.ai/node-type" -> "flink",
+      "kubernetes.io/arch"   -> "amd64"
+    )
+  }
+
+  "nodeSelector" should "return None when arg is absent" in {
+    val args = Array("--other-arg=value")
+    ai.chronon.spark.submission.JobSubmitter.getArgValue(args, "--eks-node-selector") shouldBe None
+  }
+
+  // regression test: values containing '=' must not be truncated
+  "nodeSelector" should "parse a value that contains = (e.g. label value with equals sign)" in {
+    val args = Array("--eks-node-selector=sardine.ai/node-type=flink")
+    ai.chronon.spark.submission.JobSubmitter.getArgValue(args, "--eks-node-selector") shouldBe
+      Some("sardine.ai/node-type=flink")
+  }
+
+  "nodeSelector" should "throw on malformed pair missing '='" in {
+    an[IllegalArgumentException] should be thrownBy EmrServerlessSubmitter.parseNodeSelector("sardine.ai/node-type=flink,badtoken")
+  }
+
+  "nodeSelector" should "throw on blank input" in {
+    an[IllegalArgumentException] should be thrownBy EmrServerlessSubmitter.parseNodeSelector("")
+    an[IllegalArgumentException] should be thrownBy EmrServerlessSubmitter.parseNodeSelector("   ")
   }
 }
 

@@ -78,7 +78,6 @@ trait JobSubmitter {
   def jarName: String = ""
   def flinkJarName: String = "flink_assembly_deploy.jar"
   def onlineClass: String = ""
-  def tablePartitionsDataset: String = ""
   def dqMetricsDataset: String = ""
 
   def resolveConfPath(stagedFileUri: String): String = stagedFileUri.split("/").last
@@ -133,9 +132,8 @@ object JobSubmitter {
 
   def getArgValue(args: Array[String], argKeyword: String): Option[String] = {
     args
-      .find(_.startsWith(argKeyword))
-      .map(_.split("="))
-      .map(_(1))
+      .find(_.startsWith(s"$argKeyword="))
+      .map(arg => arg.substring(argKeyword.length + 1))
   }
 
   def parseConf[T <: TBase[_, _]: Manifest: ClassTag](confPath: String): T =

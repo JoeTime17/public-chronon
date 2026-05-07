@@ -185,4 +185,22 @@ class AksFlinkSubmitterTest extends AnyFlatSpec {
   it should "set azure.workload.identity/use=true in WorkloadIdentityPodLabels" in {
     assertEquals("true", AksFlinkSubmitter.WorkloadIdentityPodLabels("azure.workload.identity/use"))
   }
+
+  // The hub on AKS without streaming workflows shouldn't fail to start when these env vars
+  // aren't set; the resolution happens lazily on first Flink submission.
+  it should "construct AksFlinkSubmitter even when FLINK_AZURE_* env vars are missing" in {
+    // Should NOT throw — extraAzureFlinkConfig is captured by-name and not evaluated until
+    // the first call to K8sFlinkSubmitter.buildFlinkConfiguration / .submit.
+    val submitter = AksFlinkSubmitter(env = Map.empty)
+    assertTrue(submitter != null)
+  }
+
+  it should "fail at first Flink config build when FLINK_AZURE_CLIENT_ID is unset" in {
+    val submitter = AksFlinkSubmitter(env = Map.empty)
+    // The lazy by-name extraFlinkConfig is forced when buildFlinkConfiguration is called —
+    // that's when we want the IllegalArgumentException, not at hub startup.
+    intercept[IllegalArgumentException] {
+      submitter.buildFlinkConfiguration("abfss://state-uri/checkpoints", Map.empty)
+    }
+  }
 }

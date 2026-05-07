@@ -10,9 +10,10 @@ import io.apicurio.registry.rest.client.RegistryClient
 import io.apicurio.registry.rest.client.exception.ArtifactNotFoundException
 import io.apicurio.registry.rest.v2.beans.{ArtifactMetaData, Error => ApicurioError}
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema
-import org.mockito.ArgumentMatchers.anyString
+import org.mockito.ArgumentMatchers.{anyLong, anyString}
 import org.mockito.Mockito
 import org.mockito.Mockito.when
+import org.mockito.invocation.InvocationOnMock
 import org.scalatest.flatspec.AnyFlatSpec
 
 import java.io.{ByteArrayInputStream, InputStream}
@@ -163,7 +164,8 @@ class ApicurioSchemaSerDeSpec extends AnyFlatSpec {
       Map(RegistryHostKey -> "localhost", WireFormatKey -> "apicurio"))
     val mockClient = Mockito.mock(classOf[RegistryClient])
     when(mockClient.getArtifactMetaData(anyString(), anyString())).thenReturn(makeMetadata(11L, "AVRO"))
-    when(mockClient.getContentByGlobalId(11L)).thenReturn(streamOf(avroSchemaStr))
+    // Return a fresh stream on each call — called once during init, once per-message for writer schema
+    when(mockClient.getContentByGlobalId(11L)).thenAnswer((_: InvocationOnMock) => streamOf(avroSchemaStr))
 
     val serDe = new MockApicurioSchemaSerDe(topicInfo, mockClient)
     val avroCodec = AvroCodec.of(avroSchemaStr)
@@ -186,7 +188,8 @@ class ApicurioSchemaSerDeSpec extends AnyFlatSpec {
       Map(RegistryHostKey -> "localhost", WireFormatKey -> "confluent"))
     val mockClient = Mockito.mock(classOf[RegistryClient])
     when(mockClient.getArtifactMetaData(anyString(), anyString())).thenReturn(makeMetadata(12L, "AVRO"))
-    when(mockClient.getContentByGlobalId(12L)).thenReturn(streamOf(avroSchemaStr))
+    // Return a fresh stream on each call — called once during init, once per-message for writer schema
+    when(mockClient.getContentByGlobalId(12L)).thenAnswer((_: InvocationOnMock) => streamOf(avroSchemaStr))
 
     val serDe = new MockApicurioSchemaSerDe(topicInfo, mockClient)
     val avroCodec = AvroCodec.of(avroSchemaStr)
@@ -351,6 +354,103 @@ class ApicurioSchemaSerDeSpec extends AnyFlatSpec {
     val mutation = serDe.fromBytes(emptyMessage.toByteArray)
     assert(mutation.after(0) == "")
     assert(mutation.after(1) == 0)
+  }
+
+  // ============== Schema Evolution tests ==============
+
+  private val schema1Str =
+    """{ "type": "record", "name": "User", "fields": [
+      |  { "name": "name", "type": "string" },
+      |  { "name": "age",  "type": "int" }
+      |]}""".stripMargin
+
+  private val schema2Str =
+    """{ "type": "record", "name": "User", "fields": [
+      |  { "name": "name",  "type": "string" },
+      |  { "name": "age",   "type": "int" },
+      |  { "name": "email", "type": ["null", "string"], "default": null }
+      |]}""".stripMargin
+
+  private def buildWireApicurio(globalId: Long, payload: Array[Byte]): Array[Byte] = {
+    val buf = java.nio.ByteBuffer.allocate(9)
+    buf.put(0x00.toByte)
+    buf.putLong(globalId)
+    buf.array() ++ payload
+  }
+
+  private def buildWireConfluent(schemaId: Int, payload: Array[Byte]): Array[Byte] = {
+    val buf = java.nio.ByteBuffer.allocate(5)
+    buf.put(0x00.toByte)
+    buf.putInt(schemaId)
+    buf.array() ++ payload
+  }
+
+  it should "correctly decode old data (schema 1) when latest schema (schema 2) adds a nullable field - apicurio wire format" in {
+    val mockClient = Mockito.mock(classOf[RegistryClient])
+    // globalId 50 = schema 2 (latest, used as reader); globalId 51 = schema 1 (writer, embedded in wire header)
+    when(mockClient.getArtifactMetaData(anyString(), anyString())).thenReturn(makeMetadata(50L, "AVRO"))
+    when(mockClient.getContentByGlobalId(50L)).thenAnswer((_: InvocationOnMock) => streamOf(schema2Str))
+    when(mockClient.getContentByGlobalId(51L)).thenAnswer((_: InvocationOnMock) => streamOf(schema1Str))
+
+    val topicInfo = TopicInfo("test-topic", "kafka", Map(RegistryHostKey -> "localhost", WireFormatKey -> "apicurio"))
+    val serDe = new MockApicurioSchemaSerDe(topicInfo, mockClient)
+
+    val codec1 = AvroCodec.of(schema1Str)
+    val record = new org.apache.avro.generic.GenericData.Record(codec1.schema)
+    record.put("name", "John")
+    record.put("age", 30)
+    val wireBytes = buildWireApicurio(51L, codec1.encodeBinary(record))
+
+    val mutation = serDe.fromBytes(wireBytes)
+    assert(mutation.after(0) == "John")
+    assert(mutation.after(1) == 30)
+    assert(mutation.after(2) == null, "email should be null (default from schema 2)")
+  }
+
+  it should "correctly decode old data (schema 1) when latest schema (schema 2) adds a nullable field - confluent wire format" in {
+    val mockClient = Mockito.mock(classOf[RegistryClient])
+    // globalId 52 = schema 2 (latest, used as reader); globalId 53 = schema 1 (writer, embedded in wire header)
+    when(mockClient.getArtifactMetaData(anyString(), anyString())).thenReturn(makeMetadata(52L, "AVRO"))
+    when(mockClient.getContentByGlobalId(52L)).thenAnswer((_: InvocationOnMock) => streamOf(schema2Str))
+    when(mockClient.getContentByGlobalId(53L)).thenAnswer((_: InvocationOnMock) => streamOf(schema1Str))
+
+    val topicInfo = TopicInfo("test-topic", "kafka", Map(RegistryHostKey -> "localhost", WireFormatKey -> "confluent"))
+    val serDe = new MockApicurioSchemaSerDe(topicInfo, mockClient)
+
+    val codec1 = AvroCodec.of(schema1Str)
+    val record = new org.apache.avro.generic.GenericData.Record(codec1.schema)
+    record.put("name", "John")
+    record.put("age", 30)
+    val wireBytes = buildWireConfluent(53, codec1.encodeBinary(record))
+
+    val mutation = serDe.fromBytes(wireBytes)
+    assert(mutation.after(0) == "John")
+    assert(mutation.after(1) == 30)
+    assert(mutation.after(2) == null, "email should be null (default from schema 2)")
+  }
+
+  it should "correctly decode new data (schema 2) when SerDe was initialized with schema 1 as reader - apicurio wire format" in {
+    val mockClient = Mockito.mock(classOf[RegistryClient])
+    // globalId 54 = schema 1 (latest at init, used as reader); globalId 55 = schema 2 (writer, embedded in wire header)
+    when(mockClient.getArtifactMetaData(anyString(), anyString())).thenReturn(makeMetadata(54L, "AVRO"))
+    when(mockClient.getContentByGlobalId(54L)).thenAnswer((_: InvocationOnMock) => streamOf(schema1Str))
+    when(mockClient.getContentByGlobalId(55L)).thenAnswer((_: InvocationOnMock) => streamOf(schema2Str))
+
+    val topicInfo = TopicInfo("test-topic", "kafka", Map(RegistryHostKey -> "localhost", WireFormatKey -> "apicurio"))
+    val serDe = new MockApicurioSchemaSerDe(topicInfo, mockClient)
+    assert(serDe.schema != null)
+
+    val codec2 = AvroCodec.of(schema2Str)
+    val record = new org.apache.avro.generic.GenericData.Record(codec2.schema)
+    record.put("name", "Alice")
+    record.put("age", 25)
+    record.put("email", "alice@test.com")
+    val wireBytes = buildWireApicurio(55L, codec2.encodeBinary(record))
+
+    // Avro resolution: extra "email" field in writer schema is ignored (not in reader schema 1)
+    val mutation = serDe.fromBytes(wireBytes)
+    assert(mutation.after(0) == "Alice")
+    assert(mutation.after(1) == 25)
   }
 
   // ============== Proto2 tests ==============

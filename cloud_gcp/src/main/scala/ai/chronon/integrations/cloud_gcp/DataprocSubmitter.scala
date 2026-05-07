@@ -30,7 +30,6 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
                         clusterControllerClient: Option[ClusterControllerClient] = None,
                         rawStorageClient: Option[Storage] = None,
                         bigtableInstanceId: String = "",
-                        override val tablePartitionsDataset: String = "",
                         override val dqMetricsDataset: String = "",
                         flinkHealthCheckFn: Option[String] => Boolean = _ => true,
                         flinkInternalJobIdFetchFn: Option[String] => Option[String] = _ => None)

@@ -827,34 +827,38 @@ def clear_downstream(conf, repo, hub_url, use_auth, format, start_ds, end_ds, as
         )
 
     results = preview_json.get("results", [])
-    total_nodes = preview_json.get("totalNodesCleared", 0)
+    affected_confs = preview_json.get("affectedConfs", [])
 
     print_key_value("Conf", conf_name, format=format)
     start_str = start_ds.strftime("%Y-%m-%d") if hasattr(start_ds, "strftime") else str(start_ds)
     end_str = end_ds.strftime("%Y-%m-%d") if hasattr(end_ds, "strftime") else str(end_ds)
     print_key_value("Range", f"{start_str} to {end_str}", format=format)
-    print_key_value("Nodes to clear", total_nodes, format=format)
+    print_key_value("Affected confs", len(affected_confs), format=format)
     click.echo()
-    for result in results:
+    for conf_result in affected_confs:
         print_key_value(
-            f"  {result.get('nodeName', 'unknown')}",
-            f"{result.get('startPartition', '')} to {result.get('endPartition', '')}",
+            f"  {conf_result.get('confName', 'unknown')}",
+            f"{conf_result.get('startPartition', '')} to {conf_result.get('endPartition', '')}",
             format=format,
         )
     click.echo()
 
     if not assume_yes:
-        if not click.confirm(click.style("Proceed with clearing these nodes?", fg="yellow")):
+        if not click.confirm(click.style("Proceed with clearing these confs?", fg="yellow")):
             click.echo("Aborted.")
             sys.exit(0)
 
     with status_spinner("Clearing downstream nodes...", format=format):
-        apply_json = zipline_hub.apply_clear_downstream(
+        zipline_hub.apply_clear_downstream(
             node_results=results,
             user=user,
+            affected_confs=affected_confs,
         )
 
-    print_success(f"Cleared {apply_json.get('totalNodesCleared', 0)} nodes", format=format)
+    print_success(f"Cleared {len(affected_confs)} confs", format=format)
+    click.echo()
+    click.echo("To recompute, run backfill for each affected conf:")
+    click.echo("  zipline hub backfill <compiled_conf_path> --start-ds <start> --end-ds <end>")
 
 
 def load_json(file_path):

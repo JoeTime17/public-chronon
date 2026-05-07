@@ -336,3 +336,52 @@ def test_split_date_range():
 
     result = utils.split_date_range(start_date, end_date, parallelism)
     assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "gs://bucket/path/jar.jar",
+        "s3://bucket/path/jar.jar",
+        "http://artifactory.example.com/path/jar.jar",
+        "https://artifactory.example.com/path/jar.jar",
+        "file:/opt/jars/jar.jar",
+        "file:///opt/jars/jar.jar",
+        "local:/opt/jars/jar.jar",
+        "local:///opt/jars/jar.jar",
+        "gs://bucket/a.jar,https://artifactory.example.com/b.jar,s3://bucket/c.jar",
+    ],
+)
+def test_validate_additional_jars_accepts_supported_schemes(value):
+    assert run.validate_additional_jars(None, None, value) == value
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("  gs://bucket/a.jar  ", "gs://bucket/a.jar"),
+        ("gs://bucket/a.jar, https://artifactory.example.com/b.jar",
+         "gs://bucket/a.jar,https://artifactory.example.com/b.jar"),
+        ("\tgs://bucket/a.jar\t,\nhttps://artifactory.example.com/b.jar\n",
+         "gs://bucket/a.jar,https://artifactory.example.com/b.jar"),
+    ],
+)
+def test_validate_additional_jars_strips_whitespace(value, expected):
+    assert run.validate_additional_jars(None, None, value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "ftp://example.com/jar.jar",
+        "/absolute/path/jar.jar",
+        "relative/path/jar.jar",
+        "hdfs://nn/path/jar.jar",
+        "gs://bucket/a.jar,ftp://example.com/b.jar",
+    ],
+)
+def test_validate_additional_jars_rejects_unsupported_schemes(value):
+    with pytest.raises(click.BadParameter):
+        run.validate_additional_jars(None, None, value)

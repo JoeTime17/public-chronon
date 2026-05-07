@@ -1124,6 +1124,10 @@ object Driver {
   }
 
   class Args(args: Array[String]) extends ScallopConf(args) {
+    val noExit: ScallopOption[Boolean] = opt[Boolean](
+      descr = "Whether to skip System.exit(0) at the end of the run",
+      default = Some(false)
+    )
     object JoinBackFillArgs extends JoinBackfill.Args
     addSubcommand(JoinBackFillArgs)
     object LogFlattenerArgs extends LogFlattener.Args
@@ -1183,6 +1187,7 @@ object Driver {
 
   def main(baseArgs: Array[String]): Unit = {
     val args = new Args(baseArgs)
+    val skipExit = args.noExit()
     var shouldExit = true
     args.subcommand match {
       case Some(x) =>
@@ -1217,7 +1222,7 @@ object Driver {
         }
       case None => logger.info("specify a subcommand please")
     }
-    if (shouldExit) {
+    if (shouldExit && !skipExit) {
       System.exit(0)
     }
   }

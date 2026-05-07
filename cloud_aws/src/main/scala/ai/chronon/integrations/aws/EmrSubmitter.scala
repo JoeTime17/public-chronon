@@ -39,7 +39,6 @@ class EmrSubmitter(customerId: String,
                    eksFlinkSubmitter: Option[K8sFlinkSubmitter] = None,
                    s3Client: Option[S3Client] = None,
                    awsRegion: String = "",
-                   override val tablePartitionsDataset: String = "",
                    override val dqMetricsDataset: String = "",
                    flinkEksServiceAccount: Option[String] = None,
                    flinkEksNamespace: Option[String] = None,
@@ -522,6 +521,10 @@ class EmrSubmitter(customerId: String,
           throw new RuntimeException(s"Missing expected $EksServiceAccount"))
         val namespace =
           submissionProperties.getOrElse(EksNamespace, throw new RuntimeException(s"Missing expected $EksNamespace"))
+        val nodeSelector = submissionProperties
+          .get(EksNodeSelector)
+          .map(EmrServerlessSubmitter.parseNodeSelector)
+          .getOrElse(Map.empty)
 
         val deploymentName = eksFlinkSubmitter
           .getOrElse(
@@ -539,7 +542,8 @@ class EmrSubmitter(customerId: String,
             args = userArgs,
             serviceAccount = serviceAccount,
             namespace = namespace,
-            envVars = envVars
+            envVars = envVars,
+            nodeSelector = nodeSelector
           )
         // Encode namespace into the job ID so status/kill can target the right namespace
         s"flink:$namespace:$deploymentName"
@@ -650,12 +654,13 @@ class EmrSubmitter(customerId: String,
     val eksNamespace = this.flinkEksNamespace
       .orElse(env.get("FLINK_EKS_NAMESPACE"))
       .getOrElse(throw new IllegalArgumentException("FLINK_EKS_NAMESPACE must be set for GROUP_BY_STREAMING"))
+    val maybeNodeSelector = env.get("FLINK_EKS_NODE_SELECTOR")
     val base = Map(
       FlinkMainJarURI -> flinkJarUri,
       FlinkCheckpointUri -> s"$flinkStateUri/checkpoints",
       EksServiceAccount -> eksServiceAccount,
       EksNamespace -> eksNamespace
-    )
+    ) ++ maybeNodeSelector.map(EksNodeSelector -> _)
     val enableKinesis = env.getOrElse("ENABLE_KINESIS", "false").toBoolean
     if (enableKinesis)
       base + (FlinkKinesisConnectorJarURI -> s"$artifactPrefix/release/$version/jars/connectors_kinesis_deploy.jar")
@@ -852,6 +857,8 @@ object EmrSubmitter {
         val maybeFlinkJarsUri = JobSubmitter.getArgValue(args, FlinkJarsUriArgKeyword)
         val maybeAdditionalJarsUri = JobSubmitter.getArgValue(args, AdditionalJarsUriArgKeyword)
 
+        val maybeNodeSelector = JobSubmitter.getArgValue(args, EksNodeSelectorArgKeyword)
+
         val baseJobProps = Map(
           JobId -> jobId,
           MainClass -> mainClass,
@@ -862,7 +869,8 @@ object EmrSubmitter {
           EksNamespace -> eksNamespace
         ) ++ maybeKinesisJarUri.map(FlinkKinesisConnectorJarURI -> _) ++
           maybeFlinkJarsUri.map(FlinkJarsUri -> _) ++
-          maybeAdditionalJarsUri.map(AdditionalJars -> _)
+          maybeAdditionalJarsUri.map(AdditionalJars -> _) ++
+          maybeNodeSelector.map(EksNodeSelector -> _)
 
         val userPassedSavepoint = JobSubmitter.getArgValue(args, StreamingCustomSavepointArgKeyword)
         val maybeSavepointUri =

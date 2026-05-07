@@ -761,8 +761,11 @@ class TestHubRunner:
                 {"nodeName": "aws.my_node.v1", "nodeHash": "h1", "semanticHash": "s1",
                  "startPartition": "2024-01-01", "endPartition": "2024-01-05"},
             ],
+            "affectedConfs": [
+                {"confName": "aws.my_conf.v1", "startPartition": "2024-01-01", "endPartition": "2024-01-05"},
+            ],
             "totalNodesCleared": 1,
-            "message": "Preview: 1 nodes would be cleared",
+            "message": "Preview: 1 confs would be cleared",
         }
         preview_response.raise_for_status.return_value = None
 
@@ -791,8 +794,9 @@ class TestHubRunner:
 
         assert result.exit_code == 0
         plain_output = _plain(result.output)
-        assert "aws.my_node.v1" in plain_output
-        assert "Cleared 1 nodes" in plain_output
+        assert "aws.my_conf.v1" in plain_output
+        assert "Cleared 1 confs" in plain_output
+        assert "zipline hub backfill" in plain_output
 
         assert mock_post.call_count == 2
 
@@ -809,3 +813,5 @@ class TestHubRunner:
         apply_payload = apply_call[1]['json']
         assert len(apply_payload['nodeResults']) == 1
         assert apply_payload['user'] == "test@example.com"
+        assert len(apply_payload['affectedConfs']) == 1
+        assert apply_payload['affectedConfs'][0]['confName'] == "aws.my_conf.v1"

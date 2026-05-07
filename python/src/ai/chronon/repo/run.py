@@ -100,13 +100,30 @@ def validate_flink_state(ctx, param, value):
     return value
 
 
+# Keep in sync with Spark's `Utils.fetchFile` (used by `spark-submit --jars`):
+# adding a scheme it can't fetch surfaces as a driver classpath failure, not
+# a CLI error.
+ADDITIONAL_JARS_ALLOWED_SCHEMES = (
+    "gs://",
+    "s3://",
+    "http://",
+    "https://",
+    "file:",
+    "local:",
+)
+
+
 def validate_additional_jars(ctx, param, value):
-    if value:
-        jars = value.split(",")
-        for jar in jars:
-            if not jar.startswith(("gs://", "s3://")):
-                raise click.BadParameter(f"Additional jars must start with gs://, s3://: {jar}")
-    return value
+    if not value:
+        return value
+    jars = [j.strip() for j in value.split(",")]
+    for jar in jars:
+        if not jar.startswith(ADDITIONAL_JARS_ALLOWED_SCHEMES):
+            raise click.BadParameter(
+                f"Additional jars must start with one of "
+                f"{list(ADDITIONAL_JARS_ALLOWED_SCHEMES)}: {jar}"
+            )
+    return ",".join(jars)
 
 
 @click.command(
@@ -210,7 +227,12 @@ def validate_additional_jars(ctx, param, value):
 )
 @click.option(
     "--additional-jars",
-    help="Comma separated list of additional jar URIs to be included in the Flink job classpath (e.g. gs://bucket/jar1.jar,gs://bucket/jar2.jar).",
+    help=(
+        "Comma separated list of additional jar URIs to be included in the "
+        "Spark/Flink job classpath. Accepts gs://, s3://, http(s)://, file: "
+        "and local: schemes "
+        "(e.g. gs://bucket/jar1.jar,https://artifactory.example.com/path/jar2.jar)."
+    ),
     callback=validate_additional_jars,
 )
 @click.option(

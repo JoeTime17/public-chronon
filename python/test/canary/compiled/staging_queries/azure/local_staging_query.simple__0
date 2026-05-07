@@ -11,7 +11,8 @@
           "spark.chronon.table_write.format": "iceberg",
           "spark.default.parallelism": "10",
           "spark.driver.cores": "1",
-          "spark.driver.memory": "512m",
+          "spark.driver.memory": "4g",
+          "spark.driver.memoryOverhead": "1g",
           "spark.executor.cores": "1",
           "spark.executor.memory": "512m",
           "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkCatalog",
@@ -33,6 +34,7 @@
           "CLOUD_PROVIDER": "azure",
           "CUSTOMER_ID": "dev",
           "EVAL_URL": "https://dev-azure.zipline.ai/services/eval",
+          "FETCHER_URL": "http://localhost:9000",
           "FLINK_JARS_URI": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/spark-3.5.3/libs/",
           "FLINK_SASL_JAAS_CONFIG_VAULT_URI": "https://eventhub-sasl-jaas.vault.azure.net/secrets/sasl-jass-config",
           "FLINK_STATE_URI": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net/flink-state",
@@ -41,7 +43,7 @@
           "OC_CREDENTIAL_VAULT_URI": "https://dev-zipline-secrets.vault.azure.net/secrets/oc-catalog-credential",
           "SNOWFLAKE_JDBC_URL": "jdbc:snowflake://VEJLULX-AZURE.snowflakecomputing.com/?user=demo_batch_service&db=Demo&schema=public&warehouse=demo_wh",
           "SNOWFLAKE_PRIVATE_KEY_VAULT_URI": "https://demo-service-writer-pkey.vault.azure.net/secrets/snowflake-private-key",
-          "SPARK_CLUSTER_NAME": "http://kyuubi-dev.westus.cloudapp.azure.com:10099",
+          "SPARK_CLUSTER_NAME": "http://dev-zipline-kyuubi.westus.cloudapp.azure.com:10099",
           "VERSION": "latest",
           "WAREHOUSE_PREFIX": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net"
         }

@@ -40,6 +40,7 @@ object JobSubmitterConstants {
   // EKS (Flink on EKS) specific properties
   val EksServiceAccount = "eksServiceAccount"
   val EksNamespace = "eksNamespace"
+  val EksNodeSelector = "eksNodeSelector"
 
   val JarUriArgKeyword = "--jar-uri"
   val JobTypeArgKeyword = "--job-type"
@@ -73,6 +74,7 @@ object JobSubmitterConstants {
   val JobIdArgKeyword = "--job-id"
   val EksServiceAccountArgKeyword = "--eks-service-account"
   val EksNamespaceArgKeyword = "--eks-namespace"
+  val EksNodeSelectorArgKeyword = "--eks-node-selector"
 
   val FlinkDeploymentModeArgKeyword = "--flink-deployment-mode"
   val FlinkDeploymentModeDefault = "default"
@@ -101,6 +103,7 @@ object JobSubmitterConstants {
     JobIdArgKeyword,
     EksServiceAccountArgKeyword,
     EksNamespaceArgKeyword,
+    EksNodeSelectorArgKeyword,
     FlinkDeploymentModeArgKeyword
   )
 
@@ -119,7 +122,6 @@ object JobSubmitterConstants {
   // Deprecated: Use ClusterNameEnvVar instead
   val EmrClusterNameEnvVar = "EMR_CLUSTER_NAME"
 
-  val TablePartitionsDatasetNameArgKeyword = "--table-partitions-dataset"
   val TableStatsDatasetNameArgKeyword = "--table-stats-dataset"
 
   val CheckIfJobIsRunning = "check-if-job-is-running"

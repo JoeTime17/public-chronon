@@ -35,7 +35,6 @@ spark-submit \
       --conf-path=azure_exports_dim_listings__0__staging \
 	  --start-ds=2026-01-18 \
  	  --end-ds=2026-01-18 \
-	  --table-partitions-dataset=TABLE_PARTITIONS \
 	  --table-stats-dataset=DATA_QUALITY_METRICS \
 	  --online-class=ai.chronon.integrations.cloud_azure.AzureApiImpl \
 	  -ZAZURE_STORAGE_ACCOUNT_NAME=$AZ_STORAGE \

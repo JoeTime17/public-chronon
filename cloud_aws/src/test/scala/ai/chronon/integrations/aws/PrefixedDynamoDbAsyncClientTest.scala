@@ -270,6 +270,96 @@ class PrefixedDynamoDbAsyncClientTest extends AnyFlatSpec with Matchers with Moc
     captor.getValue.tableName() shouldBe originalTableName
   }
 
+  // ===== listTables =====
+
+  it should "prefix exclusiveStartTableName in listTables and strip prefix from response names" in {
+    val client = new PrefixedDynamoDbAsyncClient(mockDelegate, testPrefix)
+    val request = ListTablesRequest.builder().exclusiveStartTableName("my_start").build()
+
+    when(mockDelegate.listTables(any[ListTablesRequest]())).thenReturn(
+      CompletableFuture.completedFuture(
+        ListTablesResponse.builder()
+          .tableNames(s"${testPrefix}table_a", s"${testPrefix}table_b")
+          .build()
+      )
+    )
+
+    val result = client.listTables(request).join()
+
+    val captor = ArgumentCaptor.forClass(classOf[ListTablesRequest])
+    verify(mockDelegate).listTables(captor.capture())
+    // exclusiveStartTableName should be prefixed
+    captor.getValue.exclusiveStartTableName() shouldBe s"${testPrefix}my_start"
+    // response names should have prefix stripped
+    result.tableNames().toArray shouldBe Array("table_a", "table_b")
+  }
+
+  it should "strip prefix from lastEvaluatedTableName in listTables response" in {
+    val client = new PrefixedDynamoDbAsyncClient(mockDelegate, testPrefix)
+    val request = ListTablesRequest.builder().build()
+
+    when(mockDelegate.listTables(any[ListTablesRequest]())).thenReturn(
+      CompletableFuture.completedFuture(
+        ListTablesResponse.builder()
+          .tableNames(s"${testPrefix}table_a")
+          .lastEvaluatedTableName(s"${testPrefix}table_a")
+          .build()
+      )
+    )
+
+    val result = client.listTables(request).join()
+    result.lastEvaluatedTableName() shouldBe "table_a"
+  }
+
+  it should "not modify listTables response names that do not carry the prefix" in {
+    // Tables created outside the prefix namespace should pass through unchanged
+    val client = new PrefixedDynamoDbAsyncClient(mockDelegate, testPrefix)
+    val request = ListTablesRequest.builder().build()
+
+    when(mockDelegate.listTables(any[ListTablesRequest]())).thenReturn(
+      CompletableFuture.completedFuture(
+        ListTablesResponse.builder()
+          .tableNames("unrelated_table")
+          .build()
+      )
+    )
+
+    val result = client.listTables(request).join()
+    result.tableNames().toArray shouldBe Array("unrelated_table")
+  }
+
+  it should "handle listTables with no exclusiveStartTableName" in {
+    val client = new PrefixedDynamoDbAsyncClient(mockDelegate, testPrefix)
+    val request = ListTablesRequest.builder().limit(10).build()
+
+    when(mockDelegate.listTables(any[ListTablesRequest]())).thenReturn(
+      CompletableFuture.completedFuture(ListTablesResponse.builder().build())
+    )
+
+    client.listTables(request).join()
+
+    val captor = ArgumentCaptor.forClass(classOf[ListTablesRequest])
+    verify(mockDelegate).listTables(captor.capture())
+    captor.getValue.exclusiveStartTableName() shouldBe null
+    captor.getValue.limit() shouldBe 10
+  }
+
+  it should "handle listTables with empty prefix (no stripping)" in {
+    val client = new PrefixedDynamoDbAsyncClient(mockDelegate, "")
+    val request = ListTablesRequest.builder().build()
+
+    when(mockDelegate.listTables(any[ListTablesRequest]())).thenReturn(
+      CompletableFuture.completedFuture(
+        ListTablesResponse.builder()
+          .tableNames("table_a", "table_b")
+          .build()
+      )
+    )
+
+    val result = client.listTables(request).join()
+    result.tableNames().toArray shouldBe Array("table_a", "table_b")
+  }
+
   it should "preserve other request parameters when prefixing table name" in {
     val client = new PrefixedDynamoDbAsyncClient(mockDelegate, testPrefix)
     val originalTableName = "my_table"

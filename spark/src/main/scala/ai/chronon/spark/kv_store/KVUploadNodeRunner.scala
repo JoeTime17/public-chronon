@@ -124,9 +124,6 @@ object KVUploadNodeRunner {
                                   descr =
                                     "Fully qualified Online.Api based class. We expect the jar to be on the class path")
     val apiProps: Map[String, String] = props[String]('Z', descr = "Props to configure API Store")
-    val tablePartitionsDataset = opt[String](required = true,
-                                             descr = "Name of table in kv store to use to keep track of partitions",
-                                             default = Option(NodeRunner.DefaultTablePartitionsDataset))
     verify()
   }
 

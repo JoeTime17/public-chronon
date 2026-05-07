@@ -60,6 +60,17 @@ object SparkSessionBuilder {
     val chrononLogger = builder.newLogger("ai.chronon", Level.INFO)
     builder.add(chrononLogger)
 
+    // Spark 3.5.3 RPC noise: org.apache.spark.storage.StorageStatus is not
+    // Serializable, so BlockManagerMasterEndpoint replies to GetStorageStatus
+    // hit a NotSerializableException over Netty. Inbox.safelyCall catches and
+    // logs at ERROR ("Ignoring error", with full stack trace) on every RPC.
+    // The job is unaffected. Upstream demoted this log to DEBUG in
+    // SPARK-49749 (https://issues.apache.org/jira/browse/SPARK-49749), but
+    // we're on 3.5.3 which predates the fix. Drop the Inbox logger until we
+    // upgrade.
+    val inboxLogger = builder.newLogger("org.apache.spark.rpc.netty.Inbox", Level.OFF)
+    builder.add(inboxLogger)
+
     // Build and apply configuration
     val config = builder.build()
     val context = LoggerContext.getContext(false)

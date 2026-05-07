@@ -7,6 +7,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema
 import io.confluent.kafka.schemaregistry.client.{CachedSchemaRegistryClient, SchemaRegistryClient}
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema
+import java.nio.ByteBuffer
 
 /** Schema Provider / SerDe implementation that uses the Confluent Schema Registry to fetch schemas for topics.
   * Supports both Avro and Protobuf schemas.
@@ -49,11 +50,12 @@ class SchemaRegistrySerDe(topicInfo: TopicInfo) extends SerDe {
     }
   }
 
-  private lazy val delegate: SerDe = buildSerDe(topicInfo)
+  @transient private lazy val schemaRegistryClient: SchemaRegistryClient =
+    buildSchemaRegistryClient(schemaRegistrySchemeString, schemaRegistryHost, schemaRegistryPortString)
+
+  @transient private lazy val delegate: SerDe = buildSerDe(topicInfo)
 
   private def buildSerDe(topicInfo: TopicInfo): SerDe = {
-    val schemaRegistryClient =
-      buildSchemaRegistryClient(schemaRegistrySchemeString, schemaRegistryHost, schemaRegistryPortString)
     val subject = topicInfo.params.getOrElse(RegistrySubjectKey, s"${topicInfo.name}-value")
     val parsedSchema =
       try {
@@ -84,18 +86,25 @@ class SchemaRegistrySerDe(topicInfo: TopicInfo) extends SerDe {
   override def schema: StructType = delegate.schema
 
   override def fromBytes(message: Array[Byte]): Mutation = {
-    val messageBytes =
-      if (schemaRegistryWireFormat) {
-        // Schema id is set, we skip the first 5 bytes based on the wire format:
-        // https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#messages-wire-format
-        // unfortunately we need to drop the first 5 bytes (and thus copy the rest of the byte array) as the AvroDataToCatalyst
-        // interface takes a byte array and the methods to do the Row conversion etc are all private so we can't reach in
-        // This applies to both Avro and Protobuf schemas in Confluent Schema Registry.
-        message.drop(5)
-      } else {
-        message
+    if (schemaRegistryWireFormat) {
+      // Wire format: [0x00 magic byte][4-byte schema ID big-endian][payload]
+      // https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#messages-wire-format
+      val writerSchemaId = ByteBuffer.wrap(message, 1, 4).getInt
+      val messageBytes = message.drop(5)
+      delegate match {
+        case avroSerDe: AvroSerDe =>
+          val writerAvroSchema = schemaRegistryClient
+            .getSchemaById(writerSchemaId)
+            .asInstanceOf[AvroSchema]
+            .rawSchema()
+          avroSerDe.fromBytes(messageBytes, writerAvroSchema)
+        case _ =>
+          // Protobuf is self-describing (field tags in every message) — no schema resolution needed
+          delegate.fromBytes(messageBytes)
       }
-    delegate.fromBytes(messageBytes)
+    } else {
+      delegate.fromBytes(message)
+    }
   }
 }
 

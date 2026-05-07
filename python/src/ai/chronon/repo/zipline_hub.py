@@ -161,7 +161,7 @@ class ZiplineHub:
 
             print_info("Token acquired.", format=self.format)
         except (ClientAuthenticationError, CredentialUnavailableError) as e:
-            print_error(
+            print_warning(
                 f"Could not acquire token. Make sure you are logged in via 'az login'. Details: {e}",
                 format=self.format,
             )
@@ -710,12 +710,14 @@ class ZiplineHub:
             print_error(f"Error calling clear-downstream preview API: {self._get_error_details(e)}", format=self.format)
             raise e
 
-    def apply_clear_downstream(self, node_results, user):
+    def apply_clear_downstream(self, node_results, user, affected_confs=None):
         url = f"{self.base_url}/workflow/v2/clear-downstream/apply"
         apply_request = {
             "nodeResults": node_results,
             "user": user,
         }
+        if affected_confs:
+            apply_request["affectedConfs"] = affected_confs
         try:
             response = requests.post(
                 url, json=apply_request, headers=self.additional_headers(self.base_url)

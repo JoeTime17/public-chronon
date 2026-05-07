@@ -92,7 +92,6 @@ class KyuubiSubmitter private[submission] (
     sparkHistoryServerUrl: Option[String] = None,
     override val jarName: String = "",
     override val onlineClass: String = "",
-    override val tablePartitionsDataset: String = "",
     override val dqMetricsDataset: String = "",
     override val kvStoreApiProperties: Map[String, String] = Map.empty
 ) extends JobSubmitter {
@@ -521,7 +520,6 @@ object KyuubiSubmitter {
       sparkHistoryServerUrl: Option[String] = None,
       jarName: String = "",
       onlineClass: String = "",
-      tablePartitionsDataset: String = "",
       dqMetricsDataset: String = "",
       kvStoreApiProperties: Map[String, String] = Map.empty
   ): KyuubiSubmitter = {
@@ -532,7 +530,6 @@ object KyuubiSubmitter {
                         sparkHistoryServerUrl,
                         jarName,
                         onlineClass,
-                        tablePartitionsDataset,
                         dqMetricsDataset,
                         kvStoreApiProperties)
   }

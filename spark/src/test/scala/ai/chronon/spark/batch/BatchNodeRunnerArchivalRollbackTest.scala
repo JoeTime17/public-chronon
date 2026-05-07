@@ -2,7 +2,7 @@ package ai.chronon.spark.batch
 
 import ai.chronon.api.Extensions._
 import ai.chronon.api._
-import ai.chronon.api.planner.{MetaDataUtils, NodeRunner, TableDependencies}
+import ai.chronon.api.planner.{MetaDataUtils, TableDependencies}
 import ai.chronon.planner.{MonolithJoinNode, Node, NodeContent}
 import ai.chronon.spark.utils.{MockApi, SparkTestBase}
 import ai.chronon.spark.catalog.{CreationUtils, TableUtils}
@@ -112,7 +112,7 @@ class BatchNodeRunnerArchivalRollbackTest extends AnyFlatSpec with BeforeAndAfte
       }
     }
 
-    val exitCode = failingRunner.runFromArgs(twoDaysAgo, yesterday, NodeRunner.DefaultTablePartitionsDataset, None)
+    val exitCode = failingRunner.runFromArgs(twoDaysAgo, yesterday, None)
 
     assertEquals("runFromArgs should return 1 on failure", 1, exitCode)
     assertTrue(s"Output table should be restored after failure", tableUtils.tableReachable(outputTable))
@@ -143,7 +143,7 @@ class BatchNodeRunnerArchivalRollbackTest extends AnyFlatSpec with BeforeAndAfte
       }
     }
 
-    val exitCode = failingRunner.runFromArgs(twoDaysAgo, yesterday, NodeRunner.DefaultTablePartitionsDataset, None)
+    val exitCode = failingRunner.runFromArgs(twoDaysAgo, yesterday, None)
 
     assertEquals("runFromArgs should return 1 on failure", 1, exitCode)
     assertTrue(s"Output table should still exist", tableUtils.tableReachable(outputTable))

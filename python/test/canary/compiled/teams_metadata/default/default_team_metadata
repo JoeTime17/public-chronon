@@ -8,6 +8,8 @@
     "env": {
       "common": {
         "CUSTOMER_ID": "dev",
+        "EVAL_URL": "http://localhost:3904",
+        "FETCHER_URL": "http://localhost:9000",
         "FRONTEND_URL": "http://localhost:3000",
         "HUB_URL": "http://localhost:3903",
         "VERSION": "latest"

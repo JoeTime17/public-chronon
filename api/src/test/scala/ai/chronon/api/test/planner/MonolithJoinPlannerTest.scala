@@ -247,6 +247,57 @@ class MonolithJoinPlannerTest extends AnyFlatSpec with Matchers {
     metadataUploadNode.content.getJoinMetadataUpload.join should equal(join)
   }
 
+  it should "include mutation table dependencies and sensors for temporal entity join parts when the left side is events" in {
+    import ai.chronon.api.Builders._
+
+    val entityQuery = Query(
+      startPartition = "2025-01-01",
+      partitionColumn = "ds"
+    )
+    entityQuery.setPartitionInterval(WindowUtils.Day)
+
+    val temporalEntityGroupBy = GroupBy(
+      sources = Seq(Source.entities(
+        query = entityQuery,
+        snapshotTable = "test.dim_snapshot",
+        mutationTable = "test.dim_mutations"
+      )),
+      keyColumns = Seq("listing_id"),
+      aggregations = Seq(Aggregation(ai.chronon.api.Operation.LAST, "headline", Seq(WindowUtils.Unbounded))),
+      accuracy = ai.chronon.api.Accuracy.TEMPORAL,
+      metaData = MetaData(namespace = "test_namespace", name = "temporal_entity_gb")
+    )
+
+    val join = Join(
+      metaData = MetaData(name = "temporal_entity_join"),
+      left = Source.events(Query(partitionColumn = "ds"), table = "test.left_events"),
+      joinParts = Seq(new ai.chronon.api.JoinPart().setGroupBy(temporalEntityGroupBy)),
+      bootstrapParts = Seq.empty
+    )
+
+    val plan = MonolithJoinPlanner(join).buildPlan
+
+    val backfillNode = plan.nodes.asScala.find(_.content.isSetMonolithJoin).get
+    val tableDeps = backfillNode.metaData.executionInfo.tableDependencies.asScala
+
+    tableDeps.map(_.tableInfo.table) should equal(
+      Seq("test.left_events", "test.dim_snapshot", "test.dim_mutations")
+    )
+    tableDeps(1).startOffset should equal(WindowUtils.Day)
+    tableDeps(1).endOffset should equal(WindowUtils.Day)
+    tableDeps(2).startOffset should equal(WindowUtils.zero())
+    tableDeps(2).endOffset should equal(WindowUtils.zero())
+
+    val sensorOutputTables = plan.nodes.asScala
+      .filter(_.content.isSetExternalSourceSensor)
+      .map(_.content.getExternalSourceSensor.metaData.executionInfo.outputTableInfo.table)
+      .toSet
+
+    sensorOutputTables should equal(
+      Set("test.left_events", "test.dim_snapshot", "test.dim_mutations")
+    )
+  }
+
   it should "monolith join planner should skip metadata in semantic hash for both nodes" in {
     val firstJoin = Join(
       metaData = MetaData(name = "firstJoin", executionInfo = new ExecutionInfo().setStepDays(2)),
