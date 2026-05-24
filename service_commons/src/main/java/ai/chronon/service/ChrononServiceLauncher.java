@@ -147,20 +147,42 @@ public class ChrononServiceLauncher extends Launcher {
     }
 
     // Overload that takes an env lookup function for testability — System.getenv is immutable in-process.
+    // Uses a LinkedHashMap to deduplicate keys — last write wins, matching OTel SDK precedence semantics.
+    // Micrometer's OtlpConfig.resourceAttributes() uses Collectors.toMap() which rejects duplicate keys.
     static String buildOtlpResourceAttributes(String defaultServiceName, Function<String, String> envLookup) {
-        StringBuilder sb = new StringBuilder("service.name=").append(defaultServiceName);
+        java.util.LinkedHashMap<String, String> attrs = new java.util.LinkedHashMap<>();
+        attrs.put("service.name", defaultServiceName);
+
         String envResourceAttrs = envLookup.apply("OTEL_RESOURCE_ATTRIBUTES");
         if (envResourceAttrs != null && !envResourceAttrs.trim().isEmpty()) {
-            sb.append(',').append(envResourceAttrs.trim());
+            for (String pair : envResourceAttrs.trim().split(",")) {
+                String[] kv = pair.split("=", 2);
+                if (kv.length == 2) {
+                    attrs.put(kv[0].trim(), kv[1].trim());
+                }
+            }
         }
+
         String chrononResourceAttrs = System.getProperty(OtelMetricsReporter.MetricsExporterResourceKey(), "");
         if (!chrononResourceAttrs.trim().isEmpty()) {
-            sb.append(',').append(chrononResourceAttrs.trim());
+            for (String pair : chrononResourceAttrs.trim().split(",")) {
+                String[] kv = pair.split("=", 2);
+                if (kv.length == 2) {
+                    attrs.put(kv[0].trim(), kv[1].trim());
+                }
+            }
         }
+
         String envServiceName = envLookup.apply("OTEL_SERVICE_NAME");
         if (envServiceName != null && !envServiceName.trim().isEmpty()) {
-            sb.append(',').append("service.name=").append(envServiceName.trim());
+            attrs.put("service.name", envServiceName.trim());
         }
+
+        StringBuilder sb = new StringBuilder();
+        attrs.forEach((k, v) -> {
+            if (sb.length() > 0) sb.append(',');
+            sb.append(k).append('=').append(v);
+        });
         return sb.toString();
     }
 

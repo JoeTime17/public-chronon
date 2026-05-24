@@ -79,6 +79,35 @@ class ChrononServiceLauncherTest {
     }
 
     @Test
+    void duplicateServiceNameInOtelResourceAttributesDoesNotCrash() {
+        // Reproduces the crash: OTEL_RESOURCE_ATTRIBUTES contains service.name (injected by OTel agent)
+        // which conflicted with the default service.name, causing Collectors.toMap() to throw
+        // IllegalStateException: Duplicate key service.name
+        Map<String, String> env = new HashMap<>();
+        env.put("OTEL_RESOURCE_ATTRIBUTES", "service.name=chronon-fetcher,k8s.pod.name=pod-1");
+
+        Map<String, String> parsed = parseAsMicrometerWould(
+                ChrononServiceLauncher.buildOtlpResourceAttributes("ai.chronon", envOf(env)));
+
+        // OTEL_RESOURCE_ATTRIBUTES overrides the default
+        assertEquals("chronon-fetcher", parsed.get("service.name"));
+        assertEquals("pod-1", parsed.get("k8s.pod.name"));
+    }
+
+    @Test
+    void otelServiceNameOverridesResourceAttributesServiceName() {
+        Map<String, String> env = new HashMap<>();
+        env.put("OTEL_RESOURCE_ATTRIBUTES", "service.name=from-resource-attrs");
+        env.put("OTEL_SERVICE_NAME", "from-service-name-env");
+
+        Map<String, String> parsed = parseAsMicrometerWould(
+                ChrononServiceLauncher.buildOtlpResourceAttributes("ai.chronon", envOf(env)));
+
+        // OTEL_SERVICE_NAME has highest precedence
+        assertEquals("from-service-name-env", parsed.get("service.name"));
+    }
+
+    @Test
     void blankInputsAreIgnoredWithoutTrailingDelimiters() {
         // Guards against producing strings like "service.name=ai.chronon,," that would parse
         // into spurious empty entries on the receiving side.
