@@ -24,6 +24,27 @@ import scala.concurrent.ExecutionContextExecutor
 object FlexibleExecutionContext {
   private val instanceId = java.util.UUID.randomUUID().toString.take(8)
 
+  val ThreadPoolSizeProperty = "ai.chronon.threadpool.size"
+  val QueueCapacityProperty = "ai.chronon.threadpool.queue.capacity"
+  val KeepAliveSecondsProperty = "ai.chronon.threadpool.keepalive.seconds"
+
+  private val DefaultQueueCapacity = 10000
+  private val DefaultKeepAliveSeconds = 600
+
+  private def readPositiveInt(prop: String, default: Int): Int = {
+    val v = Option(System.getProperty(prop))
+      .flatMap(raw => scala.util.Try(raw.trim.toInt).toOption)
+      .getOrElse(default)
+    if (v > 0) v else default
+  }
+
+  private def readNonNegativeInt(prop: String, default: Int): Int = {
+    val v = Option(System.getProperty(prop))
+      .flatMap(raw => scala.util.Try(raw.trim.toInt).toOption)
+      .getOrElse(default)
+    if (v >= 0) v else default
+  }
+
   // Create a thread factory so that we can name the threads for easier debugging
   val threadFactory: ThreadFactory = new ThreadFactory {
     private val counter = new AtomicInteger(0)
@@ -41,12 +62,16 @@ object FlexibleExecutionContext {
 
   lazy val buildExecutor: ThreadPoolExecutor = {
     val cores = Runtime.getRuntime.availableProcessors()
+    val defaultPoolSize = cores * 4
+    val poolSize = readPositiveInt(ThreadPoolSizeProperty, defaultPoolSize)
+    val queueCapacity = readPositiveInt(QueueCapacityProperty, DefaultQueueCapacity)
+    val keepAliveSeconds = readNonNegativeInt(KeepAliveSecondsProperty, DefaultKeepAliveSeconds)
     new InstrumentedThreadPoolExecutor(
-      cores * 4, // corePoolSize
-      cores * 4, // maxPoolSize
-      600, // keepAliveTime
-      TimeUnit.SECONDS, // keep alive time units
-      new ArrayBlockingQueue[Runnable](10000),
+      poolSize,
+      poolSize,
+      keepAliveSeconds,
+      TimeUnit.SECONDS,
+      new ArrayBlockingQueue[Runnable](queueCapacity),
       threadFactory
     )
   }

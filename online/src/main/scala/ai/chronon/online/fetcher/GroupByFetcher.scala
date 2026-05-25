@@ -179,7 +179,11 @@ class GroupByFetcher(fetchContext: FetchContext, metadataStore: MetadataStore)
 
     val startTimeMs = System.currentTimeMillis()
     val kvResponseFuture: Future[Seq[GetResponse]] = if (allRequestsToFetch.nonEmpty) {
-      fetchContext.kvStore.multiGet(allRequestsToFetch)
+      val rawFuture = fetchContext.kvStore.multiGet(allRequestsToFetch)
+      if (fetchContext.kvTimeoutMillis > 0)
+        FetcherTimeout.withTimeout(rawFuture, fetchContext.kvTimeoutMillis)
+      else
+        rawFuture
     } else {
       Future(Seq.empty[GetResponse])
     }
