@@ -1,0 +1,127 @@
+{
+  "metaData": {
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.partition.column": "_DATE"
+        }
+      },
+      "env": {
+        "common": {
+          "CUSTOMER_ID": "canary",
+          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+          "GCP_PROJECT_ID": "canary-443022",
+          "GCP_REGION": "us-central1",
+          "VERSION": "latest"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "streaming": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "upload": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          }
+        }
+      }
+    },
+    "name": "quickstart.test.v1__1",
+    "outputNamespace": "quickstart",
+    "sourceFile": "models/quickstart/test.py",
+    "team": "quickstart",
+    "version": "1"
+  },
+  "models": [
+    {
+      "inferenceSpec": {
+        "modelBackend": 0,
+        "modelBackendParams": {
+          "model_type": "xgboost"
+        }
+      },
+      "metaData": {
+        "executionInfo": {
+          "conf": {
+            "common": {
+              "spark.chronon.partition.column": "_DATE"
+            }
+          },
+          "env": {
+            "common": {
+              "CUSTOMER_ID": "canary",
+              "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+              "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+              "GCP_PROJECT_ID": "canary-443022",
+              "GCP_REGION": "us-central1",
+              "VERSION": "latest"
+            },
+            "modeEnvironments": {
+              "backfill": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "streaming": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "upload": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              }
+            }
+          }
+        },
+        "name": "quickstart.test.model__1.0",
+        "outputNamespace": "quickstart",
+        "team": "quickstart",
+        "version": "1.0"
+      }
+    }
+  ],
+  "passthroughFields": [
+    "user_id"
+  ],
+  "sources": [
+    {
+      "events": {
+        "query": {
+          "selects": {
+            "user_id": "user_id"
+          },
+          "timeColumn": "ts"
+        },
+        "table": "data.checkouts"
+      }
+    }
+  ]
+}

@@ -23,6 +23,7 @@ import ai.chronon.api.HashUtils
 import ai.chronon.api.ScalaJavaConversions._
 import ai.chronon.api.StructField
 import ai.chronon.api.StructType
+import ai.chronon.online.fetcher.JoinRequestKeys
 import ai.chronon.online.OnlineDerivationUtil.DerivationFunc
 import ai.chronon.online.OnlineDerivationUtil.buildDerivationFunction
 import ai.chronon.online.OnlineDerivationUtil.buildDerivedFields
@@ -37,6 +38,7 @@ case class JoinCodec(conf: JoinOps,
                      keyCodec: AvroCodec,
                      baseValueCodec: AvroCodec,
                      valueInfos: Array[JoinCodec.ValueInfo],
+                     @transient joinPartKeyMappings: Map[String, JoinRequestKeys.KeyMapping] = Map.empty,
                      hasPartialFailure: Boolean = false)
     extends Serializable {
 

@@ -150,26 +150,33 @@ class StatsCompute(inputDf: DataFrame, keys: Seq[String], name: String) extends 
       .toDF()
   }
 
-  /** Compute cardinality map for all columns in the DataFrame.
-    * Returns a map from column name to approximate unique count.
+  /** Compute normalized cardinality map for all columns in the DataFrame.
+    * Returns a map from column name to (distinct_count / total_rows).
+    * Normalizing by row count keeps classification stable across different step sizes —
+    * a truly categorical column (e.g. 10 rating values) will have a consistently low ratio
+    * regardless of whether the step covers 1 day or 30 days of data.
     */
-  def computeCardinalityMap(): Map[String, Long] = {
+  def computeCardinalityMap(): Map[String, Double] = {
     import org.apache.spark.sql.functions._
+    val countExpr = functions.count(functions.lit(1)).as("__total_count")
     val cardinalityExprs = noKeysDf.columns.map { colName =>
       approx_count_distinct(col(colName)).as(colName)
     }
-    val cardinalityRow = noKeysDf.agg(cardinalityExprs.head, cardinalityExprs.tail: _*).collect().head
+    val allExprs = Seq(countExpr) ++ cardinalityExprs
+    val resultRow = noKeysDf.agg(allExprs.head, allExprs.tail: _*).collect().head
+    val totalRows = resultRow.getAs[Long]("__total_count")
+    if (totalRows == 0) return noKeysDf.columns.map(_ -> 0.0).toMap
     noKeysDf.columns.map { colName =>
-      colName -> cardinalityRow.getAs[Long](colName)
+      colName -> (resultRow.getAs[Long](colName).toDouble / totalRows)
     }.toMap
   }
 }
 
-class EnhancedStatsCompute(inputDf: DataFrame, keys: Seq[String], name: String, cardinalityThreshold: Int = 100)
+class EnhancedStatsCompute(inputDf: DataFrame, keys: Seq[String], name: String, cardinalityThreshold: Double = 0.01)
     extends StatsCompute(inputDf, keys, name) {
 
   /** Compute cardinality-aware enhanced metrics */
-  lazy val cardinalityMap: Map[String, Long] = computeCardinalityMap()
+  lazy val cardinalityMap: Map[String, Double] = computeCardinalityMap()
 
   lazy val enhancedMetrics: Seq[StatsGenerator.MetricTransform] =
     StatsGenerator.buildEnhancedMetrics(

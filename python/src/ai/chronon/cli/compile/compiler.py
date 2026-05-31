@@ -40,13 +40,48 @@ class Compiler:
 
         compile_results = {}
         all_compiled_objects = []  # Collect all compiled objects for change validation
+        processed_dirs = set()  # Track processed directories
+        # Track config name to source file mapping to detect duplicates across directories
+        config_name_to_file: Dict[Tuple[ConfType, str], str] = {}
 
         for config_info in config_infos:
-            configs, compiled_objects = self._compile_class_configs(config_info)
-            compile_results[config_info.config_type] = configs
+            input_dir = self.compile_context.input_dir(config_info.cls)
 
-            # Collect compiled objects for change validation
-            all_compiled_objects.extend(compiled_objects)
+            # Only process each directory once
+            if input_dir not in processed_dirs and os.path.exists(input_dir):
+                # Scan for ALL config types in this directory to support cross-type discovery
+                # (e.g., finding Join objects in staging_queries/ directories)
+                multi_results = self._compile_multi_class_configs(
+                    config_infos, input_dir, compile_results, config_name_to_file
+                )
+
+                # Merge results for each type (duplicates already filtered in _compile_multi_class_configs)
+                for ci, result, compiled_objs in multi_results:
+                    if ci.config_type not in compile_results:
+                        compile_results[ci.config_type] = result
+                    else:
+                        # Merge results (duplicates already prevented from being written)
+                        compile_results[ci.config_type].obj_dict.update(result.obj_dict)
+                        # Extend error lists instead of replacing to preserve errors from multiple directories
+                        for key, error_list in result.error_dict.items():
+                            if key in compile_results[ci.config_type].error_dict:
+                                compile_results[ci.config_type].error_dict[key].extend(error_list)
+                            else:
+                                compile_results[ci.config_type].error_dict[key] = error_list.copy()
+
+                    # Track source files for all successfully compiled configs
+                    for co in compiled_objs:
+                        if co.name and co.obj:
+                            config_name_to_file[(ci.config_type, co.name)] = co.file
+
+                    all_compiled_objects.extend(compiled_objs)
+
+                processed_dirs.add(input_dir)
+
+        # Close class trackers after all directories have been processed
+        for config_info in config_infos:
+            if config_info.config_type is not None:
+                self.compile_context.compile_status.close_cls(config_info.cls.__name__)
 
         # Validate changes once after all classes have been processed
         self.compile_context.validator.validate_changes(all_compiled_objects, validate_all)
@@ -93,7 +128,11 @@ class Compiler:
                     shutil.rmtree(output_dir)
                 shutil.move(staging_dir, output_dir)
                 if self.compile_context.format != Format.JSON:
-                    console.print(f"Compilation successful. Compiled files saved to {output_dir}")
+                    env_label = self.compile_context.env.upper()
+                    console.print(
+                        f"[bold green]{env_label} compilation successful.[/] "
+                        f"Compiled files saved to {output_dir}"
+                    )
             else:
                 if self.compile_context.format != Format.JSON:
                     console.print(
@@ -145,11 +184,17 @@ class Compiler:
     def _compile_class_configs(
         self, config_info: ConfigInfo
     ) -> Tuple[CompileResult, List[CompiledObj]]:
+        """
+        Compile configs for a single class type (backward compatibility wrapper).
+        Calls the multi-class version with a single class.
+        """
         compile_result = CompileResult(config_info=config_info, obj_dict={}, error_dict={})
 
         input_dir = self.compile_context.input_dir(config_info.cls)
 
-        compiled_objects = parser.from_folder(config_info.cls, input_dir, self.compile_context)
+        # Use multi-class version with single class for consistency
+        multi_type_results = parser.from_folder([config_info.cls], input_dir, self.compile_context)
+        compiled_objects = multi_type_results.get(config_info.cls, [])
 
         objects, errors = self._write_objects_in_folder(compiled_objects)
 
@@ -162,6 +207,101 @@ class Compiler:
         self.compile_context.compile_status.close_cls(config_info.cls.__name__)
 
         return compile_result, compiled_objects
+
+    def _compile_multi_class_configs(
+        self,
+        config_infos: List[ConfigInfo],
+        input_dir: str,
+        existing_compile_results: Optional[Dict[ConfType, CompileResult]] = None,
+        config_name_to_file: Optional[Dict[Tuple[ConfType, str], str]] = None,
+    ) -> List[Tuple[ConfigInfo, CompileResult, List[CompiledObj]]]:
+        """
+        Compile multiple config types from a single directory.
+
+        Args:
+            config_infos: List of ConfigInfo objects to search for in this directory
+            input_dir: The directory to scan
+            existing_compile_results: Already compiled results to check for duplicates
+            config_name_to_file: Mapping of (config_type, name) to source file for duplicate detection
+
+        Returns:
+            List of tuples: [(ConfigInfo, CompileResult, List[CompiledObj]), ...]
+        """
+        if existing_compile_results is None:
+            existing_compile_results = {}
+        if config_name_to_file is None:
+            config_name_to_file = {}
+
+        # Extract all target classes
+        target_classes = [ci.cls for ci in config_infos]
+
+        # Scan directory for all types at once
+        multi_type_results = parser.from_folder(target_classes, input_dir, self.compile_context)
+
+        results = []
+
+        # Process results for each config type
+        for config_info in config_infos:
+            compiled_objects = multi_type_results.get(config_info.cls, [])
+
+            compile_result = CompileResult(
+                config_info=config_info,
+                obj_dict={},
+                error_dict={}
+            )
+
+            # Check for duplicates BEFORE writing
+            objects_to_write = []
+            for co in compiled_objects:
+                if co.name and co.obj:
+                    # Check if this config name already exists for this type
+                    if config_info.config_type in existing_compile_results:
+                        if co.name in existing_compile_results[config_info.config_type].obj_dict:
+                            # Duplicate detected!
+                            existing_file = config_name_to_file.get((config_info.config_type, co.name), "unknown")
+                            error = ValueError(
+                                f"Duplicate config name '{co.name}' of type {config_info.folder_name} found:\n"
+                                f"  - First defined in: {existing_file}\n"
+                                f"  - Also found in: {co.file}\n"
+                                f"Config names must be unique across all directories. "
+                                f"Please rename one of these configs."
+                            )
+
+                            # Add error instead of writing the object
+                            compile_result.error_dict[co.name] = [error]
+
+                            if self.compile_context.format != Format.JSON:
+                                self.compile_context.compile_status.print_live_console(str(error))
+
+                            # Mark as error in display (create error version of CompiledObj)
+                            error_co = CompiledObj(
+                                name=co.name,
+                                obj=None,
+                                file=co.file,
+                                errors=[error],
+                                obj_type=co.obj_type,
+                                tjson=co.tjson
+                            )
+                            self.compile_context.compile_status.add_object_update_display(error_co, config_info.cls.__name__)
+                            continue
+
+                    # No duplicate, safe to write
+                    objects_to_write.append(co)
+                else:
+                    # Objects with parsing errors should still be processed for error recording
+                    objects_to_write.append(co)
+
+            # Write non-duplicate objects and collect results
+            objects, errors = self._write_objects_in_folder(objects_to_write)
+
+            if objects:
+                compile_result.obj_dict.update(objects)
+            if errors:
+                compile_result.error_dict.update(errors)
+
+            results.append((config_info, compile_result, objects_to_write))
+
+        return results
 
     def _write_objects_in_folder(
         self,

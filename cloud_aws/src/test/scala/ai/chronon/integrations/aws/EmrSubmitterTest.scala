@@ -51,7 +51,8 @@ class EmrSubmitterTest extends AnyFlatSpec with Matchers with MockitoSugar {
       jobProperties = expectedJobProperties,
       files = expectedFiles,
       labels = Map.empty,
-      expectedApplicationArgs: _*
+      envVars = Map.empty,
+      args = expectedApplicationArgs: _*
     )
     assertEquals(submittedStepId, s"$clusterId:$stepId")
 
@@ -318,7 +319,9 @@ class EmrSubmitterTest extends AnyFlatSpec with Matchers with MockitoSugar {
         jobProperties = org.mockito.ArgumentMatchers.any(),
         args = org.mockito.ArgumentMatchers.any(),
         serviceAccount = org.mockito.ArgumentMatchers.anyString(),
-        namespace = org.mockito.ArgumentMatchers.anyString()
+        namespace = org.mockito.ArgumentMatchers.anyString(),
+        envVars = org.mockito.ArgumentMatchers.any(),
+        nodeSelector = org.mockito.ArgumentMatchers.any()
       )
     ).thenReturn("flink-abc123")
 
@@ -336,10 +339,54 @@ class EmrSubmitterTest extends AnyFlatSpec with Matchers with MockitoSugar {
       ),
       jobProperties = Map.empty,
       files = List.empty,
-      labels = Map.empty
+      labels = Map.empty,
+      envVars = Map.empty
     )
 
     jobId shouldBe "flink:zipline-flink:flink-abc123"
+  }
+
+  it should "pass nodeSelector to K8sFlinkSubmitter when present in submissionProperties" in {
+    val mockEks = mock[K8sFlinkSubmitter]
+    val nodeSelectorCaptor = org.mockito.ArgumentCaptor.forClass(classOf[Map[String, String]])
+    when(
+      mockEks.submit(
+        jobId = org.mockito.ArgumentMatchers.anyString(),
+        mainClass = org.mockito.ArgumentMatchers.anyString(),
+        mainJarUri = org.mockito.ArgumentMatchers.anyString(),
+        jarUris = org.mockito.ArgumentMatchers.any(),
+        flinkCheckpointUri = org.mockito.ArgumentMatchers.anyString(),
+        maybeSavepointUri = org.mockito.ArgumentMatchers.any(),
+        maybeFlinkJarsUri = org.mockito.ArgumentMatchers.any(),
+        jobProperties = org.mockito.ArgumentMatchers.any(),
+        args = org.mockito.ArgumentMatchers.any(),
+        serviceAccount = org.mockito.ArgumentMatchers.anyString(),
+        namespace = org.mockito.ArgumentMatchers.anyString(),
+        envVars = org.mockito.ArgumentMatchers.any(),
+        nodeSelector = nodeSelectorCaptor.capture()
+      )
+    ).thenReturn("flink-abc123")
+
+    val submitter = new EmrSubmitter("test-customer", mock[EmrClient], mock[Ec2Client], Some(mockEks))
+    submitter.submit(
+      jobType = FlinkJob,
+      submissionProperties = Map(
+        JobId -> "test-job-id",
+        MainClass -> "ai.chronon.flink.FlinkJob",
+        JarURI -> "s3://bucket/cloud_aws_lib_deploy.jar",
+        FlinkMainJarURI -> "s3://bucket/flink_assembly_deploy.jar",
+        FlinkCheckpointUri -> "s3://bucket/checkpoints",
+        EksServiceAccount -> "zipline-flink-sa",
+        EksNamespace -> "zipline-flink",
+        EksNodeSelector -> "sardine.ai/node-type=flink"
+      ),
+      jobProperties = Map.empty,
+      files = List.empty,
+      labels = Map.empty,
+      envVars = Map.empty
+    )
+
+    nodeSelectorCaptor.getValue shouldBe Map("sardine.ai/node-type" -> "flink")
   }
 
   it should "use single quotes for regular confs and double quotes for Databricks token confs" in {
@@ -371,7 +418,8 @@ class EmrSubmitterTest extends AnyFlatSpec with Matchers with MockitoSugar {
       ),
       files = List.empty,
       labels = Map.empty,
-      "arg1"
+      envVars = Map.empty,
+      args = "arg1"
     )
 
     val actualArgs = requestCaptor.getValue.steps().get(0).hadoopJarStep().args().toScala.mkString(" ")
@@ -402,7 +450,8 @@ class EmrSubmitterTest extends AnyFlatSpec with Matchers with MockitoSugar {
         jobProperties = Map.empty,
         files = List.empty,
         labels = Map.empty,
-        "arg1"
+        envVars = Map.empty,
+        args = "arg1"
       )
     }
   }
@@ -571,14 +620,17 @@ class EmrSubmitterTest extends AnyFlatSpec with Matchers with MockitoSugar {
       ),
       jobProperties = Map.empty,
       files = List("s3://zipline-warehouse-canary/purchases.v1"),
-      Map.empty,
-      "group-by-backfill",
-      "--conf-path",
-      "/mnt/zipline/purchases.v1",
-      "--end-date",
-      "2025-02-26",
-      "--conf-type",
-      "group_bys",
+      labels = Map.empty,
+      envVars = Map.empty,
+      args = Seq(
+        "group-by-backfill",
+        "--conf-path",
+        "/mnt/zipline/purchases.v1",
+        "--end-date",
+        "2025-02-26",
+        "--conf-type",
+        "group_bys"
+      ): _*
     )
     println("EMR job id: " + jobId)
     0

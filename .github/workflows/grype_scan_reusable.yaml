@@ -26,10 +26,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          cache-output: "true"
+          output-cache-scope: scala-assemblies
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Build Service JAR
         run: ./mill service\[${{ env.SCALA_VERSION }}\].assembly

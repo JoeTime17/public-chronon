@@ -1,0 +1,306 @@
+{
+  "joinParts": [
+    {
+      "groupBy": {
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 7,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "event",
+            "operation": 7
+          },
+          {
+            "argMap": {
+              "k": "200",
+              "percentiles": "[0.99, 0.95, 0.5]"
+            },
+            "inputColumn": "event",
+            "operation": 12
+          }
+        ],
+        "keyColumns": [
+          "group_by_subject"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "event_approx_percentile": "ecb1d6ff348b84c5412294f0fd6a34da",
+            "event_sum": "ecb1d6ff348b84c5412294f0fd6a34da",
+            "event_sum_7d": "ecb1d6ff348b84c5412294f0fd6a34da",
+            "group_by_subject": "825a7008e4d55f0cc56cd0457a30ad3b"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.partition.column": "_test_column_sample"
+              }
+            },
+            "env": {
+              "common": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "modeEnvironments": {
+                "backfill": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "streaming": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "upload": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                }
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily"
+          },
+          "name": "sample_team.event_sample_group_by.v1__0",
+          "online": 1,
+          "outputNamespace": "sample_namespace",
+          "team": "sample_team",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "event": "event_expr",
+                  "group_by_subject": "group_by_expr",
+                  "subject": "subject"
+                },
+                "startPartition": "2021-04-09",
+                "timeColumn": "ts"
+              },
+              "table": "sample_namespace.sample_table_group_by"
+            }
+          }
+        ]
+      },
+      "keyMapping": {
+        "subject": "group_by_subject"
+      },
+      "useLongNames": 0
+    },
+    {
+      "groupBy": {
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "entity",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "entity",
+            "operation": 3,
+            "windows": [
+              {
+                "length": 7,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "group_by_subject"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "entity_last": "95a566f812b1c7bbaad37d394135a32a",
+            "entity_last_7d": "95a566f812b1c7bbaad37d394135a32a",
+            "group_by_subject": "396180897f5371ec0e2c4a343aff4d44"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.partition.column": "_test_column_sample"
+              }
+            },
+            "env": {
+              "common": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "modeEnvironments": {
+                "backfill": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "streaming": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "upload": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                }
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily"
+          },
+          "name": "sample_team.entity_sample_group_by_from_module.v1__0",
+          "online": 1,
+          "outputNamespace": "test",
+          "team": "sample_team",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "entities": {
+              "mutationTable": "sample_table.sample_entity_mutations/hr=00:00",
+              "mutationTopic": "sample_topic",
+              "query": {
+                "selects": {
+                  "entity": "entity_expr",
+                  "group_by_subject": "group_by_subject_expr"
+                },
+                "startPartition": "2021-03-01",
+                "timeColumn": "ts"
+              },
+              "snapshotTable": "sample_table.sample_entity_snapshot"
+            }
+          }
+        ]
+      },
+      "keyMapping": {
+        "subject": "group_by_subject"
+      },
+      "useLongNames": 0
+    }
+  ],
+  "left": {
+    "events": {
+      "query": {
+        "selects": {
+          "event": "event_expr",
+          "group_by_subject": "group_by_expr",
+          "subject": "subject",
+          "ts": "ts"
+        },
+        "startPartition": "2021-04-09",
+        "timeColumn": "ts"
+      },
+      "table": "sample_namespace.sample_table_group_by"
+    }
+  },
+  "metaData": {
+    "columnHashes": {
+      "event": "af9f70df13e4452969624323f374efa6",
+      "group_by_subject": "1380b67281f4b818439a8d8588238e4f",
+      "group_by_subject_entity_last": "d3346a02fcefdad51bf133734e217941",
+      "group_by_subject_entity_last_7d": "d3346a02fcefdad51bf133734e217941",
+      "group_by_subject_event_approx_percentile": "e4ac9ad1b922e644c3fe46365d74ab34",
+      "group_by_subject_event_sum": "e4ac9ad1b922e644c3fe46365d74ab34",
+      "group_by_subject_event_sum_7d": "e4ac9ad1b922e644c3fe46365d74ab34",
+      "subject": "2078558b2758b6bd5421b8d2df2cef0e",
+      "ts": "2932897efedd17abaf8481deecaa3786"
+    },
+    "consistencyCheck": 1,
+    "consistencySamplePercent": 5.0,
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_sample_namespace_sample_table_group_by_with_offset_0\", \"spec\": \"sample_namespace.sample_table_group_by/_test_column_sample={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_sample_table_sample_entity_snapshot_with_offset_0\", \"spec\": \"sample_table.sample_entity_snapshot/_test_column_sample={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_sample_table_sample_entity_mutations_hr_00_00_with_offset_0\", \"spec\": \"sample_table.sample_entity_mutations/hr=00:00/_test_column_sample={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.partition.column": "_test_column_sample"
+        }
+      },
+      "env": {
+        "common": {
+          "CUSTOMER_ID": "canary",
+          "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+          "GCP_PROJECT_ID": "canary-443022",
+          "GCP_REGION": "us-central1",
+          "VERSION": "latest"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "streaming": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "upload": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          }
+        }
+      },
+      "offlineSchedule": "@daily",
+      "onlineSchedule": "@daily"
+    },
+    "name": "sample_team.sample_chaining_group_by.parent_join__0",
+    "online": 1,
+    "outputNamespace": "test_namespace",
+    "production": 0,
+    "samplePercent": 100.0,
+    "sourceFile": "group_bys/sample_team/sample_chaining_group_by.py",
+    "team": "sample_team",
+    "version": "0"
+  },
+  "rowIds": [
+    "event"
+  ],
+  "useLongNames": 0
+}

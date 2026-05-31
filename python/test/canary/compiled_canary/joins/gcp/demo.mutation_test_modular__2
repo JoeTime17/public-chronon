@@ -1,0 +1,905 @@
+{
+  "joinParts": [
+    {
+      "groupBy": {
+        "accuracy": 0,
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "merchant_id",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "headline",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "brief_description",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "long_description",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "price_cents",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "currency",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "inventory_count",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "primary_category",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_active",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "weight_grams",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "tags",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_expensive",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_in_stock",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "main_image_path",
+            "operation": 3
+          },
+          {
+            "argMap": {},
+            "inputColumn": "secondary_image_paths",
+            "operation": 3
+          }
+        ],
+        "keyColumns": [
+          "listing_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "brief_description_last": "0a1386de070d704b0d2c5d1c87fe519a",
+            "currency_last": "5121fca8b3fe87a914b5ee279b648e95",
+            "headline_last": "45ea540639c06959f17b71c3e554175a",
+            "inventory_count_last": "da8c9a07f97c968c72d2073a8d0f67c8",
+            "is_active_last": "1fec57d936cc463617bac897e12be096",
+            "is_expensive_last": "805f3d530ac6f8e7623c21a73a1f18b6",
+            "is_in_stock_last": "0c23362ef6a4871d3324889b1549563d",
+            "listing_id": "886183f17e4eac643e2068a1ff1c9e13",
+            "long_description_last": "3cc8017f1420a64fd7b2254dae7f1e75",
+            "main_image_path_last": "af1e43d33658f520fd74c426eb9aaf8c",
+            "merchant_id_last": "c1dd7d3842c0b00e1f65fa7bf15c11aa",
+            "price_cents_last": "97455a3821b0ffbf3ec0e5567426673c",
+            "primary_category_last": "7d771f16ef459f9b442390ce6e4941fe",
+            "secondary_image_paths_last": "815571cc5ddb0b27ad2722957f7c0080",
+            "tags_last": "127ced2578a540a522f3f437101d7726",
+            "weight_grams_last": "5b19e9ed87508482695b4e3606acfa97"
+          },
+          "executionInfo": {
+            "clusterConf": {
+              "modeClusterConfigs": {
+                "upload": {
+                  "canary_only_sentinel_cluster": "canary-only-cluster-sentinel-5b6c7d",
+                  "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}"
+                }
+              }
+            },
+            "conf": {
+              "common": {
+                "spark.chronon.coalesce.factor": "10",
+                "spark.chronon.partition.column": "ds",
+                "spark.chronon.partition.format": "yyyy-MM-dd",
+                "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_gcp.GcpFormatProvider",
+                "spark.chronon.table_write.format": "iceberg",
+                "spark.chronon.test.canary_only_sentinel": "canary-only-conf-sentinel-7c8d9e",
+                "spark.default.parallelism": "10",
+                "spark.driver.cores": "1",
+                "spark.driver.extraJavaOptions": "-Dai.chronon.metrics.enabled=true -Dai.chronon.metrics.reader=grpc -Dai.chronon.metrics.exporter.url=http://localhost:4317",
+                "spark.driver.memory": "512m",
+                "spark.executor.cores": "1",
+                "spark.executor.memory": "512m",
+                "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.gcp.bigquery.BigQueryMetastoreCatalog",
+                "spark.sql.catalog.spark_catalog.gcp.bigquery.location": "us-central1",
+                "spark.sql.catalog.spark_catalog.gcp.bigquery.project-id": "canary-443022",
+                "spark.sql.catalog.spark_catalog.io-impl": "org.apache.iceberg.io.ResolvingFileIO",
+                "spark.sql.catalog.spark_catalog.warehouse": "gs://zipline-warehouse-canary/data/tables/",
+                "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                "spark.sql.shuffle.partitions": "10"
+              }
+            },
+            "env": {
+              "common": {
+                "ARTIFACT_PREFIX": "gs://zipline-artifacts-canary",
+                "CANARY_ONLY_SENTINEL_GCP": "canary-only-sentinel-value-1d2e3f",
+                "CHRONON_ONLINE_ARGS": " -Ztasks=4",
+                "CLOUD_PROVIDER": "gcp",
+                "CUSTOMER_ID": "canary",
+                "ENABLE_PUBSUB": "true",
+                "EVAL_URL": "http://localhost:3904",
+                "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
+                "FRONTEND_URL": "http://localhost:3000",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "HUB_URL": "http://localhost:3903",
+                "SPARK_CLUSTER_NAME": "zipline-canary-cluster",
+                "VERSION": "latest",
+                "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
+              },
+              "modeEnvironments": {
+                "upload": {
+                  "ARTIFACT_PREFIX": "gs://zipline-artifacts-canary",
+                  "CANARY_ONLY_SENTINEL_GCP": "canary-only-sentinel-value-1d2e3f",
+                  "CHRONON_ONLINE_ARGS": " -Ztasks=4",
+                  "CLOUD_PROVIDER": "gcp",
+                  "CUSTOMER_ID": "canary",
+                  "ENABLE_PUBSUB": "true",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
+                  "FRONTEND_URL": "http://localhost:3000",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "HUB_URL": "http://localhost:3903",
+                  "SPARK_CLUSTER_NAME": "zipline-transient-upload-cluster",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
+                }
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily"
+          },
+          "name": "gcp.dim_listings_with_mutations.v2__0",
+          "online": 1,
+          "outputNamespace": "data",
+          "team": "gcp",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "entities": {
+              "mutationTable": "data.gcp_exports_dim_listing_mutations__0",
+              "query": {
+                "selects": {
+                  "brief_description": "brief_description",
+                  "currency": "currency",
+                  "headline": "headline",
+                  "inventory_count": "inventory_count",
+                  "is_active": "is_active",
+                  "is_expensive": "IF(price_cents > 10000, 1, 0)",
+                  "is_in_stock": "IF(inventory_count > 0, 1, 0)",
+                  "listing_id": "listing_id",
+                  "long_description": "long_description",
+                  "main_image_path": "main_image_path",
+                  "merchant_id": "merchant_id",
+                  "price_cents": "price_cents",
+                  "primary_category": "primary_category",
+                  "secondary_image_paths": "secondary_image_paths",
+                  "tags": "tags",
+                  "weight_grams": "weight_grams"
+                },
+                "startPartition": "2025-01-01"
+              },
+              "snapshotTable": "data.gcp_exports_dim_listings__0"
+            }
+          }
+        ]
+      },
+      "useLongNames": 0
+    },
+    {
+      "groupBy": {
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "view_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "click_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "purchase_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "favorite_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "add_to_cart_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "view_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "click_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "purchase_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "favorite_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "add_to_cart_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_mobile",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_desktop",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_tablet",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {
+              "k": "128"
+            },
+            "inputColumn": "user_event_struct",
+            "operation": 13,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "user_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "add_to_cart_event_average_14d": "ac7d8c6d6a4d0ddd7fdbab6517207fa0",
+            "add_to_cart_event_average_1d": "ac7d8c6d6a4d0ddd7fdbab6517207fa0",
+            "add_to_cart_event_average_30d": "ac7d8c6d6a4d0ddd7fdbab6517207fa0",
+            "add_to_cart_event_average_7d": "ac7d8c6d6a4d0ddd7fdbab6517207fa0",
+            "add_to_cart_event_sum_14d": "ac7d8c6d6a4d0ddd7fdbab6517207fa0",
+            "add_to_cart_event_sum_1d": "ac7d8c6d6a4d0ddd7fdbab6517207fa0",
+            "add_to_cart_event_sum_30d": "ac7d8c6d6a4d0ddd7fdbab6517207fa0",
+            "add_to_cart_event_sum_7d": "ac7d8c6d6a4d0ddd7fdbab6517207fa0",
+            "click_event_average_14d": "1d544b33eebdfc17a3a5afe87b81eb53",
+            "click_event_average_1d": "1d544b33eebdfc17a3a5afe87b81eb53",
+            "click_event_average_30d": "1d544b33eebdfc17a3a5afe87b81eb53",
+            "click_event_average_7d": "1d544b33eebdfc17a3a5afe87b81eb53",
+            "click_event_sum_14d": "1d544b33eebdfc17a3a5afe87b81eb53",
+            "click_event_sum_1d": "1d544b33eebdfc17a3a5afe87b81eb53",
+            "click_event_sum_30d": "1d544b33eebdfc17a3a5afe87b81eb53",
+            "click_event_sum_7d": "1d544b33eebdfc17a3a5afe87b81eb53",
+            "favorite_event_average_14d": "9236810c6ed256e2ce111114fcdf2468",
+            "favorite_event_average_1d": "9236810c6ed256e2ce111114fcdf2468",
+            "favorite_event_average_30d": "9236810c6ed256e2ce111114fcdf2468",
+            "favorite_event_average_7d": "9236810c6ed256e2ce111114fcdf2468",
+            "favorite_event_sum_14d": "9236810c6ed256e2ce111114fcdf2468",
+            "favorite_event_sum_1d": "9236810c6ed256e2ce111114fcdf2468",
+            "favorite_event_sum_30d": "9236810c6ed256e2ce111114fcdf2468",
+            "favorite_event_sum_7d": "9236810c6ed256e2ce111114fcdf2468",
+            "is_desktop_sum_14d": "751be38cbc62b37986a93da55ea3bb53",
+            "is_desktop_sum_1d": "751be38cbc62b37986a93da55ea3bb53",
+            "is_desktop_sum_30d": "751be38cbc62b37986a93da55ea3bb53",
+            "is_desktop_sum_7d": "751be38cbc62b37986a93da55ea3bb53",
+            "is_mobile_sum_14d": "736a00d8d3e5cc6458f666ceb2840ddf",
+            "is_mobile_sum_1d": "736a00d8d3e5cc6458f666ceb2840ddf",
+            "is_mobile_sum_30d": "736a00d8d3e5cc6458f666ceb2840ddf",
+            "is_mobile_sum_7d": "736a00d8d3e5cc6458f666ceb2840ddf",
+            "is_tablet_sum_14d": "c9f1e7cc6f8dee7506aa0d04fab1fe02",
+            "is_tablet_sum_1d": "c9f1e7cc6f8dee7506aa0d04fab1fe02",
+            "is_tablet_sum_30d": "c9f1e7cc6f8dee7506aa0d04fab1fe02",
+            "is_tablet_sum_7d": "c9f1e7cc6f8dee7506aa0d04fab1fe02",
+            "purchase_event_average_14d": "903c18bce150f38415fb70a46f0eaba5",
+            "purchase_event_average_1d": "903c18bce150f38415fb70a46f0eaba5",
+            "purchase_event_average_30d": "903c18bce150f38415fb70a46f0eaba5",
+            "purchase_event_average_7d": "903c18bce150f38415fb70a46f0eaba5",
+            "purchase_event_sum_14d": "903c18bce150f38415fb70a46f0eaba5",
+            "purchase_event_sum_1d": "903c18bce150f38415fb70a46f0eaba5",
+            "purchase_event_sum_30d": "903c18bce150f38415fb70a46f0eaba5",
+            "purchase_event_sum_7d": "903c18bce150f38415fb70a46f0eaba5",
+            "user_event_struct_last128_14d": "9615edd561708d3aa83e1efae33be4a0",
+            "user_event_struct_last128_1d": "9615edd561708d3aa83e1efae33be4a0",
+            "user_event_struct_last128_30d": "9615edd561708d3aa83e1efae33be4a0",
+            "user_event_struct_last128_7d": "9615edd561708d3aa83e1efae33be4a0",
+            "user_id": "006bbceaf919145938ec06d702ad51b9",
+            "view_event_average_14d": "f597dd2f8e5d672fbac0445fb935469b",
+            "view_event_average_1d": "f597dd2f8e5d672fbac0445fb935469b",
+            "view_event_average_30d": "f597dd2f8e5d672fbac0445fb935469b",
+            "view_event_average_7d": "f597dd2f8e5d672fbac0445fb935469b",
+            "view_event_sum_14d": "f597dd2f8e5d672fbac0445fb935469b",
+            "view_event_sum_1d": "f597dd2f8e5d672fbac0445fb935469b",
+            "view_event_sum_30d": "f597dd2f8e5d672fbac0445fb935469b",
+            "view_event_sum_7d": "f597dd2f8e5d672fbac0445fb935469b"
+          },
+          "executionInfo": {
+            "clusterConf": {
+              "modeClusterConfigs": {
+                "upload": {
+                  "canary_only_sentinel_cluster": "canary-only-cluster-sentinel-5b6c7d",
+                  "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}"
+                }
+              }
+            },
+            "conf": {
+              "common": {
+                "spark.chronon.coalesce.factor": "10",
+                "spark.chronon.partition.column": "ds",
+                "spark.chronon.partition.format": "yyyy-MM-dd",
+                "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_gcp.GcpFormatProvider",
+                "spark.chronon.table_write.format": "iceberg",
+                "spark.chronon.test.canary_only_sentinel": "canary-only-conf-sentinel-7c8d9e",
+                "spark.default.parallelism": "10",
+                "spark.driver.cores": "1",
+                "spark.driver.extraJavaOptions": "-Dai.chronon.metrics.enabled=true -Dai.chronon.metrics.reader=grpc -Dai.chronon.metrics.exporter.url=http://localhost:4317",
+                "spark.driver.memory": "512m",
+                "spark.executor.cores": "1",
+                "spark.executor.memory": "512m",
+                "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.gcp.bigquery.BigQueryMetastoreCatalog",
+                "spark.sql.catalog.spark_catalog.gcp.bigquery.location": "us-central1",
+                "spark.sql.catalog.spark_catalog.gcp.bigquery.project-id": "canary-443022",
+                "spark.sql.catalog.spark_catalog.io-impl": "org.apache.iceberg.io.ResolvingFileIO",
+                "spark.sql.catalog.spark_catalog.warehouse": "gs://zipline-warehouse-canary/data/tables/",
+                "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                "spark.sql.shuffle.partitions": "10"
+              }
+            },
+            "env": {
+              "common": {
+                "ARTIFACT_PREFIX": "gs://zipline-artifacts-canary",
+                "CANARY_ONLY_SENTINEL_GCP": "canary-only-sentinel-value-1d2e3f",
+                "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+                "CLOUD_PROVIDER": "gcp",
+                "CUSTOMER_ID": "canary",
+                "ENABLE_PUBSUB": "true",
+                "EVAL_URL": "http://localhost:3904",
+                "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
+                "FRONTEND_URL": "http://localhost:3000",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "HUB_URL": "http://localhost:3903",
+                "SPARK_CLUSTER_NAME": "zipline-canary-cluster",
+                "VERSION": "latest",
+                "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
+              },
+              "modeEnvironments": {
+                "upload": {
+                  "ARTIFACT_PREFIX": "gs://zipline-artifacts-canary",
+                  "CANARY_ONLY_SENTINEL_GCP": "canary-only-sentinel-value-1d2e3f",
+                  "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+                  "CLOUD_PROVIDER": "gcp",
+                  "CUSTOMER_ID": "canary",
+                  "ENABLE_PUBSUB": "true",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
+                  "FRONTEND_URL": "http://localhost:3000",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "HUB_URL": "http://localhost:3903",
+                  "SPARK_CLUSTER_NAME": "zipline-transient-upload-cluster",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
+                }
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily",
+            "stepDays": 30
+          },
+          "name": "gcp.user_activities.v1__1",
+          "online": 1,
+          "outputNamespace": "data",
+          "team": "gcp",
+          "version": "1"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "add_to_cart_event": "IF(event_type = 'add_to_cart', 1, 0)",
+                  "click_event": "IF(event_type = 'click', 1, 0)",
+                  "favorite_event": "IF(event_type = 'favorite', 1, 0)",
+                  "is_desktop": "IF(device_type = 'desktop', 1, 0)",
+                  "is_mobile": "IF(device_type = 'mobile', 1, 0)",
+                  "is_tablet": "IF(device_type = 'tablet', 1, 0)",
+                  "listing_id": "listing_id",
+                  "purchase_event": "IF(event_type = 'purchase', 1, 0)",
+                  "user_event_struct": "STRUCT(event_type, listing_id, unix_millis(TIMESTAMP(event_time_ms)) as timestamp)",
+                  "user_id": "user_id",
+                  "view_event": "IF(event_type = 'view', 1, 0)"
+                },
+                "timeColumn": "unix_millis(TIMESTAMP(event_time_ms))"
+              },
+              "table": "data.gcp_exports_user_activities__0",
+              "topic": "pubsub://user-activities-v2/project=canary-443022/subscription=user-activities-v2-sub/serde=pubsub_schema/schemaId=user-activities"
+            }
+          }
+        ]
+      },
+      "useLongNames": 0
+    }
+  ],
+  "left": {
+    "events": {
+      "query": {
+        "selects": {
+          "listing_id": "listing_id",
+          "row_id": "event_id",
+          "ts": "event_time_ms",
+          "user_id": "user_id"
+        },
+        "timeColumn": "event_time_ms"
+      },
+      "table": "data.gcp_exports_user_activities__0"
+    }
+  },
+  "metaData": {
+    "columnHashes": {
+      "listing_id": "47aa3759ce41fc6ccf91367592e35f6d",
+      "listing_id_brief_description_last": "0169875656d2de09c49df6445351006a",
+      "listing_id_currency_last": "b6b93c59c83720262d6c2efc45f6d816",
+      "listing_id_headline_last": "94f02b3b99124313f9097253edb0f4ee",
+      "listing_id_inventory_count_last": "2bc1d749d9a976ed9bc392d1ec15ab10",
+      "listing_id_is_active_last": "8e0dea7804d0441e44626d2557ae22ad",
+      "listing_id_is_expensive_last": "cb8ca0dcdf70da5538b571d252daa643",
+      "listing_id_is_in_stock_last": "a060c2ea288a175756920e1326d05266",
+      "listing_id_long_description_last": "d0b56457ff7259d958e7a318ed557776",
+      "listing_id_main_image_path_last": "4f7759442b0f99390cc0de9ee9605614",
+      "listing_id_merchant_id_last": "e879f09eb8f94d0675fdcd3299108fc1",
+      "listing_id_price_cents_last": "fa43d18793086fd6eeccda31695e084b",
+      "listing_id_primary_category_last": "9c9f7cddb5be5f0a2207eb07a28bf54b",
+      "listing_id_secondary_image_paths_last": "3e761b20785b51728d11b7d2ead8eac7",
+      "listing_id_tags_last": "3f0f0c8b2e01a0869be696eac850101e",
+      "listing_id_weight_grams_last": "bcf3a2cb490ef8ac2edce3dffd17983d",
+      "row_id": "596506e0a4fef5508ebdcda7e6eb1072",
+      "ts": "d1ae44a8f84a262685dbf1bdb9f8d46e",
+      "user_id": "80c458b68b34de93d3c4c555ef2b2ddc",
+      "user_id_add_to_cart_event_average_14d": "9a69a159117eb15389ce17f93363a8cb",
+      "user_id_add_to_cart_event_average_1d": "9a69a159117eb15389ce17f93363a8cb",
+      "user_id_add_to_cart_event_average_30d": "9a69a159117eb15389ce17f93363a8cb",
+      "user_id_add_to_cart_event_average_7d": "9a69a159117eb15389ce17f93363a8cb",
+      "user_id_add_to_cart_event_sum_14d": "9a69a159117eb15389ce17f93363a8cb",
+      "user_id_add_to_cart_event_sum_1d": "9a69a159117eb15389ce17f93363a8cb",
+      "user_id_add_to_cart_event_sum_30d": "9a69a159117eb15389ce17f93363a8cb",
+      "user_id_add_to_cart_event_sum_7d": "9a69a159117eb15389ce17f93363a8cb",
+      "user_id_click_event_average_14d": "6d5df9cd495943195fd26343e889a08b",
+      "user_id_click_event_average_1d": "6d5df9cd495943195fd26343e889a08b",
+      "user_id_click_event_average_30d": "6d5df9cd495943195fd26343e889a08b",
+      "user_id_click_event_average_7d": "6d5df9cd495943195fd26343e889a08b",
+      "user_id_click_event_sum_14d": "6d5df9cd495943195fd26343e889a08b",
+      "user_id_click_event_sum_1d": "6d5df9cd495943195fd26343e889a08b",
+      "user_id_click_event_sum_30d": "6d5df9cd495943195fd26343e889a08b",
+      "user_id_click_event_sum_7d": "6d5df9cd495943195fd26343e889a08b",
+      "user_id_favorite_event_average_14d": "41973df600d5d46659f60ac0c808f438",
+      "user_id_favorite_event_average_1d": "41973df600d5d46659f60ac0c808f438",
+      "user_id_favorite_event_average_30d": "41973df600d5d46659f60ac0c808f438",
+      "user_id_favorite_event_average_7d": "41973df600d5d46659f60ac0c808f438",
+      "user_id_favorite_event_sum_14d": "41973df600d5d46659f60ac0c808f438",
+      "user_id_favorite_event_sum_1d": "41973df600d5d46659f60ac0c808f438",
+      "user_id_favorite_event_sum_30d": "41973df600d5d46659f60ac0c808f438",
+      "user_id_favorite_event_sum_7d": "41973df600d5d46659f60ac0c808f438",
+      "user_id_is_desktop_sum_14d": "248157ff361a5b1aee3aab6d459e2315",
+      "user_id_is_desktop_sum_1d": "248157ff361a5b1aee3aab6d459e2315",
+      "user_id_is_desktop_sum_30d": "248157ff361a5b1aee3aab6d459e2315",
+      "user_id_is_desktop_sum_7d": "248157ff361a5b1aee3aab6d459e2315",
+      "user_id_is_mobile_sum_14d": "29bd4cafff87531f073912d981f5df7b",
+      "user_id_is_mobile_sum_1d": "29bd4cafff87531f073912d981f5df7b",
+      "user_id_is_mobile_sum_30d": "29bd4cafff87531f073912d981f5df7b",
+      "user_id_is_mobile_sum_7d": "29bd4cafff87531f073912d981f5df7b",
+      "user_id_is_tablet_sum_14d": "4e93d18e08e8e6d0f51cc4fd54840a4c",
+      "user_id_is_tablet_sum_1d": "4e93d18e08e8e6d0f51cc4fd54840a4c",
+      "user_id_is_tablet_sum_30d": "4e93d18e08e8e6d0f51cc4fd54840a4c",
+      "user_id_is_tablet_sum_7d": "4e93d18e08e8e6d0f51cc4fd54840a4c",
+      "user_id_purchase_event_average_14d": "06b4654ea4a2b6fce7f1e5d0ecbab540",
+      "user_id_purchase_event_average_1d": "06b4654ea4a2b6fce7f1e5d0ecbab540",
+      "user_id_purchase_event_average_30d": "06b4654ea4a2b6fce7f1e5d0ecbab540",
+      "user_id_purchase_event_average_7d": "06b4654ea4a2b6fce7f1e5d0ecbab540",
+      "user_id_purchase_event_sum_14d": "06b4654ea4a2b6fce7f1e5d0ecbab540",
+      "user_id_purchase_event_sum_1d": "06b4654ea4a2b6fce7f1e5d0ecbab540",
+      "user_id_purchase_event_sum_30d": "06b4654ea4a2b6fce7f1e5d0ecbab540",
+      "user_id_purchase_event_sum_7d": "06b4654ea4a2b6fce7f1e5d0ecbab540",
+      "user_id_user_event_struct_last128_14d": "d3568d09600aa635e00f5bbe12ed46f4",
+      "user_id_user_event_struct_last128_1d": "d3568d09600aa635e00f5bbe12ed46f4",
+      "user_id_user_event_struct_last128_30d": "d3568d09600aa635e00f5bbe12ed46f4",
+      "user_id_user_event_struct_last128_7d": "d3568d09600aa635e00f5bbe12ed46f4",
+      "user_id_view_event_average_14d": "bcc46a7a6a6ee73aa8bebbcaaf039347",
+      "user_id_view_event_average_1d": "bcc46a7a6a6ee73aa8bebbcaaf039347",
+      "user_id_view_event_average_30d": "bcc46a7a6a6ee73aa8bebbcaaf039347",
+      "user_id_view_event_average_7d": "bcc46a7a6a6ee73aa8bebbcaaf039347",
+      "user_id_view_event_sum_14d": "bcc46a7a6a6ee73aa8bebbcaaf039347",
+      "user_id_view_event_sum_1d": "bcc46a7a6a6ee73aa8bebbcaaf039347",
+      "user_id_view_event_sum_30d": "bcc46a7a6a6ee73aa8bebbcaaf039347",
+      "user_id_view_event_sum_7d": "bcc46a7a6a6ee73aa8bebbcaaf039347"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_gcp_exports_user_activities__0_with_offset_0\", \"spec\": \"data.gcp_exports_user_activities__0/ds={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_data_gcp_exports_dim_listings__0_with_offset_0\", \"spec\": \"data.gcp_exports_dim_listings__0/ds={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_data_gcp_exports_dim_listing_mutations__0_with_offset_0\", \"spec\": \"data.gcp_exports_dim_listing_mutations__0/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "clusterConf": {
+        "modeClusterConfigs": {
+          "upload": {
+            "canary_only_sentinel_cluster": "canary-only-cluster-sentinel-5b6c7d",
+            "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}"
+          }
+        }
+      },
+      "conf": {
+        "common": {
+          "modular_execution": "true",
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.chronon.partition.format": "yyyy-MM-dd",
+          "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_gcp.GcpFormatProvider",
+          "spark.chronon.table_write.format": "iceberg",
+          "spark.chronon.test.canary_only_sentinel": "canary-only-conf-sentinel-7c8d9e",
+          "spark.default.parallelism": "10",
+          "spark.driver.cores": "1",
+          "spark.driver.extraJavaOptions": "-Dai.chronon.metrics.enabled=true -Dai.chronon.metrics.reader=grpc -Dai.chronon.metrics.exporter.url=http://localhost:4317",
+          "spark.driver.memory": "512m",
+          "spark.executor.cores": "1",
+          "spark.executor.memory": "512m",
+          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+          "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.gcp.bigquery.BigQueryMetastoreCatalog",
+          "spark.sql.catalog.spark_catalog.gcp.bigquery.location": "us-central1",
+          "spark.sql.catalog.spark_catalog.gcp.bigquery.project-id": "canary-443022",
+          "spark.sql.catalog.spark_catalog.io-impl": "org.apache.iceberg.io.ResolvingFileIO",
+          "spark.sql.catalog.spark_catalog.warehouse": "gs://zipline-warehouse-canary/data/tables/",
+          "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+          "spark.sql.shuffle.partitions": "10"
+        }
+      },
+      "enableStatsCompute": 1,
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "gs://zipline-artifacts-canary",
+          "CANARY_ONLY_SENTINEL_GCP": "canary-only-sentinel-value-1d2e3f",
+          "CHRONON_ONLINE_ARGS": " -Ztasks=4",
+          "CLOUD_PROVIDER": "gcp",
+          "CUSTOMER_ID": "canary",
+          "ENABLE_PUBSUB": "true",
+          "EVAL_URL": "http://localhost:3904",
+          "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
+          "FRONTEND_URL": "http://localhost:3000",
+          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+          "GCP_PROJECT_ID": "canary-443022",
+          "GCP_REGION": "us-central1",
+          "HUB_URL": "http://localhost:3903",
+          "SPARK_CLUSTER_NAME": "zipline-canary-cluster",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
+        },
+        "modeEnvironments": {
+          "upload": {
+            "ARTIFACT_PREFIX": "gs://zipline-artifacts-canary",
+            "CANARY_ONLY_SENTINEL_GCP": "canary-only-sentinel-value-1d2e3f",
+            "CHRONON_ONLINE_ARGS": " -Ztasks=4",
+            "CLOUD_PROVIDER": "gcp",
+            "CUSTOMER_ID": "canary",
+            "ENABLE_PUBSUB": "true",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
+            "FRONTEND_URL": "http://localhost:3000",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "HUB_URL": "http://localhost:3903",
+            "SPARK_CLUSTER_NAME": "zipline-transient-upload-cluster",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
+          }
+        }
+      },
+      "offlineSchedule": "@daily",
+      "stepDays": 30
+    },
+    "name": "gcp.demo.mutation_test_modular__2",
+    "online": 0,
+    "outputNamespace": "data",
+    "production": 0,
+    "samplePercent": 100.0,
+    "sourceFile": "joins/gcp/demo.py",
+    "team": "gcp",
+    "version": "2"
+  },
+  "rowIds": [
+    "event_id"
+  ],
+  "useLongNames": 0
+}

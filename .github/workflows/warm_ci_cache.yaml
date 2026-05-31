@@ -1,0 +1,69 @@
+name: Warm CI Cache
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/actions/setup-mill-cache/action.yaml'
+      - '.github/workflows/warm_ci_cache.yaml'
+      - '.mill-version'
+      - 'mill'
+      - 'build.mill'
+      - '**/package.mill'
+      - '**/src/**'
+      - 'python/**'
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types: [completed]
+  workflow_dispatch:
+
+env:
+  SCALA_VERSION: "2.12.18"
+
+jobs:
+  warm-dependencies:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository }}-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
+      - name: Resolve JVM dependencies
+        run: |
+          ./mill --no-server show __.resolvedMvnDeps > /tmp/chronon-resolved-mvn-deps.json
+      - name: Resolve Python dependencies
+        run: |
+          ./mill --no-server python.pythonExe
+
+  warm-assemblies:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    needs: warm-dependencies
+    runs-on: ubuntu_32_core_128gb
+    container:
+      image: ghcr.io/${{ github.repository }}-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          cache-output: "true"
+          output-cache-scope: scala-assemblies
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
+      - name: Build assembly artifacts
+        run: |
+          ./mill --no-server artifacts\[${{ env.SCALA_VERSION }}\].all

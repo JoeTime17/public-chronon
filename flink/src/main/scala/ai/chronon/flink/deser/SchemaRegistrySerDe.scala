@@ -7,14 +7,19 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema
 import io.confluent.kafka.schemaregistry.client.{CachedSchemaRegistryClient, SchemaRegistryClient}
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema
+import java.nio.ByteBuffer
+import scala.jdk.CollectionConverters._
 
 /** Schema Provider / SerDe implementation that uses the Confluent Schema Registry to fetch schemas for topics.
   * Supports both Avro and Protobuf schemas.
   *
-  * Can be configured as: topic = "kafka://topic-name/registry_host=host/[registry_port=port]/[registry_scheme=http]/[subject=subject]/[proto3_default_as_null=false]"
-  * Port, scheme and subject are optional. If port is missing, we assume the host is pointing to a LB address / such that
-  * forwards to the right host + port. Scheme defaults to http. Subject defaults to the topic name + "-value" (based on schema
-  * registry conventions).
+  * Can be configured as: topic = "kafka://topic-name/registry_host=host/[registry_port=port]/[registry_scheme=http]/[subject=subject]/[proto3_default_as_null=false]/[basic.auth.credentials.source=USER_INFO]"
+  * Port, scheme, subject, and basic auth params are optional. If port is missing, we assume the host is pointing to a
+  * LB address / such that forwards to the right host + port. Scheme defaults to http. Subject defaults to the topic
+  * name + "-value" (based on schema registry conventions).
+  *
+  * For authenticated registries, set `basic.auth.credentials.source=USER_INFO` in the topic URI params and provide
+  * credentials via the `SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO` env var (or `basic.auth.user.info` in topic params).
   */
 class SchemaRegistrySerDe(topicInfo: TopicInfo) extends SerDe {
   import SchemaRegistrySerDe._
@@ -39,21 +44,20 @@ class SchemaRegistrySerDe(topicInfo: TopicInfo) extends SerDe {
   protected[flink] def buildSchemaRegistryClient(schemeString: String,
                                                  registryHost: String,
                                                  maybePortString: Option[String]): SchemaRegistryClient = {
-    maybePortString match {
-      case Some(portString) =>
-        val registryUrl = s"$schemeString://$registryHost:$portString"
-        new CachedSchemaRegistryClient(registryUrl, CacheCapacity)
-      case None =>
-        val registryUrl = s"$schemeString://$registryHost"
-        new CachedSchemaRegistryClient(registryUrl, CacheCapacity)
+    val registryUrl = maybePortString match {
+      case Some(portString) => s"$schemeString://$registryHost:$portString"
+      case None             => s"$schemeString://$registryHost"
     }
+    val authConfig = resolveRegistryAuthConfig(topicInfo.params, key => Option(System.getenv(key)))
+    new CachedSchemaRegistryClient(registryUrl, CacheCapacity, authConfig.asJava)
   }
 
-  private lazy val delegate: SerDe = buildSerDe(topicInfo)
+  @transient private lazy val schemaRegistryClient: SchemaRegistryClient =
+    buildSchemaRegistryClient(schemaRegistrySchemeString, schemaRegistryHost, schemaRegistryPortString)
+
+  @transient private lazy val delegate: SerDe = buildSerDe(topicInfo)
 
   private def buildSerDe(topicInfo: TopicInfo): SerDe = {
-    val schemaRegistryClient =
-      buildSchemaRegistryClient(schemaRegistrySchemeString, schemaRegistryHost, schemaRegistryPortString)
     val subject = topicInfo.params.getOrElse(RegistrySubjectKey, s"${topicInfo.name}-value")
     val parsedSchema =
       try {
@@ -84,18 +88,25 @@ class SchemaRegistrySerDe(topicInfo: TopicInfo) extends SerDe {
   override def schema: StructType = delegate.schema
 
   override def fromBytes(message: Array[Byte]): Mutation = {
-    val messageBytes =
-      if (schemaRegistryWireFormat) {
-        // Schema id is set, we skip the first 5 bytes based on the wire format:
-        // https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#messages-wire-format
-        // unfortunately we need to drop the first 5 bytes (and thus copy the rest of the byte array) as the AvroDataToCatalyst
-        // interface takes a byte array and the methods to do the Row conversion etc are all private so we can't reach in
-        // This applies to both Avro and Protobuf schemas in Confluent Schema Registry.
-        message.drop(5)
-      } else {
-        message
+    if (schemaRegistryWireFormat) {
+      // Wire format: [0x00 magic byte][4-byte schema ID big-endian][payload]
+      // https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#messages-wire-format
+      val writerSchemaId = ByteBuffer.wrap(message, 1, 4).getInt
+      val messageBytes = message.drop(5)
+      delegate match {
+        case avroSerDe: AvroSerDe =>
+          val writerAvroSchema = schemaRegistryClient
+            .getSchemaById(writerSchemaId)
+            .asInstanceOf[AvroSchema]
+            .rawSchema()
+          avroSerDe.fromBytes(messageBytes, writerAvroSchema)
+        case _ =>
+          // Protobuf is self-describing (field tags in every message) — no schema resolution needed
+          delegate.fromBytes(messageBytes)
       }
-    delegate.fromBytes(messageBytes)
+    } else {
+      delegate.fromBytes(message)
+    }
   }
 }
 
@@ -106,4 +117,27 @@ object SchemaRegistrySerDe {
   val RegistrySubjectKey = "subject"
   val SchemaRegistryWireFormat = "schema_registry_wire_format"
   val Proto3DefaultAsNullKey = "proto3_default_as_null"
+
+  val BasicAuthCredentialsSourceKey = "basic.auth.credentials.source"
+  val BasicAuthUserInfoKey = "basic.auth.user.info"
+  val BasicAuthUserInfoEnvVar = "SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO"
+
+  /** Resolve Schema Registry auth config from topic params and environment variables.
+    * If `basic.auth.credentials.source` is set but `basic.auth.user.info` is not,
+    * falls back to the SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO env var.
+    */
+  def resolveRegistryAuthConfig(params: Map[String, String], getEnv: String => Option[String]): Map[String, String] = {
+    val hasCredentialsSource = params.get(BasicAuthCredentialsSourceKey).exists(_.trim.nonEmpty)
+    if (!hasCredentialsSource) return Map.empty
+
+    val base = Map(BasicAuthCredentialsSourceKey -> params(BasicAuthCredentialsSourceKey).trim)
+    if (params.get(BasicAuthUserInfoKey).exists(_.trim.nonEmpty)) {
+      return base + (BasicAuthUserInfoKey -> params(BasicAuthUserInfoKey).trim)
+    }
+
+    getEnv(BasicAuthUserInfoEnvVar) match {
+      case Some(userInfo) if userInfo.trim.nonEmpty => base + (BasicAuthUserInfoKey -> userInfo.trim)
+      case _                                        => base
+    }
+  }
 }

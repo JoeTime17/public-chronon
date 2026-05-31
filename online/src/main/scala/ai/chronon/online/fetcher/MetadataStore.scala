@@ -113,7 +113,8 @@ class MetadataStore(fetchContext: FetchContext) {
     { join =>
       import ai.chronon.online.metrics
       metrics.Metrics.Context(environment = "join.meta.fetch", join = join)
-    }
+    },
+    ttlMillis = fetchContext.joinConfTtlMillis
   )
 
   def putJoinConf(join: Join): Future[Boolean] = {
@@ -217,14 +218,11 @@ class MetadataStore(fetchContext: FetchContext) {
     doRetrieveAllListConfs(new mutable.ArrayBuffer[String]())
   }
 
-  private def buildJoinPartCodec(
-      joinPart: JoinPartOps,
-      servingInfo: GroupByServingInfoParsed): (Iterable[StructField], Iterable[StructField]) = {
+  private def buildJoinPartCodec(joinConf: Join, joinPart: JoinPartOps, servingInfo: GroupByServingInfoParsed)
+      : (Iterable[StructField], Iterable[StructField], JoinRequestKeys.KeyMapping) = {
     val keySchema = servingInfo.keyCodec.chrononSchema.asInstanceOf[StructType]
-    val joinKeyFields = joinPart.leftToRight
-      .map { case (leftKey, rightKey) =>
-        StructField(leftKey, keySchema.fields.find(_.name == rightKey).get.fieldType)
-      }
+    val keyMapping = JoinRequestKeys.buildKeyMapping(joinConf, joinPart, servingInfo)
+    val joinKeyFields = keyMapping.requestKeyFields
 
     val baseValueSchema: StructType = if (servingInfo.groupBy.aggregations == null) {
       servingInfo.selectedChrononSchema
@@ -238,7 +236,7 @@ class MetadataStore(fetchContext: FetchContext) {
     }
     val joinValueFields = valueFields.map(joinPart.constructJoinPartSchema)
 
-    (joinKeyFields, joinValueFields)
+    (joinKeyFields, joinValueFields, keyMapping)
   }
 
   // key and value schemas
@@ -275,6 +273,7 @@ class MetadataStore(fetchContext: FetchContext) {
         import ai.chronon.online.metrics
         metrics.Metrics.Context(environment = "join.codec.fetch", join = join)
       },
+      ttlMillis = fetchContext.joinCodecTtlMillis,
       onCreateFunc = onCreateFunc
     )
   }
@@ -283,17 +282,20 @@ class MetadataStore(fetchContext: FetchContext) {
     val keyFields = new mutable.LinkedHashSet[StructField]
     val valueFields = new mutable.ListBuffer[StructField]
     val valueInfos = mutable.ListBuffer.empty[JoinCodec.ValueInfo]
+    val joinPartKeyMappings = mutable.Map.empty[String, JoinRequestKeys.KeyMapping]
     var hasPartialFailure = false
     // collect keyFields and valueFields from joinParts/GroupBys
     joinConf.joinPartOps.foreach { joinPart =>
       getGroupByServingInfo(joinPart.groupBy.metaData.getName)
         .map { servingInfo =>
-          val (keys, values) = buildJoinPartCodec(joinPart, servingInfo)
+          val (keys, values, keyMapping) = buildJoinPartCodec(joinConf, joinPart, servingInfo)
 
           keys.foreach(k => keyFields.add(k))
           values.foreach(v => valueFields.append(v))
+          joinPartKeyMappings.put(JoinRequestKeys.partKey(joinConf, joinPart), keyMapping)
+          joinPartKeyMappings.put(JoinRequestKeys.partKey(joinConf, joinPart, servingInfo), keyMapping)
 
-          val leftKeys = keys.map(_.name).map(joinPart.rightToLeft)
+          val leftKeys = JoinRequestKeys.valueInfoLeftKeys(joinConf, joinPart)
           values.foreach { v =>
             val schemaString = SparkConversions.fromChrononType(v.fieldType).catalogString
             valueInfos.append(JoinCodec
@@ -351,7 +353,14 @@ class MetadataStore(fetchContext: FetchContext) {
     val keyCodec = AvroCodec.of(AvroConversions.fromChrononSchema(keySchema).toString)
     val baseValueSchema = StructType(s"${joinName.sanitize}_value", valueFields.toArray)
     val baseValueCodec = serde.AvroCodec.of(AvroConversions.fromChrononSchema(baseValueSchema).toString)
-    JoinCodec(joinConf, keySchema, baseValueSchema, keyCodec, baseValueCodec, valueInfos.toArray, hasPartialFailure)
+    JoinCodec(joinConf,
+              keySchema,
+              baseValueSchema,
+              keyCodec,
+              baseValueCodec,
+              valueInfos.toArray,
+              joinPartKeyMappings.toMap,
+              hasPartialFailure)
   }
 
   def getSchemaFromKVStore(dataset: String, key: String): serde.AvroCodec = {

@@ -19,6 +19,8 @@ jobs:
       redis: ${{ steps.filter.outputs.redis }}
       security: ${{ steps.filter.outputs.security }}
       format: ${{ steps.filter.outputs.format }}
+      ci_infra: ${{ steps.filter.outputs.ci_infra }}
+      ci_image: ${{ steps.filter.outputs.ci_image }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -48,6 +50,46 @@ jobs:
             format:
               - '**/*.scala'
               - '.scalafmt.conf'
+            ci_infra:
+              - '.github/actions/**'
+              - '.github/workflows/**'
+              - '.github/image/Dockerfile'
+              - '.mill-version'
+              - 'mill'
+            ci_image:
+              - '.github/image/Dockerfile'
+
+  ci-infra:
+    needs: changes
+    if: needs.changes.outputs.ci_infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate workflow YAML
+        run: |
+          ruby -e 'require "yaml"; Dir[".github/workflows/*.{yml,yaml}", ".github/actions/**/*.{yml,yaml}"].sort.each { |f| YAML.load_file(f); puts f }'
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          cache-root: /home/runner/.cache
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
+      - name: Verify cache environment
+        run: |
+          test "$XDG_CACHE_HOME" = "/home/runner/.cache"
+          test "$COURSIER_CACHE" = "/home/runner/.cache/coursier"
+          test "$UV_CACHE_DIR" = "/home/runner/.cache/uv"
+          test -d "$COURSIER_CACHE"
+          test -d "$XDG_CACHE_HOME/mill"
+          test -d "$UV_CACHE_DIR"
+      - name: Set up Docker Buildx
+        if: needs.changes.outputs.ci_image == 'true'
+        uses: docker/setup-buildx-action@v3
+      - name: Build CI Docker image
+        if: needs.changes.outputs.ci_image == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .github/image
+          push: false
+          tags: chronon-ci-pr-test:${{ github.sha }}
 
   spark:
     needs: changes
@@ -83,16 +125,17 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
       - name: Configure Git
         run: |
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
-      - name: Install uv
+      - name: Verify uv
         shell: bash
         run: |
-          apt-get update && apt-get install -y curl
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          uv --version
       - name: Run Python lint and format check
         shell: bash
         run: |
@@ -113,16 +156,17 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
       - name: Configure Git
         run: |
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
-      - name: Install uv
+      - name: Verify uv
         shell: bash
         run: |
-          apt-get update && apt-get install -y curl
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          uv --version
       - name: Run Python tests
         shell: bash
         run: |
@@ -147,6 +191,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          cache-root: /home/runner/.cache
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -156,13 +204,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y thrift-compiler
-      - name: Cache Mill
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/mill
-          key: ${{ runner.os }}-mill-${{ hashFiles('build.mill') }}
-          restore-keys: |
-            ${{ runner.os }}-mill-
       - name: Verify Docker is available
         run: |
           docker version
@@ -252,6 +293,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          cache-root: /home/runner/.cache
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -261,13 +306,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y thrift-compiler
-      - name: Cache Mill
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/mill
-          key: ${{ runner.os }}-mill-${{ hashFiles('build.mill') }}
-          restore-keys: |
-            ${{ runner.os }}-mill-
       - name: Verify Docker is available
         run: |
           docker version
@@ -292,6 +330,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          cache-root: /home/runner/.cache
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -308,7 +350,7 @@ jobs:
 
   ci-gate:
     if: always()
-    needs: [spark, non-spark, python-lint, python-tests, cosmos, redis, format, grype]
+    needs: [spark, non-spark, python-lint, python-tests, cosmos, redis, format, grype, ci-infra]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI results

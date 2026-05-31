@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Union
 import ai.chronon.utils as utils
 import gen_thrift.api.ttypes as api
 import gen_thrift.common.ttypes as common
-from ai.chronon.cli.compile import parse_teams
+from ai.chronon.cli.compile.config_origin import mark_factory_created_config
 from ai.chronon.data_types import DataType, FieldsType
 
 logging.basicConfig(level=logging.INFO)
@@ -30,20 +30,7 @@ logging.basicConfig(level=logging.INFO)
 
 def _get_output_table_name(join: api.Join, full_name: bool = False):
     """generate output table name for join backfill job"""
-    # join sources could also be created inline alongside groupBy file
-    # so we specify fallback module as group_bys
-    if isinstance(join, api.Join):
-        utils.__set_name(join, api.Join, "joins")
-    # set output namespace
-    if not join.metaData.outputNamespace:
-        team_name = join.metaData.name.split(".")[0]
-        namespace = (
-            parse_teams.load_teams(utils.chronon_root_path, print=False)
-            .get(team_name)
-            .outputNamespace
-        )
-        join.metaData.outputNamespace = namespace
-    return utils.output_table_name(join, full_name=full_name)
+    return utils._ensure_name_and_get_output_table(join, api.Join, "joins", full_name)
 
 
 def JoinPart(
@@ -279,7 +266,7 @@ def BootstrapPart(
 def Join(
     left: api.Source,
     right_parts: List[api.JoinPart],
-    row_ids: Union[str, List[str]],
+    row_ids: Optional[Union[str, List[str]]] = None,
     version: Optional[int] = None,
     online_external_parts: List[api.ExternalPart] = None,
     bootstrap_parts: List[api.BootstrapPart] = None,
@@ -304,6 +291,7 @@ def Join(
     step_days: int = None,
     enable_stats_compute: bool = None,
     modular_execution: bool = False,
+    environments: Optional[List[str]] = None,
 ) -> api.Join:
     """
     Construct a join object. A join can pull together data from various GroupBy's both offline and online. This is also
@@ -370,7 +358,8 @@ def Join(
         defaults to "@daily". Set to "@never" to explicitly disable online scheduling even when online=True.
         Supports the same format as offline_schedule.
     :param row_ids:
-        Columns of the left table that uniquely define a training record. Used as default keys during bootstrap
+        Columns of the left table that uniquely define a training record. Used as default keys during bootstrap.
+        Optional.
     :param bootstrap_parts:
         A list of BootstrapPart used for the Join. See BootstrapPart doc for more details
     :param bootstrap_from_log:
@@ -410,18 +399,34 @@ def Join(
         When True, uses modular join planning (JoinPlanner) instead of the default
         monolith planner (MonolithJoinPlanner).
     :type modular_execution: bool
+    :param environments:
+        List of environments where this join should be deployed/available.
+        Defaults to ['prod']. Valid values: 'prod', 'canary' (case-insensitive).
+    :type environments: List[str]
     """
     # Normalize row_ids
     if isinstance(row_ids, str):
         row_ids = [row_ids]
 
+    # `environments` is left unset (None) when the author doesn't specify it.
+    # Downstream consumers (e.g. hub schedule-all) default the missing/empty
+    # case to ['prod']. Keeping it unset on disk avoids baking a default into
+    # every compiled conf.
+    if environments:
+        environments = utils.convert_environments_to_enum(environments)
+
     assert version is None or isinstance(version, int), (
         f"Version must be an integer or None, but found {type(version).__name__}"
     )
 
+    # Normalize before deepcopy so a left JoinSource can resolve the nested
+    # join's metadata name from its defining module. Without this, the copied
+    # inner join can keep a null name and later resolve to "<namespace>.null".
+    normalized_left = utils.normalize_source(left, output_namespace)
+
     # create a deep copy for case: multiple LeftOuterJoin use the same left,
     # validation will fail after the first iteration
-    updated_left = copy.deepcopy(left)
+    updated_left = copy.deepcopy(normalized_left)
     if left.events and left.events.query.selects:
         assert "ts" not in left.events.query.selects.keys(), (
             "'ts' is a reserved key word for Chronon, please specify the expression in timeColumn"
@@ -499,6 +504,7 @@ def Join(
         consistencySamplePercent=consistency_sample_percent,
         executionInfo=exec_info,
         version=str(version) if version is not None else None,
+        environments=environments,
     )
 
     join = api.Join(
@@ -516,4 +522,4 @@ def Join(
     # Add the table property that calls the private function
     join.__class__.table = property(lambda self: _get_output_table_name(self, full_name=True))
 
-    return join
+    return mark_factory_created_config(join)

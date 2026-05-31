@@ -16,7 +16,11 @@ trait CloudK8sModule extends Cross.Module[String] with build.BaseModule {
     mvn"io.fabric8:kubernetes-client:7.5.2"
       .exclude("com.fasterxml.jackson.core" -> "jackson-core")
       .exclude("com.fasterxml.jackson.core" -> "jackson-databind")
-      .exclude("com.fasterxml.jackson.core" -> "jackson-annotations"),
+      .exclude("com.fasterxml.jackson.core" -> "jackson-annotations")
+      .exclude("com.fasterxml.jackson.dataformat" -> "jackson-dataformat-yaml")
+      .exclude("com.fasterxml.jackson.datatype" -> "jackson-datatype-jsr310"),
+    mvn"io.vertx:vertx-core:4.5.24",
+    mvn"io.vertx:vertx-web-client:4.5.24",
   )
 
   object test extends build.BaseTestModule {

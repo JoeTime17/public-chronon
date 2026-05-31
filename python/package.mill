@@ -33,7 +33,7 @@ object `package` extends PythonModule with RuffModule with PublishModule {
   def publishMeta = PublishMeta(
     name = "zipline-ai",
     description = "CLI tool for the Zipline AI platform",
-    requiresPython = ">= 3.11",
+    requiresPython = ">= 3.10",
     license = License.`Apache-2.0`,
     authors = Seq(Developer("Zipline AI", "hello@zipline.ai")),
     urls = Map(
@@ -57,6 +57,10 @@ object `package` extends PythonModule with RuffModule with PublishModule {
          |
          |[tool.setuptools.package-data]
          |"ai.chronon.resources" = ["*.md", "*.sh"]
+         |
+         |[tool.setuptools.packages.find]
+         |where = ["src"]
+         |namespaces = true
          |""".stripMargin
   }
 

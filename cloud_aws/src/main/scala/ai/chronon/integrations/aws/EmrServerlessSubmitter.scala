@@ -1,7 +1,7 @@
 package ai.chronon.integrations.aws
 
 import ai.chronon.api.JobStatusType
-import ai.chronon.integrations.cloud_k8s.K8sFlinkSubmitter
+import ai.chronon.integrations.cloud_k8s.{K8sFlinkStatusProvider, K8sFlinkSubmitter}
 import ai.chronon.spark.submission.JobSubmitterConstants._
 import ai.chronon.spark.submission.{
   JobSubmitter,
@@ -19,7 +19,9 @@ import software.amazon.awssdk.services.s3.S3Client
 
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
-import scala.concurrent.ExecutionContext
+import java.util.concurrent.Executors
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext}
 import scala.jdk.CollectionConverters._
 
 class EmrServerlessSubmitter(
@@ -28,7 +30,6 @@ class EmrServerlessSubmitter(
     s3LogUri: String,
     eksFlinkSubmitter: Option[K8sFlinkSubmitter] = None,
     awsRegion: String = "",
-    override val tablePartitionsDataset: String = "",
     override val dqMetricsDataset: String = "",
     override val kvStoreApiProperties: Map[String, String] = Map.empty,
     flinkEksServiceAccount: Option[String] = None,
@@ -55,6 +56,17 @@ class EmrServerlessSubmitter(
                                         val varName = m.group(1)
                                         sys.env.getOrElse(varName, m.matched)
                                       })
+    }
+
+  // EMR Serverless-specific env var expansion. Unlike YARN/K8s setups, driver env vars
+  // must use spark.emr-serverless.driverEnv.<KEY> — see
+  // https://docs.aws.amazon.com/emr/latest/EMR-Serverless-UserGuide/jobs-spark.html
+  override def envVarsToSparkProperties(env: Map[String, String]): Map[String, String] =
+    env.flatMap { case (key, value) =>
+      Seq(
+        s"spark.emr-serverless.driverEnv.$key" -> value,
+        s"spark.executorEnv.$key" -> value
+      )
     }
 
   private lazy val resolvedStudioId: Option[String] =
@@ -97,6 +109,7 @@ class EmrServerlessSubmitter(
       jobProperties: Map[String, String],
       files: List[String],
       labels: Map[String, String],
+      envVars: Map[String, String],
       args: String*
   ): String = {
     val userArgs = JobSubmitter.getApplicationArgs(jobType, args.toArray)
@@ -125,6 +138,10 @@ class EmrServerlessSubmitter(
           throw new RuntimeException(s"Missing expected $EksServiceAccount"))
         val namespace =
           submissionProperties.getOrElse(EksNamespace, throw new RuntimeException(s"Missing expected $EksNamespace"))
+        val nodeSelector = submissionProperties
+          .get(EksNodeSelector)
+          .map(EmrServerlessSubmitter.parseNodeSelector)
+          .getOrElse(Map.empty)
 
         val deploymentName = eksFlinkSubmitter
           .getOrElse(
@@ -141,18 +158,21 @@ class EmrServerlessSubmitter(
             jobProperties = jobProperties,
             args = userArgs,
             serviceAccount = serviceAccount,
-            namespace = namespace
+            namespace = namespace,
+            envVars = envVars,
+            nodeSelector = nodeSelector
           )
         s"flink:$namespace:$deploymentName"
 
       case TypeSparkJob =>
-        submitSparkJob(submissionProperties, jobProperties, files, labels, args: _*)
+        submitSparkJob(submissionProperties, jobProperties, envVars, files, labels, userArgs: _*)
     }
   }
 
   private def submitSparkJob(
       submissionProperties: Map[String, String],
       jobProperties: Map[String, String],
+      envVars: Map[String, String],
       files: List[String],
       labels: Map[String, String],
       args: String*
@@ -169,7 +189,9 @@ class EmrServerlessSubmitter(
     // EMR Serverless caps properties per Configuration at 100. Anything beyond
     // that spills into --conf flags on sparkSubmitParameters (same effect on SparkConf,
     // without the console-side property-count limit).
-    val resolvedProps = resolveEnvVars(jobProperties)
+    // envVars get expanded into EMR-Serverless-specific driver/executor Spark props here
+    // (see envVarsToSparkProperties) and merged with caller-provided jobProperties.
+    val resolvedProps = resolveEnvVars(jobProperties ++ envVarsToSparkProperties(envVars))
     val (inlineProps, overflowProps) = EmrServerlessSubmitter.splitForConfigCap(resolvedProps)
     if (overflowProps.nonEmpty) {
       logger.warn(
@@ -191,12 +213,6 @@ class EmrServerlessSubmitter(
     logger.info(
       s"EMR Serverless submission for $jobName: ${resolvedProps.size} jobProperties " +
         s"(${inlineProps.size} in spark-defaults, ${overflowProps.size} as --conf overflow)")
-    if (inlineProps.nonEmpty) {
-      logger.info(
-        s"spark-defaults classification for $jobName:\n  " +
-          inlineProps.toSeq.sortBy(_._1).map { case (k, v) => s"$k = $v" }.mkString("\n  "))
-    }
-    logger.info(s"sparkSubmitParameters for $jobName: $sparkSubmitParams")
 
     val jobDriverBuilder = JobDriver
       .builder()
@@ -450,12 +466,13 @@ class EmrServerlessSubmitter(
     val eksNamespace = this.flinkEksNamespace
       .orElse(env.get("FLINK_EKS_NAMESPACE"))
       .getOrElse(throw new IllegalArgumentException("FLINK_EKS_NAMESPACE must be set for GROUP_BY_STREAMING"))
+    val maybeNodeSelector = env.get("FLINK_EKS_NODE_SELECTOR")
     val base = Map(
       FlinkMainJarURI -> flinkJarUri,
       FlinkCheckpointUri -> s"$flinkStateUri/checkpoints",
       EksServiceAccount -> eksServiceAccount,
       EksNamespace -> eksNamespace
-    )
+    ) ++ maybeNodeSelector.map(EksNodeSelector -> _)
     val enableKinesis = env.getOrElse("ENABLE_KINESIS", "false").toBoolean
     if (enableKinesis)
       base + (FlinkKinesisConnectorJarURI -> s"$artifactPrefix/release/$version/jars/connectors_kinesis_deploy.jar")
@@ -506,6 +523,23 @@ object EmrServerlessSubmitter {
 
   private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
   val DefaultApplicationName = "chronon-serverless-app"
+
+  // Parses "zipline.ai/node-type=flink,kubernetes.io/arch=amd64" into the equivalent Map
+  private[aws] def parseNodeSelector(raw: String): Map[String, String] = {
+    if (raw.trim.isEmpty)
+      throw new IllegalArgumentException("nodeSelector value must not be blank")
+    raw
+      .split(",")
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map { pair =>
+        val idx = pair.indexOf('=')
+        if (idx <= 0)
+          throw new IllegalArgumentException(s"Malformed nodeSelector pair: '$pair' (expected key=value)")
+        pair.substring(0, idx).trim -> pair.substring(idx + 1).trim
+      }
+      .toMap
+  }
 
   // EMR Serverless StartJobRun API rejects any applicationConfiguration entry whose
   // properties map has more than 100 keys (service-side validation).
@@ -565,7 +599,6 @@ object EmrServerlessSubmitter {
       awsRegion: String,
       executionRoleArn: String,
       s3LogUri: String,
-      tablePartitionsDataset: String = "",
       dqMetricsDataset: String = "",
       flinkEksServiceAccount: Option[String] = None,
       flinkEksNamespace: Option[String] = None,
@@ -591,7 +624,6 @@ object EmrServerlessSubmitter {
       s3LogUri,
       eksFlinkSubmitter = Some(EksFlinkSubmitter(k8sConfig, ingressBaseUrl = ingressBaseUrl)),
       awsRegion = awsRegion,
-      tablePartitionsDataset = tablePartitionsDataset,
       dqMetricsDataset = dqMetricsDataset,
       flinkEksServiceAccount = flinkEksServiceAccount,
       flinkEksNamespace = flinkEksNamespace,
@@ -644,6 +676,7 @@ object EmrServerlessSubmitter {
         val maybeKinesisJarUri = JobSubmitter.getArgValue(args, FlinkKinesisJarUriArgKeyword)
         val maybeFlinkJarsUri = JobSubmitter.getArgValue(args, FlinkJarsUriArgKeyword)
         val maybeAdditionalJarsUri = JobSubmitter.getArgValue(args, AdditionalJarsUriArgKeyword)
+        val maybeNodeSelector = JobSubmitter.getArgValue(args, EksNodeSelectorArgKeyword)
 
         val baseJobProps = Map(
           JobId -> jobId,
@@ -655,7 +688,8 @@ object EmrServerlessSubmitter {
           EksNamespace -> eksNamespace
         ) ++ maybeKinesisJarUri.map(FlinkKinesisConnectorJarURI -> _) ++
           maybeFlinkJarsUri.map(FlinkJarsUri -> _) ++
-          maybeAdditionalJarsUri.map(AdditionalJars -> _)
+          maybeAdditionalJarsUri.map(AdditionalJars -> _) ++
+          maybeNodeSelector.map(EksNodeSelector -> _)
 
         val userPassedSavepoint = JobSubmitter.getArgValue(args, StreamingCustomSavepointArgKeyword)
         val maybeSavepointUri =
@@ -710,6 +744,8 @@ object EmrServerlessSubmitter {
 
     val region = sys.env.getOrElse("AWS_REGION", sys.env.getOrElse("AWS_DEFAULT_REGION", "us-west-2"))
     val appName = sys.env.get(SparkClusterNameEnvVar).filter(_.nonEmpty).getOrElse(DefaultApplicationName)
+    val flinkStatusProvider = new K8sFlinkStatusProvider()
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newCachedThreadPool())
     val submitter = EmrServerlessSubmitter(
       awsRegion = region,
       executionRoleArn = sys.env.getOrElse("EMR_EXECUTION_ROLE_ARN",
@@ -721,7 +757,9 @@ object EmrServerlessSubmitter {
       eksClusterName = sys.env.get("EKS_CLUSTER_NAME"),
       ingressBaseUrl = sys.env.get("HUB_BASE_URL"),
       emrStudioId = sys.env.get("EMR_STUDIO_ID"),
-      cloudWatchLogGroupName = sys.env.get("EMR_CLOUDWATCH_LOG_GROUP")
+      cloudWatchLogGroupName = sys.env.get("EMR_CLOUDWATCH_LOG_GROUP"),
+      flinkHealthCheckFn = uri => Await.result(flinkStatusProvider.isFlinkJobHealthy(uri), 30.seconds),
+      flinkInternalJobIdFetchFn = uri => Await.result(flinkStatusProvider.getFlinkInternalJobId(uri), 30.seconds)
     )
     val resultJobId = submitter.submit(
       jobType = jobType,
@@ -729,7 +767,8 @@ object EmrServerlessSubmitter {
       jobProperties = modeConfigProperties.getOrElse(Map.empty),
       files = files.toList,
       labels = Map.empty,
-      finalArgs: _*
+      envVars = Map.empty,
+      args = finalArgs: _*
     )
 
     val outputId = jobType match {

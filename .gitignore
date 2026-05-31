@@ -12,6 +12,7 @@
 *.db
 .idea/
 .ijwb/
+.codex/
 **/local_warehouse/
 .eclipse
 **/.vscode/

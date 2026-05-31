@@ -283,7 +283,7 @@ class CosmosKVStoreImpl(
 
   override def multiGet(requests: Seq[GetRequest]): Future[Seq[GetResponse]] = {
     val batchRequestId = UUID.randomUUID().toString
-    logger.info(s"[multiGet] [requestId=$batchRequestId] Starting with ${requests.size} requests")
+    logger.debug(s"[multiGet] [requestId=$batchRequestId] Starting with ${requests.size} requests")
 
     val requestGroups = requests.groupBy { req =>
       val containerName = mapDatasetToContainer(req.dataset)
@@ -296,7 +296,7 @@ class CosmosKVStoreImpl(
       }
     }
 
-    logger.info(s"[multiGet] [requestId=$batchRequestId] Grouped into ${requestGroups.size} batches")
+    logger.debug(s"[multiGet] [requestId=$batchRequestId] Grouped into ${requestGroups.size} batches")
 
     val groupFutures = requestGroups.zipWithIndex.map {
       case (((containerName, dataset, startTs, endTs), groupRequests), idx) =>
@@ -307,7 +307,7 @@ class CosmosKVStoreImpl(
     }.toSeq
 
     Future.sequence(groupFutures).map { results =>
-      logger.info(s"[multiGet] [requestId=$batchRequestId] Completed successfully")
+      logger.debug(s"[multiGet] [requestId=$batchRequestId] Completed successfully")
       results.flatten
     }
   }
@@ -613,10 +613,10 @@ class CosmosKVStoreImpl(
 
   override def multiPut(requests: Seq[PutRequest]): Future[Seq[Boolean]] = {
     val batchRequestId = UUID.randomUUID().toString
-    logger.info(s"[multiPut] [requestId=$batchRequestId] Starting with ${requests.size} requests")
+    logger.debug(s"[multiPut] [requestId=$batchRequestId] Starting with ${requests.size} requests")
 
     val requestsByContainer = requests.groupBy(req => mapDatasetToContainer(req.dataset))
-    logger.info(s"[multiPut] [requestId=$batchRequestId] Grouped into ${requestsByContainer.size} containers")
+    logger.debug(s"[multiPut] [requestId=$batchRequestId] Grouped into ${requestsByContainer.size} containers")
 
     val containerFutures = requestsByContainer.zipWithIndex.map {
       case ((containerName, containerRequests), containerIdx) =>

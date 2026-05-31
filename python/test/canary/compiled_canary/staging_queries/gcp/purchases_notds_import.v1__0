@@ -1,0 +1,107 @@
+{
+  "engineType": 1,
+  "metaData": {
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_purchases_notds_with_offset_0\", \"spec\": \"data.purchases_notds/notds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "clusterConf": {
+        "modeClusterConfigs": {
+          "upload": {
+            "canary_only_sentinel_cluster": "canary-only-cluster-sentinel-5b6c7d",
+            "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}"
+          }
+        }
+      },
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "notds",
+          "spark.chronon.partition.format": "yyyy-MM-dd",
+          "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_gcp.GcpFormatProvider",
+          "spark.chronon.table_write.format": "iceberg",
+          "spark.chronon.test.canary_only_sentinel": "canary-only-conf-sentinel-7c8d9e",
+          "spark.default.parallelism": "10",
+          "spark.driver.cores": "1",
+          "spark.driver.extraJavaOptions": "-Dai.chronon.metrics.enabled=true -Dai.chronon.metrics.reader=grpc -Dai.chronon.metrics.exporter.url=http://localhost:4317",
+          "spark.driver.memory": "512m",
+          "spark.executor.cores": "1",
+          "spark.executor.memory": "512m",
+          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+          "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.gcp.bigquery.BigQueryMetastoreCatalog",
+          "spark.sql.catalog.spark_catalog.gcp.bigquery.location": "us-central1",
+          "spark.sql.catalog.spark_catalog.gcp.bigquery.project-id": "canary-443022",
+          "spark.sql.catalog.spark_catalog.io-impl": "org.apache.iceberg.io.ResolvingFileIO",
+          "spark.sql.catalog.spark_catalog.warehouse": "gs://zipline-warehouse-canary/data/tables/",
+          "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+          "spark.sql.shuffle.partitions": "10"
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "gs://zipline-artifacts-canary",
+          "CANARY_ONLY_SENTINEL_GCP": "canary-only-sentinel-value-1d2e3f",
+          "CHRONON_ONLINE_ARGS": " -Ztasks=4",
+          "CLOUD_PROVIDER": "gcp",
+          "CUSTOMER_ID": "canary",
+          "ENABLE_PUBSUB": "true",
+          "EVAL_URL": "http://localhost:3904",
+          "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
+          "FRONTEND_URL": "http://localhost:3000",
+          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+          "GCP_PROJECT_ID": "canary-443022",
+          "GCP_REGION": "us-central1",
+          "HUB_URL": "http://localhost:3903",
+          "SPARK_CLUSTER_NAME": "zipline-canary-cluster",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
+        },
+        "modeEnvironments": {
+          "upload": {
+            "ARTIFACT_PREFIX": "gs://zipline-artifacts-canary",
+            "CANARY_ONLY_SENTINEL_GCP": "canary-only-sentinel-value-1d2e3f",
+            "CHRONON_ONLINE_ARGS": " -Ztasks=4",
+            "CLOUD_PROVIDER": "gcp",
+            "CUSTOMER_ID": "canary",
+            "ENABLE_PUBSUB": "true",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
+            "FRONTEND_URL": "http://localhost:3000",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "HUB_URL": "http://localhost:3903",
+            "SPARK_CLUSTER_NAME": "zipline-transient-upload-cluster",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
+          }
+        }
+      },
+      "offlineSchedule": "@daily"
+    },
+    "name": "gcp.purchases_notds_import.v1__0",
+    "outputNamespace": "data",
+    "sourceFile": "staging_queries/gcp/purchases_notds_import.py",
+    "team": "gcp",
+    "version": "0"
+  },
+  "query": "SELECT * FROM data.purchases_notds WHERE notds BETWEEN {{ start_date }} AND {{ end_date }}",
+  "tableDependencies": [
+    {
+      "endOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "startOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "tableInfo": {
+        "partitionColumn": "notds",
+        "partitionInterval": {
+          "length": 1,
+          "timeUnit": 1
+        },
+        "table": "data.purchases_notds"
+      }
+    }
+  ]
+}

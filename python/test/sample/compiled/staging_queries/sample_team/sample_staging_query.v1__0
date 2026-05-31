@@ -1,6 +1,6 @@
 {
   "metaData": {
-    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_sample_namespace_sample_table_with_offset_1\", \"spec\": \"sample_namespace.sample_table/ds={{ macros.ds_add(ds, 1) }}/_HR=23:00\"}, {\"name\": \"wf_sample_namespace.sample_table\", \"spec\": \"sample_namespace.sample_table/ds={{ macros.ds_add(ds, 1) }}\"}]}",
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_sample_namespace_sample_table_with_offset_1\", \"spec\": \"sample_namespace.sample_table/ds={{ macros.ds_add(ds, -1) }}/_HR=23:00\"}, {\"name\": \"wf_sample_namespace.sample_table\", \"spec\": \"sample_namespace.sample_table/ds={{ macros.ds_add(ds, 1) }}\"}]}",
     "executionInfo": {
       "conf": {
         "common": {

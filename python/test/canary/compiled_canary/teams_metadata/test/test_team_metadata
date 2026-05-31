@@ -1,0 +1,17 @@
+{
+  "executionInfo": {
+    "conf": {
+      "common": {
+        "spark.chronon.partition.column": "ds"
+      }
+    },
+    "env": {
+      "common": {
+        "CUSTOMER_ID": "dev",
+        "FRONTEND_URL": "http://localhost:3000",
+        "HUB_URL": "http://localhost:3903",
+        "VERSION": "latest"
+      }
+    }
+  }
+}

@@ -14,6 +14,15 @@ ignore:
     package:
       name: "spark-core_2.12"
 
+  # GHSA-rwm7-x88c-3g2p: netty-transport-native-epoll half-closure DoS
+  # Only affects Netty 4.2.x and 5.0.x — 4.1.x is not vulnerable.
+  # Grype incorrectly flags 4.1.x because the advisory's "fixed in" points to 4.2.13.Final.
+  # See: https://github.com/advisories/GHSA-rwm7-x88c-3g2p
+  # See: https://github.com/netty/netty/pull/16689#issuecomment-4394849137 (author confirms 4.1.x unaffected)
+  - vulnerability: "GHSA-rwm7-x88c-3g2p"
+    package:
+      name: "netty-transport-native-epoll"
+
   # Curl CVE exceptions - required for fetcher container functionality
   # Used for Amazon Corretto key download, Google Cloud Profiler download, and healthcheck
   - package:

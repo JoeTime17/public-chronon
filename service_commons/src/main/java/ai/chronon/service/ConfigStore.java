@@ -4,6 +4,8 @@ import io.vertx.config.ConfigRetriever;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 
+import ai.chronon.online.metrics.TTLCache;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -33,6 +35,10 @@ public class ConfigStore {
     
     // GCP configuration
     private static final String GCP_PROJECT_ID = "gcp.projectId";
+
+    // TTL cache configuration
+    private static final String JOIN_CONF_TTL_MILLIS = "ai.chronon.join.conf.ttl.millis";
+    private static final String JOIN_CODEC_TTL_MILLIS = "ai.chronon.join.codec.ttl.millis";
 
     private volatile JsonObject jsonConfig;
     private final Object lock = new Object();
@@ -165,6 +171,14 @@ public class ConfigStore {
     public void validateAllConfig() {
         validateDatabaseConfig();
         validateGcpConfig();
+    }
+
+    public long getJoinConfTtlMillis() {
+        return jsonConfig.getLong(JOIN_CONF_TTL_MILLIS, TTLCache.DefaultTtlMillis());
+    }
+
+    public long getJoinCodecTtlMillis() {
+        return jsonConfig.getLong(JOIN_CODEC_TTL_MILLIS, TTLCache.DefaultTtlMillis());
     }
 
     public String encodeConfig() {

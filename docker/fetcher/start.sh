@@ -37,7 +37,7 @@ if [ -n "$CHRONON_METRICS_PREFIX" ]; then
 fi
 
 if [ -n "$CHRONON_METRICS_READER" ]; then
-  METRICS_OPTS="-Dai.chronon.metrics.enabled=true"
+  METRICS_OPTS="$METRICS_OPTS -Dai.chronon.metrics.enabled=true"
   METRICS_OPTS="$METRICS_OPTS -Dai.chronon.metrics.reader=$CHRONON_METRICS_READER"
 
   if [ "$CHRONON_METRICS_READER" = "prometheus" ]; then
@@ -94,13 +94,22 @@ ADD_OPENS_OPTS="
 
 JVM_OPTS="$JVM_OPTS $GC_OPTS $ADD_OPENS_OPTS -XX:MaxMetaspaceSize=1g -XX:MaxRAMPercentage=70.0 -XX:MinRAMPercentage=70.0 -XX:InitialRAMPercentage=70.0 -XX:MaxHeapFreeRatio=100 -XX:MinHeapFreeRatio=0"
 
+# TTL cache configuration
+TTL_OPTS=""
+if [ -n "$CHRONON_JOIN_CONF_TTL_MILLIS" ]; then
+  TTL_OPTS="$TTL_OPTS -Dai.chronon.join.conf.ttl.millis=$CHRONON_JOIN_CONF_TTL_MILLIS"
+fi
+if [ -n "$CHRONON_JOIN_CODEC_TTL_MILLIS" ]; then
+  TTL_OPTS="$TTL_OPTS -Dai.chronon.join.codec.ttl.millis=$CHRONON_JOIN_CODEC_TTL_MILLIS"
+fi
+
 echo "Starting Fetcher service with online jar $ONLINE_JAR and online class $ONLINE_CLASS"
-if ! java $JVM_OPTS -cp $FETCHER_JAR:$ONLINE_JAR ai.chronon.service.ChrononServiceLauncher \
+if ! java $JVM_OPTS $METRICS_OPTS -cp $FETCHER_JAR:$ONLINE_JAR ai.chronon.service.ChrononServiceLauncher \
   run ai.chronon.service.FetcherVerticle \
   -Dserver.port=$FETCHER_PORT \
   -Donline.jar=$ONLINE_JAR \
   -Donline.api.props='{"kv.tablePrefix":"'"$KV_TABLE_PREFIX"'"}' \
-  $METRICS_OPTS \
+  $TTL_OPTS \
   -Donline.class=$ONLINE_CLASS; then
   echo "Error: Fetcher service failed to start"
   exit 1

@@ -95,6 +95,7 @@ object Metrics {
     val FetchCount = "fetch.count"
     val FeatureNulls = "feature.null_count"
     val FeatureCount = "feature.count"
+    val UploadNullCount = "upload.null_count"
 
     val PutKeyNullPercent = "put.key.null_percent"
     val PutValueNullPercent = "put.value.null_percent"
@@ -255,5 +256,10 @@ object Metrics {
     def gauge(metric: String, value: Double): Unit = Context.client.doubleGauge(prefix(metric), value)
     def gauge(metric: String, value: Double, additionalTags: Map[String, String]): Unit =
       Context.client.doubleGauge(prefix(metric), value, additionalTags)
+
+    /** Block until any buffered metrics have been exported, or `timeoutMillis` elapses.
+      * Use from short-lived batch jobs after recording terminal gauges, before the JVM exits.
+      */
+    def flush(timeoutMillis: Long): Unit = Context.client.flush(timeoutMillis)
   }
 }

@@ -1,0 +1,1041 @@
+{
+  "joinParts": [
+    {
+      "groupBy": {
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "view_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "click_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "purchase_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "favorite_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "add_to_cart_event",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "view_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "click_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "purchase_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "favorite_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "add_to_cart_event",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_mobile",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_desktop",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "is_tablet",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {
+              "k": "128"
+            },
+            "inputColumn": "user_event_struct",
+            "operation": 13,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              },
+              {
+                "length": 7,
+                "timeUnit": 1
+              },
+              {
+                "length": 14,
+                "timeUnit": 1
+              },
+              {
+                "length": 30,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "user_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "add_to_cart_event_average_14d": "721cedd948fa111b342a27442173c100",
+            "add_to_cart_event_average_1d": "721cedd948fa111b342a27442173c100",
+            "add_to_cart_event_average_30d": "721cedd948fa111b342a27442173c100",
+            "add_to_cart_event_average_7d": "721cedd948fa111b342a27442173c100",
+            "add_to_cart_event_sum_14d": "721cedd948fa111b342a27442173c100",
+            "add_to_cart_event_sum_1d": "721cedd948fa111b342a27442173c100",
+            "add_to_cart_event_sum_30d": "721cedd948fa111b342a27442173c100",
+            "add_to_cart_event_sum_7d": "721cedd948fa111b342a27442173c100",
+            "click_event_average_14d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+            "click_event_average_1d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+            "click_event_average_30d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+            "click_event_average_7d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+            "click_event_sum_14d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+            "click_event_sum_1d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+            "click_event_sum_30d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+            "click_event_sum_7d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+            "favorite_event_average_14d": "8c5dbe13014ce5c05064cd89fede7998",
+            "favorite_event_average_1d": "8c5dbe13014ce5c05064cd89fede7998",
+            "favorite_event_average_30d": "8c5dbe13014ce5c05064cd89fede7998",
+            "favorite_event_average_7d": "8c5dbe13014ce5c05064cd89fede7998",
+            "favorite_event_sum_14d": "8c5dbe13014ce5c05064cd89fede7998",
+            "favorite_event_sum_1d": "8c5dbe13014ce5c05064cd89fede7998",
+            "favorite_event_sum_30d": "8c5dbe13014ce5c05064cd89fede7998",
+            "favorite_event_sum_7d": "8c5dbe13014ce5c05064cd89fede7998",
+            "is_desktop_sum_14d": "cd279c4eecf6966bba76ebcf642e07c1",
+            "is_desktop_sum_1d": "cd279c4eecf6966bba76ebcf642e07c1",
+            "is_desktop_sum_30d": "cd279c4eecf6966bba76ebcf642e07c1",
+            "is_desktop_sum_7d": "cd279c4eecf6966bba76ebcf642e07c1",
+            "is_mobile_sum_14d": "4aad5a5a5bad4a8029ba05cc6b299b8c",
+            "is_mobile_sum_1d": "4aad5a5a5bad4a8029ba05cc6b299b8c",
+            "is_mobile_sum_30d": "4aad5a5a5bad4a8029ba05cc6b299b8c",
+            "is_mobile_sum_7d": "4aad5a5a5bad4a8029ba05cc6b299b8c",
+            "is_tablet_sum_14d": "e45ad389d51304af80f003ab465b215f",
+            "is_tablet_sum_1d": "e45ad389d51304af80f003ab465b215f",
+            "is_tablet_sum_30d": "e45ad389d51304af80f003ab465b215f",
+            "is_tablet_sum_7d": "e45ad389d51304af80f003ab465b215f",
+            "purchase_event_average_14d": "af3161f10b0f6c6fbfd48885ac5943c9",
+            "purchase_event_average_1d": "af3161f10b0f6c6fbfd48885ac5943c9",
+            "purchase_event_average_30d": "af3161f10b0f6c6fbfd48885ac5943c9",
+            "purchase_event_average_7d": "af3161f10b0f6c6fbfd48885ac5943c9",
+            "purchase_event_sum_14d": "af3161f10b0f6c6fbfd48885ac5943c9",
+            "purchase_event_sum_1d": "af3161f10b0f6c6fbfd48885ac5943c9",
+            "purchase_event_sum_30d": "af3161f10b0f6c6fbfd48885ac5943c9",
+            "purchase_event_sum_7d": "af3161f10b0f6c6fbfd48885ac5943c9",
+            "user_event_struct_last128_14d": "47d3f70709072f97d2b414d5403026ce",
+            "user_event_struct_last128_1d": "47d3f70709072f97d2b414d5403026ce",
+            "user_event_struct_last128_30d": "47d3f70709072f97d2b414d5403026ce",
+            "user_event_struct_last128_7d": "47d3f70709072f97d2b414d5403026ce",
+            "user_id": "1cefa43bec1f992629ef61e61e07bd76",
+            "view_event_average_14d": "62a8793addff23c7d8079961a8a07320",
+            "view_event_average_1d": "62a8793addff23c7d8079961a8a07320",
+            "view_event_average_30d": "62a8793addff23c7d8079961a8a07320",
+            "view_event_average_7d": "62a8793addff23c7d8079961a8a07320",
+            "view_event_sum_14d": "62a8793addff23c7d8079961a8a07320",
+            "view_event_sum_1d": "62a8793addff23c7d8079961a8a07320",
+            "view_event_sum_30d": "62a8793addff23c7d8079961a8a07320",
+            "view_event_sum_7d": "62a8793addff23c7d8079961a8a07320"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.coalesce.factor": "10",
+                "spark.chronon.partition.column": "ds",
+                "spark.default.parallelism": "10",
+                "spark.hadoop.fs.s3a.access.key": "minioadmin",
+                "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+                "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+                "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+                "spark.hadoop.fs.s3a.path.style.access": "true",
+                "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+                "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+                "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+                "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+                "spark.sql.catalog.iceberg.type": "jdbc",
+                "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+                "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+                "spark.sql.defaultCatalog": "iceberg",
+                "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                "spark.sql.shuffle.partitions": "10"
+              },
+              "modeConfigs": {
+                "backfill": {
+                  "spark.chronon.coalesce.factor": "10",
+                  "spark.chronon.partition.column": "ds",
+                  "spark.default.parallelism": "10",
+                  "spark.driver.memory": "512m",
+                  "spark.executor.cores": "1",
+                  "spark.executor.instances": "1",
+                  "spark.executor.memory": "1g",
+                  "spark.hadoop.fs.s3a.access.key": "minioadmin",
+                  "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+                  "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+                  "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+                  "spark.hadoop.fs.s3a.path.style.access": "true",
+                  "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+                  "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+                  "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+                  "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+                  "spark.sql.catalog.iceberg.type": "jdbc",
+                  "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+                  "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+                  "spark.sql.defaultCatalog": "iceberg",
+                  "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                  "spark.sql.shuffle.partitions": "10"
+                },
+                "upload": {
+                  "spark.chronon.coalesce.factor": "10",
+                  "spark.chronon.partition.column": "ds",
+                  "spark.default.parallelism": "10",
+                  "spark.driver.memory": "512m",
+                  "spark.executor.memory": "512m",
+                  "spark.hadoop.fs.s3a.access.key": "minioadmin",
+                  "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+                  "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+                  "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+                  "spark.hadoop.fs.s3a.path.style.access": "true",
+                  "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+                  "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+                  "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+                  "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+                  "spark.sql.catalog.iceberg.type": "jdbc",
+                  "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+                  "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+                  "spark.sql.defaultCatalog": "iceberg",
+                  "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                  "spark.sql.shuffle.partitions": "10"
+                }
+              }
+            },
+            "env": {
+              "common": {
+                "ARTIFACT_PREFIX": "s3a://warehouse",
+                "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+                "CUSTOMER_ID": "dev",
+                "EVAL_URL": "http://localhost:3904",
+                "FLINK_STATE_URI": "s3a://warehouse",
+                "FRONTEND_URL": "http://localhost:3000",
+                "HUB_URL": "http://localhost:3903",
+                "K8S_NAMESPACE": "chronon",
+                "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+                "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+                "SPARK_EVENT_LOG_ENABLED": "true",
+                "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+                "SPARK_IMAGE": "chronon-spark-k8s:latest",
+                "SPARK_SERVICE_ACCOUNT": "spark",
+                "VERSION": "latest",
+                "WAREHOUSE_PREFIX": "s3a://warehouse"
+              },
+              "modeEnvironments": {
+                "backfill": {
+                  "ARTIFACT_PREFIX": "s3a://warehouse",
+                  "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+                  "CUSTOMER_ID": "dev",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FLINK_STATE_URI": "s3a://warehouse",
+                  "FRONTEND_URL": "http://localhost:3000",
+                  "HUB_URL": "http://localhost:3903",
+                  "K8S_NAMESPACE": "chronon",
+                  "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+                  "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+                  "SPARK_EVENT_LOG_ENABLED": "true",
+                  "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+                  "SPARK_IMAGE": "chronon-spark-k8s:latest",
+                  "SPARK_SERVICE_ACCOUNT": "spark",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "s3a://warehouse"
+                },
+                "streaming": {
+                  "ARTIFACT_PREFIX": "s3a://warehouse",
+                  "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+                  "CUSTOMER_ID": "dev",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FLINK_STATE_URI": "s3a://warehouse",
+                  "FRONTEND_URL": "http://localhost:3000",
+                  "HUB_URL": "http://localhost:3903",
+                  "K8S_NAMESPACE": "chronon",
+                  "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+                  "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+                  "SPARK_EVENT_LOG_ENABLED": "true",
+                  "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+                  "SPARK_IMAGE": "chronon-spark-k8s:latest",
+                  "SPARK_SERVICE_ACCOUNT": "spark",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "s3a://warehouse"
+                },
+                "upload": {
+                  "ARTIFACT_PREFIX": "s3a://warehouse",
+                  "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+                  "CUSTOMER_ID": "dev",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FLINK_STATE_URI": "s3a://warehouse",
+                  "FRONTEND_URL": "http://localhost:3000",
+                  "HUB_URL": "http://localhost:3903",
+                  "K8S_NAMESPACE": "chronon",
+                  "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+                  "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+                  "SPARK_EVENT_LOG_ENABLED": "true",
+                  "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+                  "SPARK_IMAGE": "chronon-spark-k8s:latest",
+                  "SPARK_SERVICE_ACCOUNT": "spark",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "s3a://warehouse"
+                }
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily",
+            "stepDays": 4
+          },
+          "name": "quickstart.user_activities.v1__1",
+          "online": 1,
+          "outputNamespace": "quickstart",
+          "team": "quickstart",
+          "version": "1"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "add_to_cart_event": "IF(event_type = 'add_to_cart', 1, 0)",
+                  "click_event": "IF(event_type = 'click', 1, 0)",
+                  "favorite_event": "IF(event_type = 'favorite', 1, 0)",
+                  "is_desktop": "IF(device_type = 'desktop', 1, 0)",
+                  "is_mobile": "IF(device_type = 'mobile', 1, 0)",
+                  "is_tablet": "IF(device_type = 'tablet', 1, 0)",
+                  "listing_id": "listing_id",
+                  "purchase_event": "IF(event_type = 'purchase', 1, 0)",
+                  "user_event_struct": "struct(event_type, listing_id, event_time_ms as timestamp)",
+                  "user_id": "user_id",
+                  "view_event": "IF(event_type = 'view', 1, 0)"
+                },
+                "timeColumn": "event_time_ms"
+              },
+              "table": "quickstart.quickstart_exports_user_activities__0",
+              "topic": "user_activities_stream"
+            }
+          }
+        ]
+      },
+      "useLongNames": 0
+    },
+    {
+      "groupBy": {
+        "keyColumns": [
+          "listing_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "brief_description": "243bd9475048b531e39784ed5a4c5d4c",
+            "currency": "9ab5e4d3c769742611e6e6a21f738f2d",
+            "headline": "81a42c547de455ac521e611ba9481579",
+            "inventory_count": "3960d102ae6397912e352963b24b38dc",
+            "is_active": "379f96022efce3edf51da4b393e79547",
+            "is_expensive": "2504b94d7ac884660d25b2f1244023ae",
+            "is_in_stock": "ebb556dbdf71f816accd53d8c6baa93f",
+            "listing_id": "fbf72f082947fc83693eec35cd952267",
+            "long_description": "595aeee2959d571b6255119efde48896",
+            "main_image_path": "ede172f537c094b47645056183a6a280",
+            "merchant_id": "3771ceeff8397cb4c7ebbd516466b978",
+            "price_cents": "dc1f837ea154688d1fcf185da86bb945",
+            "primary_category": "83ce32a1a4651376edf05ac4c8ecbd11",
+            "secondary_image_paths": "fc4a13046d7659ed39878955d18cf1c4",
+            "tags": "799675961e188b9e4a5a898d7e3f02ff",
+            "weight_grams": "5c3e9f99cb7ec2d0aa56c9bd0e391308"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.coalesce.factor": "10",
+                "spark.chronon.partition.column": "ds",
+                "spark.default.parallelism": "10",
+                "spark.hadoop.fs.s3a.access.key": "minioadmin",
+                "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+                "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+                "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+                "spark.hadoop.fs.s3a.path.style.access": "true",
+                "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+                "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+                "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+                "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+                "spark.sql.catalog.iceberg.type": "jdbc",
+                "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+                "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+                "spark.sql.defaultCatalog": "iceberg",
+                "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                "spark.sql.shuffle.partitions": "10"
+              },
+              "modeConfigs": {
+                "backfill": {
+                  "spark.chronon.coalesce.factor": "10",
+                  "spark.chronon.partition.column": "ds",
+                  "spark.default.parallelism": "10",
+                  "spark.driver.memory": "512m",
+                  "spark.executor.cores": "1",
+                  "spark.executor.instances": "1",
+                  "spark.executor.memory": "1g",
+                  "spark.hadoop.fs.s3a.access.key": "minioadmin",
+                  "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+                  "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+                  "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+                  "spark.hadoop.fs.s3a.path.style.access": "true",
+                  "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+                  "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+                  "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+                  "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+                  "spark.sql.catalog.iceberg.type": "jdbc",
+                  "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+                  "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+                  "spark.sql.defaultCatalog": "iceberg",
+                  "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                  "spark.sql.shuffle.partitions": "10"
+                },
+                "upload": {
+                  "spark.chronon.coalesce.factor": "10",
+                  "spark.chronon.partition.column": "ds",
+                  "spark.default.parallelism": "10",
+                  "spark.driver.memory": "512m",
+                  "spark.executor.memory": "512m",
+                  "spark.hadoop.fs.s3a.access.key": "minioadmin",
+                  "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+                  "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+                  "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+                  "spark.hadoop.fs.s3a.path.style.access": "true",
+                  "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+                  "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+                  "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+                  "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+                  "spark.sql.catalog.iceberg.type": "jdbc",
+                  "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+                  "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+                  "spark.sql.defaultCatalog": "iceberg",
+                  "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                  "spark.sql.shuffle.partitions": "10"
+                }
+              }
+            },
+            "env": {
+              "common": {
+                "ARTIFACT_PREFIX": "s3a://warehouse",
+                "CUSTOMER_ID": "dev",
+                "EVAL_URL": "http://localhost:3904",
+                "FLINK_STATE_URI": "s3a://warehouse",
+                "FRONTEND_URL": "http://localhost:3000",
+                "HUB_URL": "http://localhost:3903",
+                "K8S_NAMESPACE": "chronon",
+                "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+                "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+                "SPARK_EVENT_LOG_ENABLED": "true",
+                "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+                "SPARK_IMAGE": "chronon-spark-k8s:latest",
+                "SPARK_SERVICE_ACCOUNT": "spark",
+                "VERSION": "latest",
+                "WAREHOUSE_PREFIX": "s3a://warehouse"
+              },
+              "modeEnvironments": {
+                "backfill": {
+                  "ARTIFACT_PREFIX": "s3a://warehouse",
+                  "CUSTOMER_ID": "dev",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FLINK_STATE_URI": "s3a://warehouse",
+                  "FRONTEND_URL": "http://localhost:3000",
+                  "HUB_URL": "http://localhost:3903",
+                  "K8S_NAMESPACE": "chronon",
+                  "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+                  "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+                  "SPARK_EVENT_LOG_ENABLED": "true",
+                  "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+                  "SPARK_IMAGE": "chronon-spark-k8s:latest",
+                  "SPARK_SERVICE_ACCOUNT": "spark",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "s3a://warehouse"
+                },
+                "streaming": {
+                  "ARTIFACT_PREFIX": "s3a://warehouse",
+                  "CUSTOMER_ID": "dev",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FLINK_STATE_URI": "s3a://warehouse",
+                  "FRONTEND_URL": "http://localhost:3000",
+                  "HUB_URL": "http://localhost:3903",
+                  "K8S_NAMESPACE": "chronon",
+                  "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+                  "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+                  "SPARK_EVENT_LOG_ENABLED": "true",
+                  "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+                  "SPARK_IMAGE": "chronon-spark-k8s:latest",
+                  "SPARK_SERVICE_ACCOUNT": "spark",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "s3a://warehouse"
+                },
+                "upload": {
+                  "ARTIFACT_PREFIX": "s3a://warehouse",
+                  "CUSTOMER_ID": "dev",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FLINK_STATE_URI": "s3a://warehouse",
+                  "FRONTEND_URL": "http://localhost:3000",
+                  "HUB_URL": "http://localhost:3903",
+                  "K8S_NAMESPACE": "chronon",
+                  "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+                  "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+                  "SPARK_EVENT_LOG_ENABLED": "true",
+                  "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+                  "SPARK_IMAGE": "chronon-spark-k8s:latest",
+                  "SPARK_SERVICE_ACCOUNT": "spark",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "s3a://warehouse"
+                }
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily"
+          },
+          "name": "quickstart.dim_listings.v1__0",
+          "online": 1,
+          "outputNamespace": "quickstart",
+          "team": "quickstart",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "entities": {
+              "query": {
+                "selects": {
+                  "brief_description": "brief_description",
+                  "currency": "currency",
+                  "headline": "headline",
+                  "inventory_count": "inventory_count",
+                  "is_active": "is_active",
+                  "is_expensive": "IF(price_cents > 10000, 1, 0)",
+                  "is_in_stock": "IF(inventory_count > 0, 1, 0)",
+                  "listing_id": "listing_id",
+                  "long_description": "long_description",
+                  "main_image_path": "main_image_path",
+                  "merchant_id": "merchant_id",
+                  "price_cents": "price_cents",
+                  "primary_category": "primary_category",
+                  "secondary_image_paths": "secondary_image_paths",
+                  "tags": "tags",
+                  "weight_grams": "weight_grams"
+                },
+                "startPartition": "2023-11-01"
+              },
+              "snapshotTable": "quickstart.quickstart_exports_dim_listings__0"
+            }
+          }
+        ]
+      },
+      "useLongNames": 0
+    }
+  ],
+  "left": {
+    "events": {
+      "query": {
+        "selects": {
+          "listing_id": "listing_id",
+          "row_id": "event_id",
+          "ts": "event_time_ms",
+          "user_id": "user_id"
+        },
+        "timeColumn": "event_time_ms"
+      },
+      "table": "quickstart.quickstart_exports_user_activities__0"
+    }
+  },
+  "metaData": {
+    "columnHashes": {
+      "listing_id": "4b3027633335c8df64bc8820f4f56fce",
+      "listing_id_brief_description": "c71f33ba349f66c01dcf4557f4cb94de",
+      "listing_id_currency": "f49a33afa3929e6e7c460f8acbd2a4eb",
+      "listing_id_headline": "fc839d4105e1aac4fe1c3de1c8286e1c",
+      "listing_id_inventory_count": "f9f680e671f106750757d3e9b7434fc3",
+      "listing_id_is_active": "fc1a13593a08a049d853425f5048a96d",
+      "listing_id_is_expensive": "2eb7f00ec6398e404f2aec9239446bda",
+      "listing_id_is_in_stock": "4f7e695f325a78276e2dedb8166c2623",
+      "listing_id_listing_id": "52d50ba7ee0e7dccbb3f1073cdba87eb",
+      "listing_id_long_description": "abb42ebe24f787623707f37c4fa0bf6f",
+      "listing_id_main_image_path": "c64891f0aa0e400990bf8ad85bb73f05",
+      "listing_id_merchant_id": "83f8e4cf838d7048d8309caceb5f6097",
+      "listing_id_price_cents": "9b7f6f7e90460e43de9a79170c725dd8",
+      "listing_id_primary_category": "1ea78421a70d9d19b94bb75862ebd6bc",
+      "listing_id_secondary_image_paths": "3ff5eb4424e9710aa123d7ec2b5c97f4",
+      "listing_id_tags": "cc114b56dcde8f9767d3ec8c1f459f66",
+      "listing_id_weight_grams": "35b0897447856c1e916fa5231a46a624",
+      "row_id": "a9ba055d706957bc41ff081e3b103156",
+      "ts": "ed4e298422a4f5a0412df3165e7a2fa6",
+      "user_id": "a73717a51818e41dcddfd683143c082d",
+      "user_id_add_to_cart_event_average_14d": "27ca57b4dad0cd206d5bb47fddd583cf",
+      "user_id_add_to_cart_event_average_1d": "27ca57b4dad0cd206d5bb47fddd583cf",
+      "user_id_add_to_cart_event_average_30d": "27ca57b4dad0cd206d5bb47fddd583cf",
+      "user_id_add_to_cart_event_average_7d": "27ca57b4dad0cd206d5bb47fddd583cf",
+      "user_id_add_to_cart_event_sum_14d": "27ca57b4dad0cd206d5bb47fddd583cf",
+      "user_id_add_to_cart_event_sum_1d": "27ca57b4dad0cd206d5bb47fddd583cf",
+      "user_id_add_to_cart_event_sum_30d": "27ca57b4dad0cd206d5bb47fddd583cf",
+      "user_id_add_to_cart_event_sum_7d": "27ca57b4dad0cd206d5bb47fddd583cf",
+      "user_id_click_event_average_14d": "9ac6396069fa92eda053ac3364225733",
+      "user_id_click_event_average_1d": "9ac6396069fa92eda053ac3364225733",
+      "user_id_click_event_average_30d": "9ac6396069fa92eda053ac3364225733",
+      "user_id_click_event_average_7d": "9ac6396069fa92eda053ac3364225733",
+      "user_id_click_event_sum_14d": "9ac6396069fa92eda053ac3364225733",
+      "user_id_click_event_sum_1d": "9ac6396069fa92eda053ac3364225733",
+      "user_id_click_event_sum_30d": "9ac6396069fa92eda053ac3364225733",
+      "user_id_click_event_sum_7d": "9ac6396069fa92eda053ac3364225733",
+      "user_id_favorite_event_average_14d": "2561aa654af762623dec196e75a5b763",
+      "user_id_favorite_event_average_1d": "2561aa654af762623dec196e75a5b763",
+      "user_id_favorite_event_average_30d": "2561aa654af762623dec196e75a5b763",
+      "user_id_favorite_event_average_7d": "2561aa654af762623dec196e75a5b763",
+      "user_id_favorite_event_sum_14d": "2561aa654af762623dec196e75a5b763",
+      "user_id_favorite_event_sum_1d": "2561aa654af762623dec196e75a5b763",
+      "user_id_favorite_event_sum_30d": "2561aa654af762623dec196e75a5b763",
+      "user_id_favorite_event_sum_7d": "2561aa654af762623dec196e75a5b763",
+      "user_id_is_desktop_sum_14d": "b1e4a3ef656c7d295be3608837315fee",
+      "user_id_is_desktop_sum_1d": "b1e4a3ef656c7d295be3608837315fee",
+      "user_id_is_desktop_sum_30d": "b1e4a3ef656c7d295be3608837315fee",
+      "user_id_is_desktop_sum_7d": "b1e4a3ef656c7d295be3608837315fee",
+      "user_id_is_mobile_sum_14d": "eb3aab96af7e41d9fb2589d46932f479",
+      "user_id_is_mobile_sum_1d": "eb3aab96af7e41d9fb2589d46932f479",
+      "user_id_is_mobile_sum_30d": "eb3aab96af7e41d9fb2589d46932f479",
+      "user_id_is_mobile_sum_7d": "eb3aab96af7e41d9fb2589d46932f479",
+      "user_id_is_tablet_sum_14d": "f1a3b4bbfe9a338cc40bc3da04d62800",
+      "user_id_is_tablet_sum_1d": "f1a3b4bbfe9a338cc40bc3da04d62800",
+      "user_id_is_tablet_sum_30d": "f1a3b4bbfe9a338cc40bc3da04d62800",
+      "user_id_is_tablet_sum_7d": "f1a3b4bbfe9a338cc40bc3da04d62800",
+      "user_id_purchase_event_average_14d": "035af4a792b491ccc25e8a37d347d255",
+      "user_id_purchase_event_average_1d": "035af4a792b491ccc25e8a37d347d255",
+      "user_id_purchase_event_average_30d": "035af4a792b491ccc25e8a37d347d255",
+      "user_id_purchase_event_average_7d": "035af4a792b491ccc25e8a37d347d255",
+      "user_id_purchase_event_sum_14d": "035af4a792b491ccc25e8a37d347d255",
+      "user_id_purchase_event_sum_1d": "035af4a792b491ccc25e8a37d347d255",
+      "user_id_purchase_event_sum_30d": "035af4a792b491ccc25e8a37d347d255",
+      "user_id_purchase_event_sum_7d": "035af4a792b491ccc25e8a37d347d255",
+      "user_id_user_event_struct_last128_14d": "d2d88f5a9804dfc14b857b628af5bef7",
+      "user_id_user_event_struct_last128_1d": "d2d88f5a9804dfc14b857b628af5bef7",
+      "user_id_user_event_struct_last128_30d": "d2d88f5a9804dfc14b857b628af5bef7",
+      "user_id_user_event_struct_last128_7d": "d2d88f5a9804dfc14b857b628af5bef7",
+      "user_id_view_event_average_14d": "c7ae73b92e2a8aabfb4df9d22d37d2f5",
+      "user_id_view_event_average_1d": "c7ae73b92e2a8aabfb4df9d22d37d2f5",
+      "user_id_view_event_average_30d": "c7ae73b92e2a8aabfb4df9d22d37d2f5",
+      "user_id_view_event_average_7d": "c7ae73b92e2a8aabfb4df9d22d37d2f5",
+      "user_id_view_event_sum_14d": "c7ae73b92e2a8aabfb4df9d22d37d2f5",
+      "user_id_view_event_sum_1d": "c7ae73b92e2a8aabfb4df9d22d37d2f5",
+      "user_id_view_event_sum_30d": "c7ae73b92e2a8aabfb4df9d22d37d2f5",
+      "user_id_view_event_sum_7d": "c7ae73b92e2a8aabfb4df9d22d37d2f5"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_quickstart_quickstart_exports_user_activities__0_with_offset_0\", \"spec\": \"quickstart.quickstart_exports_user_activities__0/ds={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_quickstart_quickstart_exports_dim_listings__0_with_offset_0\", \"spec\": \"quickstart.quickstart_exports_dim_listings__0/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.default.parallelism": "10",
+          "spark.hadoop.fs.s3a.access.key": "minioadmin",
+          "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+          "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+          "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+          "spark.hadoop.fs.s3a.path.style.access": "true",
+          "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+          "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+          "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+          "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+          "spark.sql.catalog.iceberg.type": "jdbc",
+          "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+          "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+          "spark.sql.defaultCatalog": "iceberg",
+          "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+          "spark.sql.shuffle.partitions": "10"
+        },
+        "modeConfigs": {
+          "backfill": {
+            "spark.chronon.coalesce.factor": "10",
+            "spark.chronon.partition.column": "ds",
+            "spark.default.parallelism": "10",
+            "spark.driver.memory": "512m",
+            "spark.executor.cores": "1",
+            "spark.executor.instances": "1",
+            "spark.executor.memory": "1g",
+            "spark.hadoop.fs.s3a.access.key": "minioadmin",
+            "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+            "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+            "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "spark.hadoop.fs.s3a.path.style.access": "true",
+            "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+            "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+            "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+            "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+            "spark.sql.catalog.iceberg.type": "jdbc",
+            "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+            "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+            "spark.sql.defaultCatalog": "iceberg",
+            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            "spark.sql.shuffle.partitions": "10"
+          },
+          "upload": {
+            "spark.chronon.coalesce.factor": "10",
+            "spark.chronon.partition.column": "ds",
+            "spark.default.parallelism": "10",
+            "spark.driver.memory": "512m",
+            "spark.executor.memory": "512m",
+            "spark.hadoop.fs.s3a.access.key": "minioadmin",
+            "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+            "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+            "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "spark.hadoop.fs.s3a.path.style.access": "true",
+            "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+            "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+            "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+            "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+            "spark.sql.catalog.iceberg.type": "jdbc",
+            "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+            "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+            "spark.sql.defaultCatalog": "iceberg",
+            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            "spark.sql.shuffle.partitions": "10"
+          }
+        }
+      },
+      "enableStatsCompute": 1,
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "s3a://warehouse",
+          "CUSTOMER_ID": "dev",
+          "EVAL_URL": "http://localhost:3904",
+          "FLINK_STATE_URI": "s3a://warehouse",
+          "FRONTEND_URL": "http://localhost:3000",
+          "HUB_URL": "http://localhost:3903",
+          "K8S_NAMESPACE": "chronon",
+          "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+          "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+          "SPARK_EVENT_LOG_ENABLED": "true",
+          "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+          "SPARK_IMAGE": "chronon-spark-k8s:latest",
+          "SPARK_SERVICE_ACCOUNT": "spark",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "s3a://warehouse"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          },
+          "streaming": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          },
+          "upload": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          }
+        }
+      },
+      "offlineSchedule": "@daily",
+      "onlineSchedule": "@daily",
+      "stepDays": 5
+    },
+    "name": "quickstart.demo.v1__1",
+    "online": 1,
+    "outputNamespace": "quickstart",
+    "production": 0,
+    "samplePercent": 100.0,
+    "sourceFile": "joins/quickstart/demo.py",
+    "team": "quickstart",
+    "version": "1"
+  },
+  "rowIds": [
+    "event_id"
+  ],
+  "useLongNames": 0
+}

@@ -19,13 +19,18 @@ package ai.chronon.spark.fetcher
 import ai.chronon.api._
 import ai.chronon.api.ScalaJavaConversions._
 import ai.chronon.online.serde.SparkConversions
+import ai.chronon.online.fetcher.Fetcher.Request
+import ai.chronon.online.fetcher.{FetchContext, MetadataStore}
 import ai.chronon.spark.Extensions._
 import ai.chronon.spark.catalog.TableUtils
-import ai.chronon.spark.utils.SparkTestBase
+import ai.chronon.spark.utils.{MockApi, OnlineUtils, SparkTestBase}
 import org.apache.spark.sql.Row
+import org.junit.Assert.assertEquals
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.util.{Arrays => JArrays, TimeZone}
+import scala.concurrent.Await
+import scala.concurrent.duration.{Duration, SECONDS}
 
 /**
  * Minimal fetcher test using static (hand-written) data instead of DataFrameGen.
@@ -61,6 +66,170 @@ class FetcherStaticTest extends SparkTestBase {
   // Tests that vendor histogram is non-null online even when user_id is null in the request.
   it should "test vendor histogram online is non-null when user_id key is null in request" in {
     runNullKeyTest("static_fetch_null_key", endDs = "2021-04-10")
+  }
+
+  it should "fetch join online using selected keys" in {
+    val namespace = "static_fetch_selected_keys"
+    val endDs = "2021-04-10"
+    SparkTestBase.createDatabase(spark, namespace)
+
+    val sourceSchema = StructType(
+      s"selected_key_events_$namespace",
+      Array(
+        StructField("user_id",     LongType),
+        StructField("query",       StringType),
+        StructField("event_count", IntType),
+        StructField("ts",          LongType),
+        StructField("ds",          StringType)
+      )
+    )
+    val sourceData = Seq(
+      Row(Long.box(1234567890123L), "Shoes", 2, toTs("2021-04-08 10:00:00"), "2021-04-09"),
+      Row(Long.box(1234567890123L), "shoes", 5, toTs("2021-04-08 11:00:00"), "2021-04-09"),
+      Row(Long.box(124L),           "shoes", 3, toTs("2021-04-08 12:00:00"), "2021-04-09")
+    )
+    spark
+      .createDataFrame(sourceData.toJava, SparkConversions.fromChrononSchema(sourceSchema))
+      .save(s"$namespace.${sourceSchema.name}")
+
+    val querySchema = StructType(
+      s"selected_key_queries_$namespace",
+      Array(
+        StructField("user_id", LongType),
+        StructField("query",   StringType),
+        StructField("ts",      LongType),
+        StructField("ds",      StringType)
+      )
+    )
+    val queryData = Seq(Row(Long.box(1234567890123L), "SHOES", toTs(s"$endDs 09:00:00"), endDs))
+    spark
+      .createDataFrame(queryData.toJava, SparkConversions.fromChrononSchema(querySchema))
+      .save(s"$namespace.${querySchema.name}")
+
+    val bucketSelect = "cast(user_id % 100 as int)"
+    val groupBy = Builders.GroupBy(
+      sources = Seq(
+        Builders.Source.events(
+          query = Builders.Query(
+            selects = Map("bucket" -> bucketSelect, "query" -> "lower(query)", "event_count" -> "event_count"),
+            startPartition = "2021-04-09"
+          ),
+          table = s"$namespace.${sourceSchema.name}"
+        )
+      ),
+      keyColumns = Seq("bucket", "query"),
+      aggregations = Seq(
+        Builders.Aggregation(
+          operation = Operation.SUM,
+          inputColumn = "event_count",
+          windows = Seq(new Window(30, TimeUnit.DAYS))
+        )
+      ),
+      metaData = Builders.MetaData(name = s"unit_test.selected_keys_$namespace", namespace = namespace, team = "chronon"),
+      accuracy = Accuracy.SNAPSHOT
+    )
+
+    val queryNormalizedGroupBy = Builders.GroupBy(
+      sources = Seq(
+        Builders.Source.events(
+          query = Builders.Query(
+            selects = Map("query_normalized" -> "lower(query)", "event_count" -> "event_count"),
+            startPartition = "2021-04-09"
+          ),
+          table = s"$namespace.${sourceSchema.name}"
+        )
+      ),
+      keyColumns = Seq("query_normalized"),
+      aggregations = Seq(
+        Builders.Aggregation(
+          operation = Operation.SUM,
+          inputColumn = "event_count",
+          windows = Seq(new Window(30, TimeUnit.DAYS))
+        )
+      ),
+      metaData =
+        Builders.MetaData(name = s"unit_test.selected_query_normalized_$namespace", namespace = namespace, team = "chronon"),
+      accuracy = Accuracy.SNAPSHOT
+    )
+
+    val joinConf = Builders.Join(
+      left = Builders.Source.events(
+        query = Builders.Query(
+          selects = Map("bucket" -> bucketSelect, "query" -> "lower(query)", "query_normalized" -> "lower(query)"),
+          startPartition = endDs
+        ),
+        table = s"$namespace.${querySchema.name}"
+      ),
+      joinParts = Seq(
+        Builders.JoinPart(groupBy = groupBy, keyMapping = Map("bucket" -> "bucket", "query" -> "query"))
+          .setUseLongNames(false),
+        Builders.JoinPart(groupBy = queryNormalizedGroupBy, keyMapping = Map("query_normalized" -> "query_normalized"))
+      ),
+      metaData =
+        Builders.MetaData(name = s"unit_test.selected_keys_join_$namespace", namespace = namespace, team = "chronon")
+    )
+
+    val storeName = s"FetcherStaticTest_$namespace"
+    val kvStoreFunc = () => OnlineUtils.buildInMemoryKVStore(storeName)
+    val inMemoryKvStore = kvStoreFunc()
+    OnlineUtils.serve(tableUtils, inMemoryKvStore, kvStoreFunc, namespace, endDs, groupBy, dropDsOnWrite = false)
+    OnlineUtils.serve(tableUtils, inMemoryKvStore, kvStoreFunc, namespace, endDs, queryNormalizedGroupBy, dropDsOnWrite = false)
+
+    val metadataStore = new MetadataStore(FetchContext(inMemoryKvStore))
+    inMemoryKvStore.create(Constants.MetadataDataset)
+    Await.result(metadataStore.putJoinConf(joinConf), Duration(30, SECONDS))
+    assertEquals(Some(LongType), metadataStore.getGroupByServingInfo(groupBy.metaData.name).get.inputChrononSchema.typeOf(Constants.TimeColumn))
+    assertEquals(
+      Some(LongType),
+      metadataStore.getGroupByServingInfo(queryNormalizedGroupBy.metaData.name).get.inputChrononSchema.typeOf(Constants.TimeColumn)
+    )
+
+    val fetcher = new MockApi(kvStoreFunc, namespace).buildFetcher(debug = true)
+    val joinSchema = fetcher.fetchJoinSchema(joinConf.metaData.name).get
+    assert(joinSchema.keySchema.contains("\"name\":\"user_id\",\"type\":[\"null\",\"long\"]"), joinSchema.keySchema)
+    assert(joinSchema.keySchema.contains("\"name\":\"bucket\",\"type\":[\"null\",\"int\"]"), joinSchema.keySchema)
+    assert(joinSchema.keySchema.contains("\"name\":\"query\",\"type\":[\"null\",\"string\"]"), joinSchema.keySchema)
+    assert(joinSchema.keySchema.contains("\"name\":\"query_normalized\",\"type\":[\"null\",\"string\"]"), joinSchema.keySchema)
+    assert(joinSchema.valueInfos.exists(_.leftKeys.toSet == Set("user_id", "query")))
+    assert(joinSchema.valueInfos.exists(_.leftKeys.toSet == Set("query")))
+
+    def sum30dValues(values: Map[String, AnyRef]): Map[String, Long] = {
+      val matches = values.collect {
+        case (name, value: java.lang.Number) if name.endsWith("event_count_sum_30d") => name -> value.longValue()
+      }
+      assertEquals(s"Expected two event_count_sum_30d features in [${values.keys.mkString(", ")}]", 2, matches.size)
+      assert(matches.keys.exists(_.contains("query_normalized")), matches.keys.mkString(", "))
+      matches
+    }
+
+    def assertSelectedKeyValues(values: Map[String, AnyRef]): Unit = {
+      val sums = sum30dValues(values)
+      assertEquals(Some(7L), sums.find { case (name, _) => !name.contains("query_normalized") }.map(_._2))
+      assertEquals(Some(10L), sums.find { case (name, _) => name.contains("query_normalized") }.map(_._2))
+    }
+
+    val requestTs = toTs(s"$endDs 09:00:00")
+    val rawKeyResponse = Await.result(
+      fetcher.fetchJoin(
+        Seq(Request(
+          joinConf.metaData.name,
+          Map("user_id" -> Long.box(1234567890123L), "query" -> "SHOES"),
+          Some(requestTs)))),
+      Duration(30, SECONDS)
+    ).head
+    assert(rawKeyResponse.values.isSuccess, rawKeyResponse.values.failed.map(_.getMessage).getOrElse(""))
+    assertSelectedKeyValues(rawKeyResponse.values.get)
+
+    val directKeyResponse = Await.result(
+      fetcher.fetchJoin(
+        Seq(Request(
+          joinConf.metaData.name,
+          Map("bucket" -> Int.box(23), "query" -> "shoes", "query_normalized" -> "shoes"),
+          Some(requestTs)))),
+      Duration(30, SECONDS)
+    ).head
+    assert(directKeyResponse.values.isSuccess, directKeyResponse.values.failed.map(_.getMessage).getOrElse(""))
+    assertSelectedKeyValues(directKeyResponse.values.get)
   }
 
   /**

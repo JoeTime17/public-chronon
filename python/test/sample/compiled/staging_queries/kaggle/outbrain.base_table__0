@@ -1,0 +1,93 @@
+{
+  "metaData": {
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_kaggle_outbrain_clicks_train_with_offset_0\", \"spec\": \"kaggle_outbrain.clicks_train/ds={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_kaggle_outbrain_events_with_offset_0\", \"spec\": \"kaggle_outbrain.events/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.partition.column": "_DATE"
+        }
+      },
+      "env": {
+        "common": {
+          "CUSTOMER_ID": "canary",
+          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+          "GCP_PROJECT_ID": "canary-443022",
+          "GCP_REGION": "us-central1",
+          "VERSION": "latest"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "streaming": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "upload": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          }
+        }
+      },
+      "offlineSchedule": "@daily"
+    },
+    "name": "kaggle.outbrain.base_table__0",
+    "outputNamespace": "default",
+    "sourceFile": "staging_queries/kaggle/outbrain.py",
+    "team": "kaggle",
+    "version": "0"
+  },
+  "query": "\n        SELECT\n            clicks_train.display_id,\n            clicks_train.ad_id,\n            clicks_train.clicked,\n            events.document_id,\n            events.uuid,\n            events.platform,\n            events.geo_location,\n            CAST(events.timestamp as LONG) + 1465876799998 as ts,\n            FROM_UNIXTIME((CAST(events.timestamp as LONG) + 1465876799998)/1000, 'yyyy-MM-dd') as ds\n        FROM\n            kaggle_outbrain.clicks_train as clicks_train\n        JOIN\n            kaggle_outbrain.events as events\n        ON clicks_train.display_id = events.display_id\n        AND ABS(HASH(clicks_train.display_id)) % 100  < 5\n        AND ABS(HASH(events.display_id)) % 100  < 5\n    ",
+  "tableDependencies": [
+    {
+      "endOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "startOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "tableInfo": {
+        "partitionColumn": "ds",
+        "partitionInterval": {
+          "length": 1,
+          "timeUnit": 1
+        },
+        "table": "kaggle_outbrain.clicks_train"
+      }
+    },
+    {
+      "endOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "startOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "tableInfo": {
+        "partitionColumn": "ds",
+        "partitionInterval": {
+          "length": 1,
+          "timeUnit": 1
+        },
+        "table": "kaggle_outbrain.events"
+      }
+    }
+  ]
+}

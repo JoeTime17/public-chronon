@@ -1,0 +1,228 @@
+{
+  "joinParts": [
+    {
+      "groupBy": {
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "add_cart",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "view",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "purchase",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "favorite",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 1,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "listing_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "add_cart_sum_1d": "fd09e7f474cf0e3cd35100a8e393001e",
+            "favorite_sum_1d": "ec11648e296c67967b03bf92b4718e96",
+            "listing_id": "2b415bfb2391528543f06ac089fbee82",
+            "purchase_sum_1d": "ae525baa20eea731a1270dd356ec611a",
+            "view_sum_1d": "10afd70aaef55fd280157c808724d63a"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.coalesce.factor": "10",
+                "spark.chronon.partition.column": "_DATE",
+                "spark.chronon.partition.format": "yyyy-MM-dd",
+                "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_azure.AzureFormatProvider",
+                "spark.chronon.table_write.format": "iceberg",
+                "spark.default.parallelism": "10",
+                "spark.driver.cores": "1",
+                "spark.driver.memory": "4g",
+                "spark.driver.memoryOverhead": "1g",
+                "spark.executor.cores": "1",
+                "spark.executor.memory": "512m",
+                "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkCatalog",
+                "spark.sql.catalog.spark_catalog.credential": "{OC_CREDENTIAL}",
+                "spark.sql.catalog.spark_catalog.header.X-Iceberg-Access-Delegation": "vended-credentials",
+                "spark.sql.catalog.spark_catalog.scope": "PRINCIPAL_ROLE:engine",
+                "spark.sql.catalog.spark_catalog.type": "rest",
+                "spark.sql.catalog.spark_catalog.uri": "https://vejlulx-azure-oc.snowflakecomputing.com/polaris/api/catalog",
+                "spark.sql.catalog.spark_catalog.warehouse": "demo-v2",
+                "spark.sql.shuffle.partitions": "10",
+                "taskmanager.memory.process.size": "4G"
+              }
+            },
+            "env": {
+              "common": {
+                "ARTIFACT_PREFIX": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net",
+                "AUTH_SCOPE": "api://dev-zipline-auth",
+                "CHRONON_ONLINE_ARGS": "-Ztasks=4 -Zbootstrap=bootstrap.zipline-kafka-cluster.us-central1.managedkafka.canary-443022.cloud.goog:9092",
+                "CLOUD_PROVIDER": "azure",
+                "CUSTOMER_ID": "dev",
+                "EVAL_URL": "https://dev-azure.zipline.ai/services/eval",
+                "FLINK_JARS_URI": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/spark-3.5.3/libs/",
+                "FLINK_SASL_JAAS_CONFIG_VAULT_URI": "https://eventhub-sasl-jaas.vault.azure.net/secrets/sasl-jass-config",
+                "FLINK_STATE_URI": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net/flink-state",
+                "FRONTEND_URL": "https://dev-azure.zipline.ai",
+                "HUB_URL": "https://dev-orch-azure.zipline.ai",
+                "OC_CREDENTIAL_VAULT_URI": "https://dev-zipline-secrets.vault.azure.net/secrets/oc-catalog-credential",
+                "SNOWFLAKE_JDBC_URL": "jdbc:snowflake://VEJLULX-AZURE.snowflakecomputing.com/?user=demo_batch_service&db=Demo&schema=public&warehouse=demo_wh",
+                "SNOWFLAKE_PRIVATE_KEY_VAULT_URI": "https://demo-service-writer-pkey.vault.azure.net/secrets/snowflake-private-key",
+                "SPARK_CLUSTER_NAME": "http://dev-zipline-kyuubi.westus.cloudapp.azure.com:10099",
+                "VERSION": "latest",
+                "WAREHOUSE_PREFIX": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net"
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily"
+          },
+          "name": "azure.item_event_canary.actions_pubsub_v2__0",
+          "online": 1,
+          "outputNamespace": "data",
+          "team": "azure",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "add_cart": "IF(event_type = 'backend_add_to_cart', 1, 0)",
+                  "favorite": "IF(event_type = 'backend_favorite_item2', 1, 0)",
+                  "listing_id": "EXPLODE(TRANSFORM(SPLIT(COALESCE(attributes['sold_listing_ids'], attributes['listing_id']), ','), e -> CAST(e AS LONG)))",
+                  "purchase": "IF(event_type = 'backend_cart_payment', 1, 0)",
+                  "view": "IF(event_type = 'view_listing', 1, 0)"
+                },
+                "timeColumn": "timestamp",
+                "wheres": [
+                  "event_type in ('backend_add_to_cart', 'view_listing', 'backend_cart_payment', 'backend_favorite_item2')"
+                ]
+              },
+              "table": "data.item_events_parquet_compat_partitioned",
+              "topic": "pubsub://test-item-event-data/serde=pubsub_schema/project=canary-443022/schemaId=item-event/tasks=4/subscription=test-item-event-data-sub"
+            }
+          }
+        ]
+      },
+      "useLongNames": 0
+    }
+  ],
+  "left": {
+    "events": {
+      "query": {
+        "selects": {
+          "listing_id": "EXPLODE(TRANSFORM(SPLIT(COALESCE(attributes['sold_listing_ids'], attributes['listing_id']), ','), e -> CAST(e AS LONG)))",
+          "ts": "timestamp",
+          "user_id": "attributes['user_id']"
+        },
+        "timeColumn": "timestamp"
+      },
+      "table": "data.item_events_parquet_compat"
+    }
+  },
+  "metaData": {
+    "columnHashes": {
+      "listing_id": "f2f6c814b8ae1521176b22a1ae7f2d0d",
+      "listing_id_add_cart_sum_1d": "6b9c42bf45158c93b823dcf0b5bea7ab",
+      "listing_id_favorite_sum_1d": "bb07e39a4b7ea81aca5baf027fd8f555",
+      "listing_id_purchase_sum_1d": "12f0cd5674381064326148e7eb352a40",
+      "listing_id_view_sum_1d": "c92a7a66f21979b327788447d063fe2b",
+      "ts": "ad9fd4c611e20ad833819a4ce9d752bf",
+      "user_id": "493d3df28f80664abd11b19fcd33b6e6"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_item_events_parquet_compat_with_offset_0\", \"spec\": \"data.item_events_parquet_compat/ds={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_data_item_events_parquet_compat_partitioned_with_offset_0\", \"spec\": \"data.item_events_parquet_compat_partitioned/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.chronon.partition.format": "yyyy-MM-dd",
+          "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_azure.AzureFormatProvider",
+          "spark.chronon.table_write.format": "iceberg",
+          "spark.default.parallelism": "10",
+          "spark.driver.cores": "1",
+          "spark.driver.memory": "4g",
+          "spark.driver.memoryOverhead": "1g",
+          "spark.executor.cores": "1",
+          "spark.executor.memory": "512m",
+          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkCatalog",
+          "spark.sql.catalog.spark_catalog.credential": "{OC_CREDENTIAL}",
+          "spark.sql.catalog.spark_catalog.header.X-Iceberg-Access-Delegation": "vended-credentials",
+          "spark.sql.catalog.spark_catalog.scope": "PRINCIPAL_ROLE:engine",
+          "spark.sql.catalog.spark_catalog.type": "rest",
+          "spark.sql.catalog.spark_catalog.uri": "https://vejlulx-azure-oc.snowflakecomputing.com/polaris/api/catalog",
+          "spark.sql.catalog.spark_catalog.warehouse": "demo-v2",
+          "spark.sql.shuffle.partitions": "10",
+          "taskmanager.memory.process.size": "4G"
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net",
+          "AUTH_SCOPE": "api://dev-zipline-auth",
+          "CHRONON_ONLINE_ARGS": " -Ztasks=1 -Zbootstrap=zipline-demo-events.servicebus.windows.net:9093",
+          "CLOUD_PROVIDER": "azure",
+          "CUSTOMER_ID": "dev",
+          "EVAL_URL": "https://dev-azure.zipline.ai/services/eval",
+          "FLINK_JARS_URI": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/spark-3.5.3/libs/",
+          "FLINK_SASL_JAAS_CONFIG_VAULT_URI": "https://eventhub-sasl-jaas.vault.azure.net/secrets/sasl-jass-config",
+          "FLINK_STATE_URI": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net/flink-state",
+          "FRONTEND_URL": "https://dev-azure.zipline.ai",
+          "HUB_URL": "https://dev-orch-azure.zipline.ai",
+          "OC_CREDENTIAL_VAULT_URI": "https://dev-zipline-secrets.vault.azure.net/secrets/oc-catalog-credential",
+          "SNOWFLAKE_JDBC_URL": "jdbc:snowflake://VEJLULX-AZURE.snowflakecomputing.com/?user=demo_batch_service&db=Demo&schema=public&warehouse=demo_wh",
+          "SNOWFLAKE_PRIVATE_KEY_VAULT_URI": "https://demo-service-writer-pkey.vault.azure.net/secrets/snowflake-private-key",
+          "SPARK_CLUSTER_NAME": "http://dev-zipline-kyuubi.westus.cloudapp.azure.com:10099",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net"
+        }
+      },
+      "offlineSchedule": "@daily",
+      "onlineSchedule": "@daily"
+    },
+    "name": "azure.item_event_join.canary_streaming_v1__0",
+    "online": 1,
+    "outputNamespace": "data",
+    "production": 0,
+    "samplePercent": 100.0,
+    "sourceFile": "joins/azure/item_event_join.py",
+    "team": "azure",
+    "version": "0"
+  },
+  "rowIds": [
+    "user_id"
+  ],
+  "useLongNames": 0
+}

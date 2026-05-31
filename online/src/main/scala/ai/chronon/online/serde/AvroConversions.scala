@@ -98,6 +98,7 @@ object AvroConversions {
       case Schema.Type.ARRAY  => ListType(toChrononSchema(schema.getElementType))
       case Schema.Type.MAP    => MapType(StringType, toChrononSchema(schema.getValueType))
       case Schema.Type.STRING => StringType
+      case Schema.Type.ENUM   => StringType
       case Schema.Type.INT
           if Option(schema.getLogicalType).map(_.getName).getOrElse("") == LogicalTypes.date().getName =>
         DateType
@@ -312,8 +313,9 @@ object AvroConversions {
           throw new RuntimeException(s"Found unknown list type in avro record: ${valueOfUnknownType.getClass.getName}")
       },
       {
-        case avString: Utf8 => avString.toString
-        case str: String    => str
+        case avString: Utf8                  => avString.toString
+        case enumVal: GenericData.EnumSymbol => enumVal.toString
+        case str: String                     => str
         case other =>
           throw new IllegalArgumentException(
             s"Unexpected string type: ${other.getClass.getName}. Expected String or Utf8, got: $other"

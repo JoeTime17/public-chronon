@@ -5,7 +5,7 @@ v1 = StagingQuery(
     engine_type=EngineType.BIGQUERY,
     output_namespace="data",
     dependencies=[
-        TableDependency(table="data.purchases", partition_column="ds", offset=0)
+        TableDependency(table="data.purchases", partition_column="ds", start_offset=0, end_offset=0)
     ],
     version=0,
 )

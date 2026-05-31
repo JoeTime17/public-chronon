@@ -28,6 +28,7 @@ import scala.concurrent.Future;
 import scala.concurrent.ExecutionContext;
 import scala.util.Try;
 import ai.chronon.online.metrics.Metrics;
+import ai.chronon.online.metrics.TTLCache;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,15 +40,15 @@ public class JavaFetcher {
   Fetcher fetcher;
 
   public JavaFetcher(KVStore kvStore, String metaDataSet, Long timeoutMillis, Consumer<LoggableResponse> logFunc, ExternalSourceRegistry registry, String callerName, Boolean disableErrorThrows) {
-    this.fetcher = new Fetcher(kvStore, metaDataSet, timeoutMillis, logFunc, false, registry, null, callerName, null, disableErrorThrows, null);
+    this.fetcher = new Fetcher(kvStore, metaDataSet, timeoutMillis, logFunc, false, registry, null, callerName, null, disableErrorThrows, null, TTLCache.DefaultTtlMillis(), TTLCache.DefaultTtlMillis());
   }
 
   public JavaFetcher(KVStore kvStore, String metaDataSet, Long timeoutMillis, Consumer<LoggableResponse> logFunc, ExternalSourceRegistry registry) {
-    this.fetcher = new Fetcher(kvStore, metaDataSet, timeoutMillis, logFunc, false, registry, null, null, null, false, null);
+    this.fetcher = new Fetcher(kvStore, metaDataSet, timeoutMillis, logFunc, false, registry, null, null, null, false, null, TTLCache.DefaultTtlMillis(), TTLCache.DefaultTtlMillis());
   }
 
   public JavaFetcher(KVStore kvStore, String metaDataSet, Long timeoutMillis, Consumer<LoggableResponse> logFunc, ExternalSourceRegistry registry, ModelPlatformProvider modelPlatformProvider, String callerName, FlagStore flagStore, Boolean disableErrorThrows) {
-    this.fetcher = new Fetcher(kvStore, metaDataSet, timeoutMillis, logFunc, false, registry, modelPlatformProvider, callerName, flagStore, disableErrorThrows, null);
+    this.fetcher = new Fetcher(kvStore, metaDataSet, timeoutMillis, logFunc, false, registry, modelPlatformProvider, callerName, flagStore, disableErrorThrows, null, TTLCache.DefaultTtlMillis(), TTLCache.DefaultTtlMillis());
   }
 
     /* user builder pattern to create JavaFetcher
@@ -69,7 +70,9 @@ public class JavaFetcher {
             builder.callerName,
             builder.flagStore,
             builder.disableErrorThrows,
-            builder.executionContextOverride);
+            builder.executionContextOverride,
+            builder.joinConfTtlMillis,
+            builder.joinCodecTtlMillis);
   }
 
   public static class Builder {
@@ -79,11 +82,13 @@ public class JavaFetcher {
     private Consumer<LoggableResponse> logFunc;
     private ExternalSourceRegistry registry;
     private String callerName;
-    private Boolean debug;
+    private boolean debug = false;
     private FlagStore flagStore;
-    private Boolean disableErrorThrows;
+    private boolean disableErrorThrows = false;
     private ExecutionContext executionContextOverride;
     private ModelPlatformProvider modelPlatformProvider;
+    private long joinConfTtlMillis = TTLCache.DefaultTtlMillis();
+    private long joinCodecTtlMillis = TTLCache.DefaultTtlMillis();
 
     public Builder(KVStore kvStore, String metaDataSet, Long timeoutMillis,
                    Consumer<LoggableResponse> logFunc, ExternalSourceRegistry registry) {
@@ -104,18 +109,33 @@ public class JavaFetcher {
       return this;
     }
 
-    public Builder disableErrorThrows(Boolean disableErrorThrows) {
+    public Builder disableErrorThrows(boolean disableErrorThrows) {
       this.disableErrorThrows = disableErrorThrows;
       return this;
     }
 
-    public Builder debug(Boolean debug) {
+    public Builder debug(boolean debug) {
       this.debug = debug;
       return this;
     }
 
     public Builder executionContextOverride(ExecutionContext executionContextOverride) {
       this.executionContextOverride = executionContextOverride;
+      return this;
+    }
+
+    public Builder modelPlatformProvider(ModelPlatformProvider modelPlatformProvider) {
+      this.modelPlatformProvider = modelPlatformProvider;
+      return this;
+    }
+
+    public Builder joinConfTtlMillis(long joinConfTtlMillis) {
+      this.joinConfTtlMillis = joinConfTtlMillis;
+      return this;
+    }
+
+    public Builder joinCodecTtlMillis(long joinCodecTtlMillis) {
+      this.joinCodecTtlMillis = joinCodecTtlMillis;
       return this;
     }
 
@@ -202,6 +222,16 @@ public class JavaFetcher {
   public JTry<JavaJoinSchemaResponse> fetchJoinSchema(String joinName) {
     Try<Fetcher.JoinSchemaResponse> scalaResponse = this.fetcher.fetchJoinSchema(joinName);
     return JTry.fromScala(scalaResponse).map(JavaJoinSchemaResponse::new);
+  }
+
+  public JTry<JavaGroupBySchemaResponse> fetchGroupBySchema(String groupByName) {
+    Try<Fetcher.GroupBySchemaResponse> scalaResponse = this.fetcher.fetchGroupBySchema(groupByName);
+    return JTry.fromScala(scalaResponse).map(JavaGroupBySchemaResponse::new);
+  }
+
+  public JTry<JavaGroupByStatusResponse> fetchGroupByStatus(String groupByName) {
+    Try<Fetcher.GroupByStatusResponse> scalaResponse = this.fetcher.fetchGroupByStatus(groupByName);
+    return JTry.fromScala(scalaResponse).map(JavaGroupByStatusResponse::new);
   }
 
   private void instrument(List<String> requestNames, boolean isGroupBy, String metricName, Long startTs) {

@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function
 
 object TTLCache {
+  val DefaultTtlMillis: Long = 2 * 60 * 60 * 1000 // 2 hours
   private[TTLCache] val executor = FlexibleExecutionContext.buildExecutor
 }
 // can continuously grow, only used for schemas
@@ -31,7 +32,7 @@ object TTLCache {
 // we choose 8 secs as the refresh interval. Refresh is to be used when an exception happens and we want to re-fetch.
 class TTLCache[I, O](f: I => O,
                      contextBuilder: I => Metrics.Context,
-                     ttlMillis: Long = 2 * 60 * 60 * 1000, // 2 hours
+                     ttlMillis: Long = TTLCache.DefaultTtlMillis,
                      nowFunc: () => Long = { () => System.currentTimeMillis() },
                      refreshIntervalMillis: Long = 8 * 1000, // 8 seconds
                      onCreateFunc: Option[O => Unit] = None) {

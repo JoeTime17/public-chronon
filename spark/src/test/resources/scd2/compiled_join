@@ -1,0 +1,106 @@
+{
+  "joinParts": [
+    {
+      "groupBy": {
+        "accuracy": 0,
+        "aggregations": [
+          {
+            "argMap": {},
+            "buckets": [
+              "__chronon_scd2_row_id"
+            ],
+            "inputColumn": "__chronon_scd2_row",
+            "operation": 3
+          }
+        ],
+        "derivations": [
+          {
+            "expression": "aggregate(\n  filter(map_values(__chronon_scd2_row_last_by___chronon_scd2_row_id), x -> x.__chronon_scd2_valid_from <= ts AND ts < x.__chronon_scd2_valid_to),\n  named_struct('sum', cast(0 as double), 'cnt', cast(0 as bigint)),\n  (acc, x) -> named_struct(\n    'sum', acc.sum + IF(x.amount IS NULL, cast(0 as double), cast(x.amount as double)),\n    'cnt', acc.cnt + IF(x.amount IS NULL, cast(0 as bigint), cast(1 as bigint))\n  ),\n  acc -> IF(acc.cnt = 0, cast(NULL as double), acc.sum)\n)",
+            "name": "amount_sum"
+          },
+          {
+            "expression": "aggregate(\n  filter(map_values(__chronon_scd2_row_last_by___chronon_scd2_row_id), x -> x.__chronon_scd2_valid_from <= ts AND ts < x.__chronon_scd2_valid_to),\n  named_struct('sum', cast(0 as double), 'cnt', cast(0 as bigint)),\n  (acc, x) -> named_struct(\n    'sum', acc.sum + IF(x.amount IS NULL, cast(0 as double), cast(x.amount as double)),\n    'cnt', acc.cnt + IF(x.amount IS NULL, cast(0 as bigint), cast(1 as bigint))\n  ),\n  acc -> IF(acc.cnt = 0, cast(NULL as double), acc.sum / acc.cnt)\n)",
+            "name": "amount_avg"
+          },
+          {
+            "expression": "IF(__chronon_scd2_row_last_by___chronon_scd2_row_id IS NULL, cast(0 as bigint), cast(size(filter(map_values(__chronon_scd2_row_last_by___chronon_scd2_row_id), x -> x.__chronon_scd2_valid_from <= ts AND ts < x.__chronon_scd2_valid_to)) as bigint))",
+            "name": "count"
+          },
+          {
+            "expression": "IF(__chronon_scd2_row_last_by___chronon_scd2_row_id IS NULL, false, size(filter(map_values(__chronon_scd2_row_last_by___chronon_scd2_row_id), x -> x.__chronon_scd2_valid_from <= ts AND ts < x.__chronon_scd2_valid_to)) > 0)",
+            "name": "exists"
+          },
+          {
+            "expression": "IF(__chronon_scd2_row_last_by___chronon_scd2_row_id IS NULL, cast(0 as bigint), cast(size(filter(map_values(__chronon_scd2_row_last_by___chronon_scd2_row_id), x -> x.__chronon_scd2_valid_from <= ts AND ts < x.__chronon_scd2_valid_to AND x.birth_ts > ts - 86400000)) as bigint))",
+            "name": "count_by_birth_ts_1d"
+          },
+          {
+            "expression": "IF(__chronon_scd2_row_last_by___chronon_scd2_row_id IS NULL, cast(0 as bigint), cast(size(array_distinct(transform(filter(filter(map_values(__chronon_scd2_row_last_by___chronon_scd2_row_id), x -> x.__chronon_scd2_valid_from <= ts AND ts < x.__chronon_scd2_valid_to), x -> x.status IS NOT NULL), x -> x.status))) as bigint))",
+            "name": "status_count_distinct"
+          }
+        ],
+        "keyColumns": [
+          "user_id"
+        ],
+        "metaData": {
+          "executionInfo": {
+            "historicalBackfill": 0
+          },
+          "name": "unit_test.scd2_contracts",
+          "online": 0,
+          "outputNamespace": "test_namespace_jointest",
+          "team": "item_team"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "__chronon_scd2_row": "named_struct('__chronon_scd2_valid_from', cast(valid_from_ts as bigint), '__chronon_scd2_valid_to', coalesce(cast(valid_to_ts as bigint), cast(9223372036854775807 as bigint)), '__chronon_scd2_ts', cast(valid_from_ts as bigint), 'amount', amount, 'status', status, 'birth_ts', birth_ts)",
+                  "__chronon_scd2_row_id": "cast(contract_id as string)",
+                  "amount": "amount",
+                  "birth_ts": "birth_ts",
+                  "contract_id": "contract_id",
+                  "status": "status",
+                  "user_id": "user_id",
+                  "valid_from_ts": "valid_from_ts",
+                  "valid_to_ts": "valid_to_ts"
+                },
+                "startPartition": "2020-01-01",
+                "timeColumn": "valid_from_ts"
+              },
+              "table": "test_namespace_jointest.scd2_contracts"
+            }
+          }
+        ]
+      },
+      "prefix": "contract",
+      "useLongNames": 0
+    }
+  ],
+  "left": {
+    "events": {
+      "query": {
+        "selects": {
+          "ts": "ts",
+          "user_id": "user_id"
+        },
+        "startPartition": "2020-01-01",
+        "timeColumn": "ts"
+      },
+      "table": "test_namespace_jointest.scd2_queries"
+    }
+  },
+  "metaData": {
+    "executionInfo": {
+      "offlineSchedule": "@daily"
+    },
+    "name": "test.scd2_features",
+    "online": 0,
+    "outputNamespace": "test_namespace_jointest",
+    "production": 0,
+    "samplePercent": 100.0,
+    "team": "item_team"
+  },
+  "useLongNames": 0
+}

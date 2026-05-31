@@ -540,11 +540,19 @@ class GroupByTest extends SparkTestBase {
 
   it should "group by from chaining gb" in {
     val namespace = "test_chaining_gb"
-    val today = tableUtils.partitionSpec.at(System.currentTimeMillis())
     val joinName = "parent_join_table"
     val parentGBName = "parent_gb"
 
     val joinSource = TestUtils.getParentJoin(spark, namespace, joinName, parentGBName)
+    // Pin `today` to DataFrameGen's last partition so wall-clock skew vs.
+    // System.currentTimeMillis() can't leave the queried partition empty.
+    val viewsTable = s"$namespace.views_table"
+    val today = tableUtils
+      .partitions(viewsTable)
+      .toSeq
+      .sorted
+      .lastOption
+      .getOrElse(tableUtils.partitionSpec.at(System.currentTimeMillis()))
     val query = Builders.Query(startPartition = today)
     val chainingGroupBy = TestUtils.getTestGBWithJoinSource(joinSource, query, namespace, "user_viewed_price_gb")
     val newGroupBy = GroupBy.from(chainingGroupBy, PartitionRange(today, today), tableUtils, computeDependency = true)

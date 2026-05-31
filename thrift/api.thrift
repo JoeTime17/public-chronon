@@ -284,6 +284,11 @@ enum EngineType {
 
 }
 
+enum Environment {
+    PROD = 0,
+    CANARY = 1,
+}
+
 /**
 * contains configs params that don't change the contents of the output.
 **/
@@ -328,6 +333,8 @@ struct MetaData {
 
     // users can put anything they want in here, but the compiler shouldn't
     103: optional string customJson
+
+    104: optional list<Environment> environments
 
     // enable job to compute consistency metrics
     200: optional bool consistencyCheck
@@ -532,6 +539,7 @@ struct Team {
     20: optional common.EnvironmentVariables env
     21: optional common.ConfigProperties conf
     22: optional common.ClusterConfigProperties clusterConf
+
 }
 
 enum DataModel {

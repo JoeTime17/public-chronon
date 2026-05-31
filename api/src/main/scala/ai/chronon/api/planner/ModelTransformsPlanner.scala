@@ -1,7 +1,7 @@
 package ai.chronon.api.planner
 
 import ai.chronon.api.{ModelTransforms, PartitionSpec, TableDependency, TableInfo}
-import ai.chronon.api.Extensions.{MetadataOps, WindowUtils}
+import ai.chronon.api.Extensions.{JoinOps, MetadataOps, WindowUtils}
 import ai.chronon.api.ScalaJavaConversions.IterableOps
 import ai.chronon.api.planner.TableDependencies.{fromSource, fromTable}
 import ai.chronon.planner.{ConfPlan, ModelTransformsBackfillNode, ModelTransformsUploadNode, Node}
@@ -31,17 +31,8 @@ class ModelTransformsPlanner(modelTransforms: ModelTransforms)(implicit outputPa
         .getOrElse(Seq.empty)
         .flatMap { source =>
           if (source.isSetJoinSource) {
-            // For join sources, depend on the join's output table
             val upstreamJoin = source.getJoinSource.getJoin
-
-            // check if derivations
-            if (upstreamJoin.isSetDerivations && !upstreamJoin.getDerivations.isEmpty) {
-              val derivationOutputTable = upstreamJoin.metaData.outputTable + "__derived"
-              Some(fromTable(derivationOutputTable, source.getJoinSource.query))
-            } else {
-              val upstreamJoinOutputTable = upstreamJoin.metaData.outputTable
-              Some(fromTable(upstreamJoinOutputTable, source.getJoinSource.query))
-            }
+            Some(fromTable(upstreamJoin.finalOutputTable, source.getJoinSource.query))
           } else {
             fromSource(source)
           }

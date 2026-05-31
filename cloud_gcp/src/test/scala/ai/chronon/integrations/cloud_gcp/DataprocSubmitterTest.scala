@@ -683,6 +683,7 @@ class DataprocSubmitterTest extends AnyFlatSpec with MockitoSugar {
         ),
         Map.empty,
         List.empty,
+        Map.empty,
         Map.empty
       )
     assertEquals(submittedJobId, jobId)
@@ -1097,6 +1098,7 @@ class DataprocSubmitterTest extends AnyFlatSpec with MockitoSugar {
         Map.empty,
         List.empty,
         Map.empty,
+        Map.empty,
         "--kafka-bootstrap=bootstrap.zipline-kafka-cluster.us-central1.managedkafka.canary-443022.cloud.goog:9092",
         "--kafka-topic=test-item-event-data",
         "--data-file-name=gs://zl-warehouse/canary_item_events/events-output.avro",
@@ -1131,6 +1133,7 @@ class DataprocSubmitterTest extends AnyFlatSpec with MockitoSugar {
         Map.empty,
         List.empty,
         Map.empty,
+        Map.empty,
         "--gcp-project=canary-443022",
         "--topic=test-item-event-data",
         "--data-file-name=gs://zl-warehouse/canary_item_events/events-output.avro",
@@ -1156,7 +1159,6 @@ class DataprocSubmitterTest extends AnyFlatSpec with MockitoSugar {
       "--start-ds=2025-08-15",
       "--end-ds=2025-11-15",
       "--online-class=ai.chronon.integrations.cloud_gcp.GcpApiImpl",
-      "--table-partitions-dataset=TABLE_PARTITIONS_thomaschow",
       "-ZGCP_PROJECT_ID=canary-443022",
       "-ZGCP_BIGTABLE_INSTANCE_ID=zipline-canary-instance",
       "-ZENABLE_UPLOAD_CLIENTS=true"
@@ -1174,6 +1176,7 @@ class DataprocSubmitterTest extends AnyFlatSpec with MockitoSugar {
       jobProperties = Map.empty,
       files = files,
       labels = Map.empty,
+      envVars = Map.empty,
       args = args: _*
     )
     println(jobId)
@@ -1452,5 +1455,176 @@ class DataprocSubmitterTest extends AnyFlatSpec with MockitoSugar {
 
     val result = submitter.getFlinkInternalJobId("any-job-id")
     assertEquals(None, result)
+  }
+
+  // --- buildFlinkApplicationJob tests ---
+
+  it should "test buildFlinkApplicationJob produces a HadoopJob with launcher main class" in {
+    val submitter = new DataprocSubmitter(jobControllerClient = mock[JobControllerClient],
+                                          gcsClient = mock[GCSClient],
+                                          region = "test-region",
+                                          projectId = "test-project")
+    val job = submitter.buildFlinkApplicationJob(
+      mainClass = "ai.chronon.flink.FlinkJob",
+      mainJarUri = "gs://zipline-jars/flink-assembly.jar",
+      launcherJarUri = "gs://zipline-jars/cloud-gcp.jar",
+      jarUris = Array("gs://zipline-jars/cloud-gcp.jar"),
+      flinkCheckpointUri = "gs://zl-warehouse/flink-state",
+      maybeSavePointUri = Some("gs://zl-warehouse/flink-state/chk-1"),
+      maybeFlinkJarsBasePath = None,
+      jobProperties = Map("custom.key" -> "custom.value"),
+      args = List("--groupby-name", "test-gb"): _*
+    )
+
+    assertEquals(job.getTypeJobCase, Job.TypeJobCase.HADOOP_JOB)
+
+    val hadoopJob = job.getHadoopJob
+    assertEquals("ai.chronon.integrations.cloud_gcp.FlinkApplicationLauncher", hadoopJob.getMainClass)
+    assert(hadoopJob.getJarFileUrisList.asScala.contains("gs://zipline-jars/cloud-gcp.jar"))
+
+    val launcherArgs = hadoopJob.getArgsList.asScala
+    assert(launcherArgs.contains("--flink-main-class"))
+    assert(launcherArgs.contains("ai.chronon.flink.FlinkJob"))
+    assert(launcherArgs.contains("--flink-main-jar"))
+    assert(launcherArgs.contains("gs://zipline-jars/flink-assembly.jar"))
+    assert(launcherArgs.contains("--savepoint-uri"))
+    assert(launcherArgs.contains("gs://zl-warehouse/flink-state/chk-1"))
+    assert(launcherArgs.contains("--flink-arg"))
+    assert(launcherArgs.contains("--groupby-name"))
+    assert(launcherArgs.contains("test-gb"))
+
+    // Verify Flink properties are serialized
+    val propertyArgs = launcherArgs.zipWithIndex.filter(_._1 == "--flink-property").map(p => launcherArgs(p._2 + 1))
+    assert(propertyArgs.exists(_.startsWith("jobmanager.memory.process.size=")))
+    assert(propertyArgs.exists(_.startsWith("taskmanager.memory.process.size=")))
+    assert(propertyArgs.exists(_.startsWith("state.backend.type=")))
+    assert(propertyArgs.exists(_ == "custom.key=custom.value"))
+  }
+
+  it should "test buildFlinkApplicationJob without savepoint omits savepoint args" in {
+    val submitter = new DataprocSubmitter(jobControllerClient = mock[JobControllerClient],
+                                          gcsClient = mock[GCSClient],
+                                          region = "test-region",
+                                          projectId = "test-project")
+    val job = submitter.buildFlinkApplicationJob(
+      mainClass = "ai.chronon.flink.FlinkJob",
+      mainJarUri = "gs://zipline-jars/flink-assembly.jar",
+      launcherJarUri = "gs://zipline-jars/cloud-gcp.jar",
+      jarUris = Array("gs://zipline-jars/cloud-gcp.jar"),
+      flinkCheckpointUri = "gs://zl-warehouse/flink-state",
+      maybeSavePointUri = None,
+      maybeFlinkJarsBasePath = None,
+      jobProperties = Map.empty,
+      args = List("--groupby-name", "test-gb"): _*
+    )
+
+    assertEquals(job.getTypeJobCase, Job.TypeJobCase.HADOOP_JOB)
+    val launcherArgs = job.getHadoopJob.getArgsList.asScala
+    assert(!launcherArgs.contains("--savepoint-uri"))
+  }
+
+  it should "test buildFlinkApplicationJob includes additional JARs" in {
+    val submitter = new DataprocSubmitter(jobControllerClient = mock[JobControllerClient],
+                                          gcsClient = mock[GCSClient],
+                                          region = "test-region",
+                                          projectId = "test-project")
+    val job = submitter.buildFlinkApplicationJob(
+      mainClass = "ai.chronon.flink.FlinkJob",
+      mainJarUri = "gs://zipline-jars/flink-assembly.jar",
+      launcherJarUri = "gs://zipline-jars/cloud-gcp.jar",
+      jarUris = Array("gs://zipline-jars/cloud-gcp.jar", "gs://zipline-jars/pubsub-connector.jar"),
+      flinkCheckpointUri = "gs://zl-warehouse/flink-state",
+      maybeSavePointUri = None,
+      maybeFlinkJarsBasePath = None,
+      jobProperties = Map.empty,
+      args = List("--groupby-name", "test-gb"): _*
+    )
+
+    val launcherArgs = job.getHadoopJob.getArgsList.asScala
+    assert(launcherArgs.contains("--flink-jar-uris"))
+    val jarUrisIdx = launcherArgs.indexOf("--flink-jar-uris") + 1
+    val jarUrisVal = launcherArgs(jarUrisIdx)
+    assert(jarUrisVal.contains("gs://zipline-jars/cloud-gcp.jar"))
+    assert(jarUrisVal.contains("gs://zipline-jars/pubsub-connector.jar"))
+  }
+
+  // --- FlinkApplicationLauncher tests ---
+
+  it should "test FlinkApplicationLauncher.parseArgs with all arguments" in {
+    val args = Array(
+      "--flink-main-class", "ai.chronon.flink.FlinkJob",
+      "--flink-main-jar", "gs://bucket/flink.jar",
+      "--flink-jar-uris", "gs://bucket/jar1.jar,gs://bucket/jar2.jar",
+      "--flink-checkpoint-uri", "gs://bucket/checkpoints",
+      "--savepoint-uri", "gs://bucket/savepoint/chk-1",
+      "--flink-property", "jobmanager.memory.process.size=4G",
+      "--flink-property", "taskmanager.memory.process.size=64G",
+      "--flink-arg", "--groupby-name",
+      "--flink-arg", "test-gb",
+      "--flink-bin-path", "/custom/flink/bin/flink"
+    )
+    val config = FlinkApplicationLauncher.parseArgs(args)
+
+    assertEquals(config.flinkMainClass, "ai.chronon.flink.FlinkJob")
+    assertEquals(config.flinkMainJar, "gs://bucket/flink.jar")
+    assertEquals(config.flinkJarUris, Seq("gs://bucket/jar1.jar", "gs://bucket/jar2.jar"))
+    assertEquals(config.flinkCheckpointUri, "gs://bucket/checkpoints")
+    assertEquals(config.savepointUri, Some("gs://bucket/savepoint/chk-1"))
+    assertEquals(config.flinkProperties.size, 2)
+    assertEquals(config.flinkArgs, Seq("--groupby-name", "test-gb"))
+    assertEquals(config.flinkBinPath, "/custom/flink/bin/flink")
+  }
+
+  it should "test FlinkApplicationLauncher.buildCommand constructs correct flink run-application" in {
+    val config = FlinkApplicationLauncher.LauncherConfig(
+      flinkMainClass = "ai.chronon.flink.FlinkJob",
+      flinkMainJar = "gs://bucket/flink.jar",
+      flinkJarUris = Seq("gs://bucket/extra.jar"),
+      flinkCheckpointUri = "gs://bucket/checkpoints",
+      savepointUri = Some("gs://bucket/savepoint/chk-1"),
+      flinkProperties = Seq("jm.mem" -> "4G", "tm.mem" -> "64G"),
+      flinkArgs = Seq("--groupby-name", "test-gb"),
+      flinkBinPath = "/usr/lib/flink/bin/flink"
+    )
+    val cmd = FlinkApplicationLauncher.buildCommand(config)
+
+    assertEquals(cmd(0), "/usr/lib/flink/bin/flink")
+    assertEquals(cmd(1), "run-application")
+    assertEquals(cmd(2), "-t")
+    assertEquals(cmd(3), "yarn-application")
+    assert(cmd.contains("-Djm.mem=4G"))
+    assert(cmd.contains("-Dtm.mem=64G"))
+    assert(cmd.exists(c => c.startsWith("-Dyarn.provided.lib.dirs=") && c.contains("gs://bucket/extra.jar")))
+    assert(cmd.contains("-s"))
+    assert(cmd.contains("gs://bucket/savepoint/chk-1"))
+    assert(cmd.contains("-c"))
+    assert(cmd.contains("ai.chronon.flink.FlinkJob"))
+    assert(cmd.contains("gs://bucket/flink.jar"))
+    assert(cmd.contains("--groupby-name"))
+    assert(cmd.contains("test-gb"))
+  }
+
+  it should "test FlinkApplicationLauncher.buildCommand omits savepoint when not provided" in {
+    val config = FlinkApplicationLauncher.LauncherConfig(
+      flinkMainClass = "ai.chronon.flink.FlinkJob",
+      flinkMainJar = "gs://bucket/flink.jar",
+      flinkJarUris = Seq.empty,
+      flinkCheckpointUri = "gs://bucket/checkpoints",
+      savepointUri = None,
+      flinkProperties = Seq.empty,
+      flinkArgs = Seq.empty,
+      flinkBinPath = "/usr/lib/flink/bin/flink"
+    )
+    val cmd = FlinkApplicationLauncher.buildCommand(config)
+
+    assert(!cmd.contains("-s"))
+    assert(!cmd.exists(_.contains("yarn.provided.lib.dirs")))
+  }
+
+  it should "test FlinkApplicationLauncher.parseArgs fails on missing required args" in {
+    val args = Array("--flink-main-class", "SomeClass")
+    assertThrows[IllegalArgumentException] {
+      FlinkApplicationLauncher.parseArgs(args)
+    }
   }
 }

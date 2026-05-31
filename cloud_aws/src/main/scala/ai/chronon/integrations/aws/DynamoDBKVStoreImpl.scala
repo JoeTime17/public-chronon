@@ -1,9 +1,9 @@
 package ai.chronon.integrations.aws
 
-import ai.chronon.api.Constants.{ContinuationKey, KvTablePrefixArg, ListLimit}
+import ai.chronon.api.Constants.{ContinuationKey, KvEnableTtlArg, KvReplicaRegionsArg, KvTablePrefixArg, ListLimit}
 import ai.chronon.api.Extensions.StringOps
 import ai.chronon.api.ScalaJavaConversions._
-import ai.chronon.api.{Constants, TilingUtils}
+import ai.chronon.api.{Constants, PartitionSpec, TilingUtils}
 import ai.chronon.online.KVStore
 import ai.chronon.online.KVStore._
 import ai.chronon.online.metrics.Metrics.Context
@@ -15,9 +15,11 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.model._
 
 import java.nio.charset.Charset
-import java.time.{Duration, Instant}
+import java.time.{Duration, Instant, LocalDate}
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import java.util
 import java.util.concurrent.{CompletableFuture, CompletionException}
+import scala.collection.mutable
 import scala.compat.java8.FutureConverters
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
@@ -27,14 +29,21 @@ class DynamoDBKVStoreImpl(rawDynamoDbClient: DynamoDbAsyncClient, conf: Map[Stri
     extends KVStore {
   import DynamoDBKVStoreConstants._
 
-  protected val enableTtl: Boolean = true
+  protected val enableTtl: Boolean = conf.getOrElse(KvEnableTtlArg, "true").toBoolean
 
   private val tablePrefix = conf.getOrElse(KvTablePrefixArg, "")
+
+  private val replicaRegions: List[String] =
+    conf
+      .get(KvReplicaRegionsArg)
+      .filter(_.nonEmpty)
+      .map(_.split(",").map(_.trim).filter(_.nonEmpty).toList)
+      .getOrElse(List.empty)
 
   // Wrap the client to automatically prefix all table names
   private val prefixedDynamoDbClient: PrefixedDynamoDbAsyncClient = {
     logger.info(
-      s"Using DynamoDB table prefix: '$tablePrefix' (prefix will be added to all table names used by this KVStore)")
+      s"Using: table prefix: '$tablePrefix' (prefix will be added to all table names used by this KVStore); enableTtl: $enableTtl")
     new PrefixedDynamoDbAsyncClient(rawDynamoDbClient, tablePrefix)
   }
 
@@ -125,6 +134,8 @@ class DynamoDBKVStoreImpl(rawDynamoDbClient: DynamoDbAsyncClient, conf: Map[Stri
         prefixedDynamoDbClient.updateTimeToLive(ttlRequest).join()
         logger.info(s"TTL enabled on table: $dataset with attribute 'ttl'")
       }
+
+      addReplicaRegions(dataset)
 
       metricsContext.increment("create.successes")
     } catch {
@@ -370,6 +381,19 @@ class DynamoDBKVStoreImpl(rawDynamoDbClient: DynamoDbAsyncClient, conf: Map[Stri
 
       waitForImportCompletion(importArn, physicalTableName)
 
+      // ImportTable API does not support TTL configuration; must be applied after import completes
+      if (enableTtl) {
+        val ttlSpec = TimeToLiveSpecification.builder.enabled(true).attributeName("ttl").build
+        val ttlRequest = UpdateTimeToLiveRequest.builder
+          .tableName(physicalTableName)
+          .timeToLiveSpecification(ttlSpec)
+          .build
+        prefixedDynamoDbClient.updateTimeToLive(ttlRequest).join()
+        logger.info(s"TTL enabled on imported table: $physicalTableName")
+      }
+
+      addReplicaRegions(physicalTableName)
+
       // Register the physical table name in the batch table registry
       create(batchTableRegistry)
       val registryKey = logicalTableName.sanitize.toUpperCase + batchSuffix
@@ -378,6 +402,8 @@ class DynamoDBKVStoreImpl(rawDynamoDbClient: DynamoDbAsyncClient, conf: Map[Stri
         30.seconds
       )
       logger.info(s"Registry updated: $registryKey -> $physicalTableName")
+
+      gcOldBatchTables(logicalTableName)
 
       val duration = System.currentTimeMillis() - startTs
       logger.info(s"DynamoDB import completed for table: $physicalTableName in ${duration}ms")
@@ -388,6 +414,78 @@ class DynamoDBKVStoreImpl(rawDynamoDbClient: DynamoDbAsyncClient, conf: Map[Stri
         logger.error(s"Failed to import data to DynamoDB table: $physicalTableName", e)
         metricsContext.increment("bulkPut.failures")
         throw e
+    }
+  }
+
+  /** Deletes batch tables for the given logical name that are older than BatchTableGCAgeDays, up to BatchTableGCMaxDelete at a time.
+    * Failures are swallowed so GC never blocks bulkPut.
+    */
+  private[aws] def gcOldBatchTables(logicalTableName: String): Unit = {
+    if (!enableTtl) return
+    try {
+      val prefix = logicalTableName.sanitize.toUpperCase + "_"
+      val cutoff = LocalDate.now().minusDays(BatchTableGCAgeDays)
+
+      // DynamoDB listTables returns names in ASCII order. By starting pagination at the prefix
+      // (exclusive), we land right at the first matching table and stop as soon as names diverge —
+      // avoiding a full scan of all tables.
+      val allMatchingTables = mutable.Set.empty[String]
+      // prefix always ends with "_" (e.g. "MY_GROUPBY_BATCH_"). Dropping it gives "MY_GROUPBY_BATCH",
+      // which sorts before all "MY_GROUPBY_BATCH_..." names, so DynamoDB starts returning
+      // matches from the first page.
+      var exclusiveStart: Option[String] = Some(prefix.dropRight(1))
+      var hasMore = true
+      while (hasMore) {
+        val reqBuilder = ListTablesRequest.builder.limit(100)
+        exclusiveStart.foreach(reqBuilder.exclusiveStartTableName)
+        val resp = prefixedDynamoDbClient.listTables(reqBuilder.build()).join()
+        val page = resp.tableNames().toScala
+        val matching = page.takeWhile(_.startsWith(prefix))
+        allMatchingTables ++= matching
+        // Stop if we've gone past the prefix range or there are no more pages
+        if (matching.size < page.size || resp.lastEvaluatedTableName() == null) {
+          hasMore = false
+        } else {
+          exclusiveStart = Some(resp.lastEvaluatedTableName())
+        }
+      }
+
+      // Parse dates from table names: {PREFIX}_{YYYY_MM_DD}_{timestamp}
+      val oldTables = allMatchingTables.flatMap { tableName =>
+        val suffix = tableName.stripPrefix(prefix) // e.g. "2026_02_17_1708192000000"
+        val parts = suffix.split("_")
+        // date is first 3 parts: YYYY, MM, DD
+        if (parts.length >= 4) {
+          val dateStr = s"${parts(0)}_${parts(1)}_${parts(2)}"
+          try {
+            val tableDate = LocalDate.parse(dateStr, BatchTableDateFormatter)
+            if (tableDate.isBefore(cutoff)) Some(tableName) else None
+          } catch {
+            case e: DateTimeParseException =>
+              logger.warn(s"Could not parse date from batch table name '$tableName': ${e.getMessage}")
+              None
+          }
+        } else None
+      }
+
+      val toDelete = oldTables.toSeq.sortBy(identity).take(BatchTableGCMaxDelete)
+      logger.info(
+        s"Batch table GC for $logicalTableName: found ${oldTables.size} old tables, deleting ${toDelete.size}")
+
+      toDelete.foreach { tableName =>
+        try {
+          prefixedDynamoDbClient
+            .deleteTable(DeleteTableRequest.builder.tableName(tableName).build())
+            .join()
+          logger.info(s"Deleted old batch table: $tableName")
+        } catch {
+          case e: Exception =>
+            logger.warn(s"Failed to delete old batch table: $tableName", e)
+        }
+      }
+    } catch {
+      case e: Exception =>
+        logger.warn(s"Batch table GC failed for $logicalTableName, skipping", e)
     }
   }
 
@@ -527,6 +625,38 @@ class DynamoDBKVStoreImpl(rawDynamoDbClient: DynamoDbAsyncClient, conf: Map[Stri
       }
     }
   }
+
+  // Global Tables v2: called after a table is active to add read replicas in additional regions.
+  // Failure is non-fatal — replicas are best-effort for read locality.
+  // Uses a per-request 30s timeout override because UpdateTable is a control-plane operation
+  // that is much slower than data-plane calls and would otherwise hit the shared 3s client timeout.
+  protected def addReplicaRegions(tableName: String): Unit = {
+    if (replicaRegions.isEmpty) return
+    try {
+      val replicaUpdates = replicaRegions.map { region =>
+        ReplicationGroupUpdate
+          .builder()
+          .create(CreateReplicationGroupMemberAction.builder().regionName(region).build())
+          .build()
+      }
+      val requestOverride = AwsRequestOverrideConfiguration
+        .builder()
+        .apiCallTimeout(Duration.ofSeconds(10))
+        .apiCallAttemptTimeout(Duration.ofSeconds(10))
+        .build()
+      val updateRequest = UpdateTableRequest
+        .builder()
+        .tableName(tableName)
+        .replicaUpdates(replicaUpdates.toList.toJava)
+        .overrideConfiguration(requestOverride)
+        .build()
+      prefixedDynamoDbClient.updateTable(updateRequest).join()
+      logger.info(s"Global Table replicas added for '$tableName' in regions: ${replicaRegions.mkString(", ")}")
+    } catch {
+      case e: Exception =>
+        logger.warn(s"Failed to add replica regions for table '$tableName' — replicas are best-effort", e)
+    }
+  }
 }
 
 object DynamoDBKVStoreConstants {
@@ -574,6 +704,12 @@ object DynamoDBKVStoreConstants {
 
   val DataTTLSeconds = 5.days.toSeconds.toInt
   val MillisPerDay = 1.day.toMillis
+
+  val BatchTableGCAgeDays = 30
+  val BatchTableGCMaxDelete = 10
+  // Batch table names embed the date with '_' separators (e.g. 2026_04_16) since '-' is not valid in DynamoDB table names
+  val BatchTableDateFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern(PartitionSpec.daily.format.replace("-", "_"))
 
   def roundToDay(timestampMillis: Long): Long = {
     timestampMillis - (timestampMillis % MillisPerDay)

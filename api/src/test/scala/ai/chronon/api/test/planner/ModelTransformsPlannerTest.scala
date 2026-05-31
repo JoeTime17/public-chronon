@@ -12,6 +12,11 @@ class ModelTransformsPlannerTest extends AnyFlatSpec with Matchers {
 
   private implicit val testPartitionSpec: PartitionSpec = PartitionSpec.daily
 
+  private def modularExecutionInfo: ExecutionInfo =
+    new ExecutionInfo().setConf(
+      new ConfigProperties().setCommon(Map("modular_execution" -> "true").asJava)
+    )
+
   private def buildModelTransforms(name: String, source: Source): ModelTransforms = {
     val testModel = B.Model(
       metaData = B.MetaData(name = s"${name}_model"),
@@ -106,7 +111,7 @@ class ModelTransformsPlannerTest extends AnyFlatSpec with Matchers {
     backfillDeps.head.tableInfo.table shouldBe "test_namespace.test_join"
   }
 
-  "ModelTransformsPlanner" should "handle model transforms with join source and contains derivations" in {
+  "ModelTransformsPlanner" should "use the base join output for join sources with derivations in non-modular mode" in {
     val join = B.Join(
       left = B.Source.events(
         query = B.Query(),
@@ -148,7 +153,98 @@ class ModelTransformsPlannerTest extends AnyFlatSpec with Matchers {
     val backfillDeps = backfillNode.get.metaData.executionInfo.tableDependencies.asScala
     backfillDeps should not be empty
     backfillDeps.length shouldBe 1
+    backfillDeps.head.tableInfo.table shouldBe "test_namespace.test_join"
+  }
+
+  "ModelTransformsPlanner" should "use the derived join output for join sources with derivations in modular mode when a separate derivation node is planned" in {
+    val join = B.Join(
+      left = B.Source.events(
+        query = B.Query(),
+        table = "test_namespace.events_table"
+      ),
+      joinParts = Seq.empty,
+      metaData = B.MetaData(
+        name = "test_join",
+        namespace = "test_namespace",
+        executionInfo = modularExecutionInfo
+      ),
+      derivations = Seq(
+        B.Derivation(
+          name = "derived_col",
+          expression = "some-expression")
+      )
+    )
+
+    val joinSource = B.Source.joinSource(
+      join = join,
+      query = B.Query()
+    )
+
+    val modelTransforms = buildModelTransforms("test_model_transforms_with_join", joinSource)
+    val planner = new ModelTransformsPlanner(modelTransforms)
+    val plan = planner.buildPlan
+
+    plan.nodes.asScala should have size 2
+
+    val backfillNode = plan.nodes.asScala.find(_.content.isSetModelTransformsBackfill)
+    backfillNode should be(defined)
+    val backfillDeps = backfillNode.get.metaData.executionInfo.tableDependencies.asScala
+    backfillDeps should not be empty
+    backfillDeps.length shouldBe 1
     backfillDeps.head.tableInfo.table shouldBe "test_namespace.test_join__derived"
+  }
+
+  "ModelTransformsPlanner" should "use the base join output for union-join-eligible modular join sources with derivations" in {
+    val joinPartGroupBy = B.GroupBy(
+      sources = Seq(B.Source.events(
+        query = B.Query(startPartition = "2023-06-01", partitionColumn = "ds"),
+        table = "test_namespace.feature_events"
+      )),
+      keyColumns = Seq("user_id"),
+      aggregations = Seq(B.Aggregation(Operation.LAST, "listing_id")),
+      accuracy = Accuracy.TEMPORAL,
+      metaData = B.MetaData(name = "test_group_by", namespace = "test_namespace")
+    )
+
+    val join = B.Join(
+      left = B.Source.events(
+        query = B.Query(
+          selects = B.Selects("user_id", "ts"),
+          startPartition = "2023-06-01",
+          partitionColumn = "ds"
+        ),
+        table = "test_namespace.events_table"
+      ),
+      joinParts = Seq(B.JoinPart(groupBy = joinPartGroupBy)),
+      metaData = B.MetaData(
+        name = "test_join",
+        namespace = "test_namespace",
+        executionInfo = modularExecutionInfo
+      ),
+      derivations = Seq(
+        B.Derivation(
+          name = "derived_col",
+          expression = "test_group_by_listing_id_last")
+      )
+    )
+
+    val joinSource = B.Source.joinSource(
+      join = join,
+      query = B.Query()
+    )
+
+    val modelTransforms = buildModelTransforms("test_model_transforms_with_union_join_source", joinSource)
+    val planner = new ModelTransformsPlanner(modelTransforms)
+    val plan = planner.buildPlan
+
+    plan.nodes.asScala should have size 2
+
+    val backfillNode = plan.nodes.asScala.find(_.content.isSetModelTransformsBackfill)
+    backfillNode should be(defined)
+    val backfillDeps = backfillNode.get.metaData.executionInfo.tableDependencies.asScala
+    backfillDeps should not be empty
+    backfillDeps.length shouldBe 1
+    backfillDeps.head.tableInfo.table shouldBe "test_namespace.test_join"
   }
 
 

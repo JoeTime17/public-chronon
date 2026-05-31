@@ -128,6 +128,20 @@ v1 = Join(
 )
 ```
 
+##### Compile
+
+`zipline compile` turns authored configs (under `group_bys/`, `joins/`, `staging_queries/`, `models/`, `model_transforms/`) into thriftjson under `compiled/`. The compiler reads team-level defaults (output namespace, env vars, conf, cluster config) from `teams.py` and merges them onto each config's `metaData.executionInfo`.
+
+```bash
+zipline compile --chronon-root <repo-root>
+```
+
+###### Multi-environment compile via `teams.canary.py`
+
+To compile the same configs against a canary deployment, drop a sibling `teams.canary.py` next to `teams.py`. `zipline compile` will run a second pass and write to `compiled_canary/`. Only `canary` is supported as a non-prod env today.
+
+See the **[Multi-Environment Compile & Deploy guide](https://docs.zipline.ai/docs/running_on_zipline_hub/MultiEnvironment)** for the full guide — directory layout, the `from teams import …` authoring pattern, per-entity `environments=[...]` opt-in, the `--env` deploy contract, the compile summary, and the CI workflow.
+
 ##### Pre-commit Setup
 
 1. Install pre-commit and other dev libraries:

@@ -442,14 +442,25 @@ object Extensions {
     lazy val rawTable: String = {
       if (source.isSetEntities) { source.getEntities.getSnapshotTable }
       else if (source.isSetEvents) { source.getEvents.getTable }
-      else { source.getJoinSource.getJoin.metaData.outputTable }
+      else { source.getJoinSource.getJoin.finalOutputTable }
     }
 
-    def mutationsTable: Option[String] = for (
-      entities <- Option(source.getEntities);
-      mutationsTable <- Option(entities.getMutationTable)
-    ) yield {
-      mutationsTable
+    def mutationsTable: Option[String] = {
+      def mutationsTableFor(current: Source): Option[String] = {
+        if (current == null) None
+        else if (current.isSetEntities) {
+          Option(current.getEntities.getMutationTable)
+        } else if (current.isSetJoinSource) {
+          // JoinSource is a union arm, so recurse through left-side joins before reading EntitySource fields.
+          Option(current.getJoinSource)
+            .flatMap(joinSource => Option(joinSource.getJoin))
+            .flatMap(join => mutationsTableFor(join.getLeft))
+        } else {
+          None
+        }
+      }
+
+      mutationsTableFor(source)
     }
 
     def overwriteTable(table: String): Unit = {
@@ -942,6 +953,20 @@ object Extensions {
         .flatMap(c => Option(c.common))
         .exists(_.get("modular_execution") == "true")
 
+    def isUnionJoinEligible: Boolean =
+      join.left.isSetEvents &&
+        Option(join.joinParts).exists(_.size() == 1) &&
+        join.getJoinParts.get(0).groupBy.inferredAccuracy == Accuracy.TEMPORAL &&
+        !join.isSetBootstrapParts
+
+    def derivedOutputTable: String = s"${join.metaData.outputTable}__derived"
+
+    def hasSeparateDerivedOutput: Boolean =
+      join.isModularMode && join.hasDerivations && !isUnionJoinEligible
+
+    def finalOutputTable: String =
+      if (hasSeparateDerivedOutput) derivedOutputTable else join.metaData.outputTable
+
     def historicalBackfill: Boolean = {
       if (join.metaData.isSetExecutionInfo && join.metaData.executionInfo.isSetHistoricalBackfill) {
         join.metaData.executionInfo.historicalBackfill
@@ -1313,19 +1338,21 @@ object Extensions {
   implicit class JoinSourceOps(joinSource: JoinSource) {
     // convert chained joinSource into event or entity sources
     def toDirectSource(joinOutputTable: String): Source = {
-      val joinTable = joinSource.getJoin.getMetaData.outputTable
       val result = new Source()
       joinSource.join.left.dataModel match {
         case ENTITIES =>
           val inner = new EntitySource()
-          inner.setSnapshotTable(joinTable)
-          inner.setQuery(joinSource.getQuery)
+          inner.setSnapshotTable(joinOutputTable)
+          inner.setQuery(Option(joinSource.getQuery).map(_.deepCopy()).orNull)
+          inner.setMutationTopic(joinSource.join.left.topic)
           result.setEntities(inner)
 
         case EVENTS =>
           val inner = new EventSource()
-          inner.setTable(joinTable)
-          inner.setQuery(joinSource.getQuery)
+          inner.setTable(joinOutputTable)
+          inner.setQuery(Option(joinSource.getQuery).map(_.deepCopy()).orNull)
+          inner.setTopic(joinSource.join.left.topic)
+          inner.setIsCumulative(joinSource.join.left.isCumulative)
           result.setEvents(inner)
       }
       result

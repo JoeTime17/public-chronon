@@ -38,8 +38,8 @@ trait FlinkModule extends Cross.Module[String] with build.BaseModule {
       .exclude("com.fasterxml.jackson.core" -> "jackson-databind")
       .exclude("com.fasterxml.jackson.core" -> "jackson-annotations"),
   ) ++ Seq(
-    mvn"io.netty:netty-codec-http2:4.1.132.Final",
-    mvn"io.netty:netty-codec-http:4.1.132.Final",
+    mvn"io.netty:netty-codec-http2:4.1.133.Final",
+    mvn"io.netty:netty-codec-http:4.1.133.Final",
   ).map(_.forceVersion())
 
   def mainClass = Some("ai.chronon.flink.FlinkJob")

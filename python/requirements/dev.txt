@@ -6,49 +6,51 @@
 #    requirements upgrade
 #
 -r base.txt
-autoflake==2.3.1
+autoflake==2.3.3
     # via -r requirements/dev.in
-black==26.1.0
+black==26.3.1
     # via -r requirements/dev.in
-cachetools==6.2.5
+cachetools==7.0.6
     # via tox
 cfgv==3.5.0
     # via pre-commit
-chardet==5.2.0
+chardet==7.4.3
     # via tox
 colorama==0.4.6
     # via tox
-coverage[toml]==7.13.2
+coverage[toml]==7.13.5
     # via pytest-cov
 distlib==0.4.0
     # via virtualenv
-filelock==3.20.3
+filelock==3.29.0
     # via
+    #   python-discovery
     #   tox
     #   virtualenv
-identify==2.6.16
+identify==2.6.19
     # via pre-commit
 importlib-metadata==8.4.0
     # via -r requirements/dev.in
 iniconfig==2.3.0
     # via pytest
-isort==7.0.0
+isort==8.0.1
     # via -r requirements/dev.in
 mypy-extensions==1.1.0
     # via black
 nodeenv==1.10.0
     # via pre-commit
-packaging==26.0
+packaging==26.2
     # via
     #   black
     #   pyproject-api
     #   pytest
     #   tox
-pathspec==1.0.3
+pathspec==1.1.1
     # via black
-platformdirs==4.5.1
+platformdirs==4.9.6
     # via
     #   black
+    #   python-discovery
     #   tox
     #   virtualenv
 pluggy==1.6.0
@@ -56,23 +58,25 @@ pluggy==1.6.0
     #   pytest
     #   pytest-cov
     #   tox
-pre-commit==4.5.1
+pre-commit==4.6.0
     # via -r requirements/dev.in
 pyflakes==3.4.0
     # via autoflake
 pyproject-api==1.10.0
     # via tox
-pytest==9.0.2
+pytest==9.0.3
     # via pytest-cov
-pytest-cov==7.0.0
+pytest-cov==7.1.0
     # via -r requirements/dev.in
-pytokens==0.4.0
+python-discovery==1.2.2
+    # via virtualenv
+pytokens==0.4.1
     # via black
 pyyaml==6.0.3
     # via pre-commit
 tox==4.20.0
     # via -r requirements/dev.in
-virtualenv==20.36.1
+virtualenv==21.2.4
     # via
     #   pre-commit
     #   tox

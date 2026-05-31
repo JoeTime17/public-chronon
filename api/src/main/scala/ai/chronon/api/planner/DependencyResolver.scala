@@ -24,6 +24,28 @@ object DependencyResolver {
     Ordering[String].min(partition, cutOff)
   }
 
+  def computeOutputRange(parentRange: PartitionRange, tableDep: TableDependency): Option[PartitionRange] = {
+    require(parentRange != null, "Parent range cannot be null")
+    require(parentRange.start != null, "Parent range start cannot be null")
+    require(parentRange.end != null, "Parent range end cannot be null")
+    require(parentRange.start <= parentRange.end, "Parent range start must be <= end")
+
+    implicit val partitionSpec: PartitionSpec = parentRange.partitionSpec
+
+    val start =
+      if (tableDep.isSetEndOffset) partitionSpec.plus(parentRange.start, tableDep.getEndOffset)
+      else parentRange.start
+    val end =
+      if (tableDep.isSetStartOffset) partitionSpec.plus(parentRange.end, tableDep.getStartOffset)
+      else parentRange.end
+
+    if (start != null && end != null && start > end) {
+      return None
+    }
+
+    Some(PartitionRange(start, end))
+  }
+
   def computeInputRange(queryRange: PartitionRange, tableDep: TableDependency): Option[PartitionRange] = {
 
     implicit val partitionSpec: PartitionSpec = queryRange.partitionSpec

@@ -16,7 +16,7 @@ object TableDependencies {
 
   def fromJoin(join: api.Join): Seq[TableDependency] = {
     val joinParts = Option(join.joinParts).map(_.iterator().toScala.toArray).getOrElse(Array.empty)
-    val joinPartDeps = joinParts.flatMap((jp) => fromGroupBy(jp.groupBy))
+    val joinPartDeps = joinParts.flatMap((jp) => fromGroupBy(jp.groupBy, Option(join.left).map(_.dataModel)))
     val leftDep = scala.Option(join.left).map((src) => fromTable(src.table, src.query))
     val bootstrap =
       scala.Option(join.bootstrapParts).map(_.toScala.toArray[BootstrapPart]).getOrElse(Array.empty[BootstrapPart])
@@ -32,7 +32,7 @@ object TableDependencies {
         val lookback = if (source.dataModel == DataModel.EVENTS && !source.isCumulative) groupBy.maxWindow else None
 
         def dep(shift: Option[Window] = None, forMutations: Boolean = false): Option[TableDependency] =
-          TableDependencies.fromSource(source, lookback, shift)
+          TableDependencies.fromSource(source, lookback, shift, forMutations)
 
         (leftDataModel, groupBy.inferredAccuracy, source.dataModel) match {
 
@@ -130,17 +130,22 @@ object TableDependencies {
     Option(sources)
       .map(_.toScala.toSeq)
       .getOrElse(Seq.empty)
-      .filter(_.isSetJoinSource)
-      .map { source =>
-        val upstreamJoin = source.getJoinSource.getJoin
-        val upstreamMetadataUploadTable = upstreamJoin.metaData.outputTable + "__metadata_upload"
-        new TableDependency()
-          .setTableInfo(
-            new TableInfo()
-              .setTable(upstreamMetadataUploadTable)
-          )
-          .setStartOffset(WindowUtils.zero())
-          .setEndOffset(WindowUtils.zero())
+      .flatMap { source =>
+        for {
+          joinSourceSource <- Option(source).filter(_.isSetJoinSource).toSeq
+          joinSource <- Option(joinSourceSource.getJoinSource).toSeq
+          upstreamJoin <- Option(joinSource.getJoin).toSeq
+          metaData <- Option(upstreamJoin.metaData).toSeq
+        } yield {
+          val upstreamMetadataUploadTable = metaData.outputTable + "__metadata_upload"
+          new TableDependency()
+            .setTableInfo(
+              new TableInfo()
+                .setTable(upstreamMetadataUploadTable)
+            )
+            .setStartOffset(WindowUtils.zero())
+            .setEndOffset(WindowUtils.zero())
+        }
       }
   }
 

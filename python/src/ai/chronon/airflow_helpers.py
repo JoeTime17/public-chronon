@@ -1,6 +1,7 @@
+import datetime
 import json
 import math
-from typing import OrderedDict
+from typing import Optional, OrderedDict
 
 import ai.chronon.utils as utils
 from gen_thrift.api.ttypes import GroupBy, Join
@@ -8,24 +9,84 @@ from gen_thrift.common.ttypes import TimeUnit
 
 AIRFLOW_DEPENDENCIES_KEY = "airflowDependencies"
 
+DEFAULT_PARTITION_FORMAT = "yyyy-MM-dd"
 
-def create_airflow_dependency(table, partition_column, additional_partitions=None, offset=0):
+# Java SimpleDateFormat -> Python strftime for the tokens that appear in
+# Chronon partition formats. Ordered longest-first so `yyyy` isn't partially
+# eaten by `yy` during replace().
+_JAVA_TO_PY_FORMAT = [
+    ("yyyy", "%Y"),
+    ("yy", "%y"),
+    ("MM", "%m"),
+    ("dd", "%d"),
+    ("HH", "%H"),
+    ("mm", "%M"),
+    ("ss", "%S"),
+]
+
+
+def _java_format_to_python(fmt: str) -> str:
+    """Translate a Chronon partition_format (Java SimpleDateFormat subset) to a
+    Python strftime format. Covers yyyy/yy/MM/dd/HH/mm/ss — every pattern used
+    in practice. Literals (dashes, slashes, etc.) pass through unchanged."""
+    out = fmt
+    for java, py in _JAVA_TO_PY_FORMAT:
+        out = out.replace(java, py)
+    return out
+
+
+def _cutoff_already_binds(
+    offset: int,
+    end_cutoff: str,
+    partition_format: str = DEFAULT_PARTITION_FORMAT,
+    today: Optional[str] = None,
+) -> bool:
+    """Return True iff ``end_cutoff`` already caps the sensor partition at compile
+    time — i.e. the partition for ``today - offset`` (formatted in the same
+    partition_format as ``end_cutoff``) already sorts past it. Every future run
+    would then resolve the upstream end partition to the cutoff literal."""
+    today_date = datetime.date.fromisoformat(today) if today else datetime.date.today()
+    effective = today_date - datetime.timedelta(days=offset)
+    py_fmt = _java_format_to_python(partition_format)
+    return effective.strftime(py_fmt) > end_cutoff
+
+
+def create_airflow_dependency(
+    table,
+    partition_column,
+    additional_partitions=None,
+    offset=0,
+    end_cutoff: Optional[str] = None,
+    partition_format: Optional[str] = None,
+):
     """
     Create an Airflow dependency object for a table.
 
+    The sensor waits on ``ds - offset`` (via ``macros.ds_add(ds, -offset)``) to
+    match Chronon's semantics where ``offset=N`` means an ``N``-day lag. When
+    ``end_cutoff`` is set and already past at compile time, the spec uses the
+    cutoff literal instead — every future run resolves to the same fixed
+    partition, so there's nothing to template on ``ds``.
+
     Args:
-        table: The table name (with namespace)
-        partition_column: The partition column to use (defaults to 'ds')
-        additional_partitions: Additional partitions to include in the dependency
+        table: The table name (with namespace).
+        partition_column: The partition column.
+        additional_partitions: Sub-partitions to wait on alongside the date.
+        offset: Day lag (positive = past). Resolved by ``TableDependency.resolved_offsets``
+            from ``end_offset`` / ``offset`` / ``0``.
+        end_cutoff: Optional fixed ceiling on the upstream end partition.
+        partition_format: Chronon partition_format for this dependency (defaults
+            to ``yyyy-MM-dd``). Used to render ``today - offset`` in the same
+            format as ``end_cutoff`` for the cutoff-bound check.
 
     Returns:
-        A dictionary with name and spec for the Airflow dependency
+        A dictionary with name and spec for the Airflow dependency.
     """
     assert (
         partition_column is not None
-    ), """Partition column must be provided via the spark.chronon.partition.column 
+    ), """Partition column must be provided via the spark.chronon.partition.column
         config. This can be set as a default in teams.py, or at the individual config level. For example:
-        ``` 
+        ```
         Team(
             conf=ConfigProperties(
                 common={
@@ -40,9 +101,20 @@ def create_airflow_dependency(table, partition_column, additional_partitions=Non
     if additional_partitions:
         additional_partitions_str = "/" + "/".join(additional_partitions)
 
+    effective_partition_format = partition_format or DEFAULT_PARTITION_FORMAT
+    if end_cutoff is not None and _cutoff_already_binds(
+        offset, end_cutoff, effective_partition_format
+    ):
+        partition_value = end_cutoff
+        name_suffix = f"at_{utils.sanitize(end_cutoff)}"
+    else:
+        # Airflow has no `ds_sub` — subtract by passing a negated offset to ds_add.
+        partition_value = f"{{{{ macros.ds_add(ds, {-offset}) }}}}"
+        name_suffix = f"with_offset_{offset}"
+
     return {
-        "name": f"wf_{utils.sanitize(table)}_with_offset_{offset}",
-        "spec": f"{table}/{partition_column}={{{{ macros.ds_add(ds, {offset}) }}}}{additional_partitions_str}",
+        "name": f"wf_{utils.sanitize(table)}_{name_suffix}",
+        "spec": f"{table}/{partition_column}={partition_value}{additional_partitions_str}",
     }
 
 
@@ -96,6 +168,15 @@ def _get_airflow_deps_from_source(source, partition_column=None):
         return []
     else:
         # Unknown source type
+        return []
+
+    # Without a partition column we can't construct a meaningful dependency
+    # spec — skip rather than fail. Happens whenever a team's conf doesn't set
+    # `spark.chronon.partition.column` and the source's query doesn't specify
+    # one either (e.g. a per-env teams file with minimal conf). Failing later
+    # (at runtime / scheduling) is preferred over an obscure assertion deep in
+    # compile-time dep generation.
+    if source_partition_column is None:
         return []
 
     return [

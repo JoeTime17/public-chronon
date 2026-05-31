@@ -18,6 +18,7 @@ class DataprocServerlessSubmitter(batchControllerClient: BatchControllerClient,
                       jobProperties: Map[String, String],
                       files: List[String],
                       labels: Map[String, String],
+                      envVars: Map[String, String],
                       args: String*): String = {
     val mainClass = submissionProperties.getOrElse(MainClass, throw new RuntimeException("Main class not found"))
     val jarUri = submissionProperties.getOrElse(JarURI, throw new RuntimeException("Jar URI not found"))
@@ -30,7 +31,8 @@ class DataprocServerlessSubmitter(batchControllerClient: BatchControllerClient,
       additionalLabels = labels
     )
 
-    val batch = buildBatch(mainClass, jarUri, files, jobProperties, formattedDataprocLabels, args: _*)
+    val effectiveJobProperties = jobProperties ++ envVarsToSparkProperties(envVars)
+    val batch = buildBatch(mainClass, jarUri, files, effectiveJobProperties, formattedDataprocLabels, args: _*)
     val locationName = LocationName.of(projectId, region)
 
     try {

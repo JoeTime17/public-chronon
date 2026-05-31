@@ -1,0 +1,178 @@
+{
+  "engineType": 0,
+  "metaData": {
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_demo_dim_users_with_offset_0\", \"spec\": \"demo.dim_users/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.default.parallelism": "10",
+          "spark.hadoop.fs.s3a.access.key": "minioadmin",
+          "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+          "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+          "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+          "spark.hadoop.fs.s3a.path.style.access": "true",
+          "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+          "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+          "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+          "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+          "spark.sql.catalog.iceberg.type": "jdbc",
+          "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+          "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+          "spark.sql.defaultCatalog": "iceberg",
+          "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+          "spark.sql.shuffle.partitions": "10"
+        },
+        "modeConfigs": {
+          "backfill": {
+            "spark.chronon.coalesce.factor": "10",
+            "spark.chronon.partition.column": "ds",
+            "spark.default.parallelism": "10",
+            "spark.driver.memory": "512m",
+            "spark.executor.cores": "1",
+            "spark.executor.instances": "1",
+            "spark.executor.memory": "1g",
+            "spark.hadoop.fs.s3a.access.key": "minioadmin",
+            "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+            "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+            "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "spark.hadoop.fs.s3a.path.style.access": "true",
+            "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+            "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+            "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+            "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+            "spark.sql.catalog.iceberg.type": "jdbc",
+            "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+            "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+            "spark.sql.defaultCatalog": "iceberg",
+            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            "spark.sql.shuffle.partitions": "10"
+          },
+          "upload": {
+            "spark.chronon.coalesce.factor": "10",
+            "spark.chronon.partition.column": "ds",
+            "spark.default.parallelism": "10",
+            "spark.driver.memory": "512m",
+            "spark.executor.memory": "512m",
+            "spark.hadoop.fs.s3a.access.key": "minioadmin",
+            "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+            "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+            "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "spark.hadoop.fs.s3a.path.style.access": "true",
+            "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+            "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+            "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+            "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+            "spark.sql.catalog.iceberg.type": "jdbc",
+            "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+            "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+            "spark.sql.defaultCatalog": "iceberg",
+            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            "spark.sql.shuffle.partitions": "10"
+          }
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "s3a://warehouse",
+          "CUSTOMER_ID": "dev",
+          "EVAL_URL": "http://localhost:3904",
+          "FLINK_STATE_URI": "s3a://warehouse",
+          "FRONTEND_URL": "http://localhost:3000",
+          "HUB_URL": "http://localhost:3903",
+          "K8S_NAMESPACE": "chronon",
+          "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+          "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+          "SPARK_EVENT_LOG_ENABLED": "true",
+          "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+          "SPARK_IMAGE": "chronon-spark-k8s:latest",
+          "SPARK_SERVICE_ACCOUNT": "spark",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "s3a://warehouse"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          },
+          "streaming": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          },
+          "upload": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          }
+        }
+      },
+      "offlineSchedule": "@daily",
+      "stepDays": 20
+    },
+    "name": "quickstart.exports.dim_users__0",
+    "outputNamespace": "quickstart",
+    "sourceFile": "staging_queries/quickstart/exports.py",
+    "team": "quickstart",
+    "version": "0"
+  },
+  "query": "\n    SELECT\n        *\n    FROM demo.dim_users\n    WHERE\n    ds BETWEEN {{ start_date }} AND {{ end_date }}\n    ",
+  "tableDependencies": [
+    {
+      "endOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "startOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "tableInfo": {
+        "partitionColumn": "ds",
+        "partitionInterval": {
+          "length": 1,
+          "timeUnit": 1
+        },
+        "table": "demo.dim_users"
+      }
+    }
+  ]
+}

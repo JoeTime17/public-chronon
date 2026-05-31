@@ -82,6 +82,16 @@ class DataStreamBuilderTest extends AnyFlatSpec {
       TopicInfo("topic_name", "kafka", Map("host" -> "X", "ssl.truststore.location" -> "/etc/kafka/truststore.jks")))
   }
 
+  it should "topic info parsing sasl.jaas.config for Azure EventHubs" in {
+    // Single '/' in values must be written as '//' in the topic string (the existing double-slash escaping convention)
+    val topic = "kafka://my-topic/bootstrap=my-host:9092/sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"Endpoint=sb:////zipline-demo-events.servicebus.windows.net//;SharedAccessKeyName=canary-flink-jobs;SharedAccessKey=foo=\";"
+    val expectedJaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"Endpoint=sb://zipline-demo-events.servicebus.windows.net/;SharedAccessKeyName=canary-flink-jobs;SharedAccessKey=foo=\";"
+    checkTopicInfo(
+      parse(topic),
+      TopicInfo("my-topic", "kafka", Map("bootstrap" -> "my-host:9092", "sasl.jaas.config" -> expectedJaasConfig))
+    )
+  }
+
   def checkTopicInfo(actual: TopicInfo, expected: TopicInfo): Unit = {
     if (actual != expected) {
       logger.info(s"Actual topicInfo != expected topicInfo. Actual: $actual, expected: $expected")

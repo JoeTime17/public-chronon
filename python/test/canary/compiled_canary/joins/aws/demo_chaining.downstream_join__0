@@ -1,0 +1,529 @@
+{
+  "joinParts": [
+    {
+      "groupBy": {
+        "aggregations": [
+          {
+            "argMap": {
+              "k": "100"
+            },
+            "inputColumn": "price_cents",
+            "operation": 13,
+            "windows": [
+              {
+                "length": 7,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "user_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "price_cents_last100_7d": "5377edbf5107cc02a5f74238b3c3696e",
+            "user_id": "96df20bb89ae17fa8229552a8afe4f3f"
+          },
+          "executionInfo": {
+            "clusterConf": {
+              "common": {
+                "emr.config": "{\"releaseLabel\": \"emr-7.12.0\", \"instanceType\": \"m5.xlarge\", \"instanceCount\": 3, \"autoTerminationPolicy\": {\"idleTimeout\": 7200}, \"subnetName\": \"zipline-canary-subnet-main\", \"securityGroupName\": \"zipline-canary-sg\"}"
+              }
+            },
+            "conf": {
+              "common": {
+                "spark.chronon.coalesce.factor": "10",
+                "spark.chronon.partition.column": "ds",
+                "spark.chronon.partition.format": "yyyy-MM-dd",
+                "spark.chronon.table_write.format": "iceberg",
+                "spark.chronon.table_write.upload.format": "ion",
+                "spark.chronon.table_write.upload.location": "s3://zipline-warehouse-canary/data/ion_uploads/",
+                "spark.default.parallelism": "10",
+                "spark.driver.cores": "1",
+                "spark.driver.memory": "1g",
+                "spark.executor.cores": "1",
+                "spark.executor.memory": "1g",
+                "spark.hadoop.hive.metastore.client.factory.class": "com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+                "spark.sql.catalog.spark_catalog.warehouse": "s3://zipline-warehouse-canary/data/tables/",
+                "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                "spark.sql.shuffle.partitions": "10",
+                "taskmanager.memory.process.size": "4G"
+              },
+              "modeConfigs": {
+                "backfill": {
+                  "spark.chronon.coalesce.factor": "10",
+                  "spark.chronon.partition.column": "ds",
+                  "spark.chronon.partition.format": "yyyy-MM-dd",
+                  "spark.chronon.table_write.format": "iceberg",
+                  "spark.chronon.table_write.upload.format": "ion",
+                  "spark.chronon.table_write.upload.location": "s3://zipline-warehouse-canary/data/ion_uploads/",
+                  "spark.default.parallelism": "10",
+                  "spark.driver.cores": "1",
+                  "spark.driver.memory": "1g",
+                  "spark.executor.cores": "1",
+                  "spark.executor.memory": "1g",
+                  "spark.hadoop.hive.metastore.client.factory.class": "com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                  "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                  "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+                  "spark.sql.catalog.spark_catalog.warehouse": "s3://zipline-warehouse-canary/data/tables/",
+                  "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                  "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                  "spark.sql.shuffle.partitions": "10",
+                  "taskmanager.memory.process.size": "4G"
+                }
+              }
+            },
+            "env": {
+              "common": {
+                "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary-aws",
+                "AWS_REGION": "us-west-2",
+                "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+                "CLOUD_PROVIDER": "aws",
+                "CUSTOMER_ID": "canary",
+                "ENABLE_KINESIS": "true",
+                "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+                "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
+                "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
+                "FRONTEND_URL": "https://canary-aws.zipline.ai",
+                "HUB_URL": "https://canary-orch-aws.zipline.ai",
+                "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+                "VERSION": "latest",
+                "WAREHOUSE_PREFIX": "s3://zipline-warehouse-canary"
+              },
+              "modeEnvironments": {
+                "upload": {
+                  "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary-aws",
+                  "AWS_REGION": "us-west-2",
+                  "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+                  "CLOUD_PROVIDER": "aws",
+                  "CUSTOMER_ID": "canary",
+                  "ENABLE_KINESIS": "true",
+                  "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+                  "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
+                  "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
+                  "FRONTEND_URL": "https://canary-aws.zipline.ai",
+                  "HUB_URL": "https://canary-orch-aws.zipline.ai",
+                  "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+                  "VERSION": "latest",
+                  "WAREHOUSE_PREFIX": "s3://zipline-warehouse-canary"
+                }
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily"
+          },
+          "name": "aws.user_activities_chained.chained_user_gb__0",
+          "online": 1,
+          "outputNamespace": "data",
+          "team": "aws",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "joinSource": {
+              "join": {
+                "joinParts": [
+                  {
+                    "groupBy": {
+                      "keyColumns": [
+                        "listing_id"
+                      ],
+                      "metaData": {
+                        "executionInfo": {
+                          "clusterConf": {
+                            "common": {
+                              "emr.config": "{\"releaseLabel\": \"emr-7.12.0\", \"instanceType\": \"m5.xlarge\", \"instanceCount\": 3, \"autoTerminationPolicy\": {\"idleTimeout\": 7200}, \"subnetName\": \"zipline-canary-subnet-main\", \"securityGroupName\": \"zipline-canary-sg\"}"
+                            }
+                          },
+                          "conf": {
+                            "common": {
+                              "spark.chronon.coalesce.factor": "10",
+                              "spark.chronon.partition.column": "ds",
+                              "spark.chronon.partition.format": "yyyy-MM-dd",
+                              "spark.chronon.table_write.format": "iceberg",
+                              "spark.chronon.table_write.upload.format": "ion",
+                              "spark.chronon.table_write.upload.location": "s3://zipline-warehouse-canary/data/ion_uploads/",
+                              "spark.default.parallelism": "10",
+                              "spark.driver.cores": "1",
+                              "spark.driver.memory": "1g",
+                              "spark.executor.cores": "1",
+                              "spark.executor.memory": "1g",
+                              "spark.hadoop.hive.metastore.client.factory.class": "com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                              "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                              "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+                              "spark.sql.catalog.spark_catalog.warehouse": "s3://zipline-warehouse-canary/data/tables/",
+                              "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                              "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                              "spark.sql.shuffle.partitions": "10",
+                              "taskmanager.memory.process.size": "4G"
+                            },
+                            "modeConfigs": {
+                              "backfill": {
+                                "spark.chronon.coalesce.factor": "10",
+                                "spark.chronon.partition.column": "ds",
+                                "spark.chronon.partition.format": "yyyy-MM-dd",
+                                "spark.chronon.table_write.format": "iceberg",
+                                "spark.chronon.table_write.upload.format": "ion",
+                                "spark.chronon.table_write.upload.location": "s3://zipline-warehouse-canary/data/ion_uploads/",
+                                "spark.default.parallelism": "10",
+                                "spark.driver.cores": "1",
+                                "spark.driver.memory": "1g",
+                                "spark.executor.cores": "1",
+                                "spark.executor.memory": "1g",
+                                "spark.hadoop.hive.metastore.client.factory.class": "com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                                "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                                "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+                                "spark.sql.catalog.spark_catalog.warehouse": "s3://zipline-warehouse-canary/data/tables/",
+                                "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                                "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                                "spark.sql.shuffle.partitions": "10",
+                                "taskmanager.memory.process.size": "4G"
+                              }
+                            }
+                          },
+                          "env": {
+                            "common": {
+                              "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary-aws",
+                              "AWS_REGION": "us-west-2",
+                              "CHRONON_ONLINE_ARGS": " -Ztasks=1",
+                              "CLOUD_PROVIDER": "aws",
+                              "CUSTOMER_ID": "canary",
+                              "ENABLE_KINESIS": "true",
+                              "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+                              "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
+                              "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
+                              "FRONTEND_URL": "https://canary-aws.zipline.ai",
+                              "HUB_URL": "https://canary-orch-aws.zipline.ai",
+                              "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+                              "VERSION": "latest",
+                              "WAREHOUSE_PREFIX": "s3://zipline-warehouse-canary"
+                            },
+                            "modeEnvironments": {
+                              "upload": {
+                                "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary-aws",
+                                "AWS_REGION": "us-west-2",
+                                "CHRONON_ONLINE_ARGS": " -Ztasks=1",
+                                "CLOUD_PROVIDER": "aws",
+                                "CUSTOMER_ID": "canary",
+                                "ENABLE_KINESIS": "true",
+                                "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+                                "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
+                                "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
+                                "FRONTEND_URL": "https://canary-aws.zipline.ai",
+                                "HUB_URL": "https://canary-orch-aws.zipline.ai",
+                                "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+                                "VERSION": "latest",
+                                "WAREHOUSE_PREFIX": "s3://zipline-warehouse-canary"
+                              }
+                            }
+                          },
+                          "historicalBackfill": 0,
+                          "onlineSchedule": "@daily",
+                          "stepDays": 10
+                        },
+                        "name": "aws.dim_listings.v1__0",
+                        "online": 1,
+                        "outputNamespace": "data",
+                        "team": "aws",
+                        "version": "0"
+                      },
+                      "sources": [
+                        {
+                          "entities": {
+                            "query": {
+                              "selects": {
+                                "brief_description": "brief_description",
+                                "currency": "currency",
+                                "headline": "headline",
+                                "inventory_count": "inventory_count",
+                                "is_active": "is_active",
+                                "is_expensive": "IF(price_cents > 10000, 1, 0)",
+                                "is_in_stock": "IF(inventory_count > 0, 1, 0)",
+                                "listing_id": "listing_id",
+                                "long_description": "long_description",
+                                "main_image_path": "main_image_path",
+                                "merchant_id": "merchant_id",
+                                "price_cents": "price_cents",
+                                "primary_category": "primary_category",
+                                "secondary_image_paths": "secondary_image_paths",
+                                "tags": "tags",
+                                "weight_grams": "weight_grams"
+                              },
+                              "startPartition": "2025-01-01"
+                            },
+                            "snapshotTable": "data.aws_exports_dim_listings__0"
+                          }
+                        }
+                      ]
+                    },
+                    "useLongNames": 0
+                  }
+                ],
+                "left": {
+                  "events": {
+                    "query": {
+                      "selects": {
+                        "listing_id": "listing_id",
+                        "row_id": "event_id",
+                        "ts": "unix_millis(TIMESTAMP(event_time_ms))",
+                        "user_id": "user_id"
+                      },
+                      "timeColumn": "unix_millis(TIMESTAMP(event_time_ms))"
+                    },
+                    "table": "data.aws_exports_user_activities__0",
+                    "topic": "kafka://user-activities-v2/serde=custom/provider_class=ai.chronon.flink.deser.MockCustomSchemaProvider/schema_name=user-activities"
+                  }
+                },
+                "metaData": {
+                  "executionInfo": {
+                    "clusterConf": {
+                      "common": {
+                        "emr.config": "{\"releaseLabel\": \"emr-7.12.0\", \"instanceType\": \"m5.xlarge\", \"instanceCount\": 3, \"autoTerminationPolicy\": {\"idleTimeout\": 7200}, \"subnetName\": \"zipline-canary-subnet-main\", \"securityGroupName\": \"zipline-canary-sg\"}"
+                      }
+                    },
+                    "conf": {
+                      "common": {
+                        "spark.chronon.coalesce.factor": "10",
+                        "spark.chronon.partition.column": "ds",
+                        "spark.chronon.partition.format": "yyyy-MM-dd",
+                        "spark.chronon.table_write.format": "iceberg",
+                        "spark.chronon.table_write.upload.format": "ion",
+                        "spark.chronon.table_write.upload.location": "s3://zipline-warehouse-canary/data/ion_uploads/",
+                        "spark.default.parallelism": "10",
+                        "spark.driver.cores": "1",
+                        "spark.driver.memory": "1g",
+                        "spark.executor.cores": "1",
+                        "spark.executor.memory": "1g",
+                        "spark.hadoop.hive.metastore.client.factory.class": "com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                        "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                        "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+                        "spark.sql.catalog.spark_catalog.warehouse": "s3://zipline-warehouse-canary/data/tables/",
+                        "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                        "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                        "spark.sql.shuffle.partitions": "10",
+                        "taskmanager.memory.process.size": "4G"
+                      },
+                      "modeConfigs": {
+                        "backfill": {
+                          "spark.chronon.coalesce.factor": "10",
+                          "spark.chronon.partition.column": "ds",
+                          "spark.chronon.partition.format": "yyyy-MM-dd",
+                          "spark.chronon.table_write.format": "iceberg",
+                          "spark.chronon.table_write.upload.format": "ion",
+                          "spark.chronon.table_write.upload.location": "s3://zipline-warehouse-canary/data/ion_uploads/",
+                          "spark.default.parallelism": "10",
+                          "spark.driver.cores": "1",
+                          "spark.driver.memory": "1g",
+                          "spark.executor.cores": "1",
+                          "spark.executor.memory": "1g",
+                          "spark.hadoop.hive.metastore.client.factory.class": "com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+                          "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+                          "spark.sql.catalog.spark_catalog.warehouse": "s3://zipline-warehouse-canary/data/tables/",
+                          "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+                          "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+                          "spark.sql.shuffle.partitions": "10",
+                          "taskmanager.memory.process.size": "4G"
+                        }
+                      }
+                    },
+                    "env": {
+                      "common": {
+                        "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary-aws",
+                        "AWS_REGION": "us-west-2",
+                        "CHRONON_ONLINE_ARGS": " -Ztasks=1",
+                        "CLOUD_PROVIDER": "aws",
+                        "CUSTOMER_ID": "canary",
+                        "ENABLE_KINESIS": "true",
+                        "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+                        "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
+                        "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
+                        "FRONTEND_URL": "https://canary-aws.zipline.ai",
+                        "HUB_URL": "https://canary-orch-aws.zipline.ai",
+                        "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+                        "VERSION": "latest",
+                        "WAREHOUSE_PREFIX": "s3://zipline-warehouse-canary"
+                      },
+                      "modeEnvironments": {
+                        "upload": {
+                          "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary-aws",
+                          "AWS_REGION": "us-west-2",
+                          "CHRONON_ONLINE_ARGS": " -Ztasks=1",
+                          "CLOUD_PROVIDER": "aws",
+                          "CUSTOMER_ID": "canary",
+                          "ENABLE_KINESIS": "true",
+                          "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+                          "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
+                          "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
+                          "FRONTEND_URL": "https://canary-aws.zipline.ai",
+                          "HUB_URL": "https://canary-orch-aws.zipline.ai",
+                          "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+                          "VERSION": "latest",
+                          "WAREHOUSE_PREFIX": "s3://zipline-warehouse-canary"
+                        }
+                      }
+                    },
+                    "offlineSchedule": "@daily",
+                    "onlineSchedule": "@daily"
+                  },
+                  "name": "aws.demo_parent.parent_join__0",
+                  "online": 1,
+                  "outputNamespace": "data",
+                  "production": 0,
+                  "samplePercent": 100.0,
+                  "team": "aws",
+                  "version": "0"
+                },
+                "rowIds": [
+                  "event_id"
+                ],
+                "useLongNames": 0
+              },
+              "query": {
+                "selects": {
+                  "listing_id": "listing_id",
+                  "price_cents": "listing_id_price_cents",
+                  "user_id": "user_id"
+                },
+                "timeColumn": "ts"
+              }
+            }
+          }
+        ]
+      },
+      "useLongNames": 0
+    }
+  ],
+  "left": {
+    "events": {
+      "query": {
+        "selects": {
+          "listing_id": "listing_id",
+          "row_id": "event_id",
+          "ts": "unix_millis(TIMESTAMP(event_time_ms))",
+          "user_id": "user_id"
+        },
+        "timeColumn": "unix_millis(TIMESTAMP(event_time_ms))"
+      },
+      "table": "data.aws_exports_user_activities__0",
+      "topic": "kafka://user-activities-v2/serde=custom/provider_class=ai.chronon.flink.deser.MockCustomSchemaProvider/schema_name=user-activities"
+    }
+  },
+  "metaData": {
+    "columnHashes": {
+      "listing_id": "9c581c20ffbeac3eebf3395422444847",
+      "row_id": "cba9fe1d5c9102f200a5e83ad5e52a7a",
+      "ts": "f4b345f80a5c6a195363f36ce3a36d79",
+      "user_id": "dd9efd48a53433b894292d805f052703",
+      "user_id_price_cents_last100_7d": "3fc813a69e5409dcb620a9173e4d1141"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_aws_exports_user_activities__0_with_offset_0\", \"spec\": \"data.aws_exports_user_activities__0/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "clusterConf": {
+        "common": {
+          "emr.config": "{\"releaseLabel\": \"emr-7.12.0\", \"instanceType\": \"m5.xlarge\", \"instanceCount\": 3, \"autoTerminationPolicy\": {\"idleTimeout\": 7200}, \"subnetName\": \"zipline-canary-subnet-main\", \"securityGroupName\": \"zipline-canary-sg\"}"
+        }
+      },
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.chronon.partition.format": "yyyy-MM-dd",
+          "spark.chronon.table_write.format": "iceberg",
+          "spark.chronon.table_write.upload.format": "ion",
+          "spark.chronon.table_write.upload.location": "s3://zipline-warehouse-canary/data/ion_uploads/",
+          "spark.default.parallelism": "10",
+          "spark.driver.cores": "1",
+          "spark.driver.memory": "1g",
+          "spark.executor.cores": "1",
+          "spark.executor.memory": "1g",
+          "spark.hadoop.hive.metastore.client.factory.class": "com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+          "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+          "spark.sql.catalog.spark_catalog.warehouse": "s3://zipline-warehouse-canary/data/tables/",
+          "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+          "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+          "spark.sql.shuffle.partitions": "10",
+          "taskmanager.memory.process.size": "4G"
+        },
+        "modeConfigs": {
+          "backfill": {
+            "spark.chronon.coalesce.factor": "10",
+            "spark.chronon.partition.column": "ds",
+            "spark.chronon.partition.format": "yyyy-MM-dd",
+            "spark.chronon.table_write.format": "iceberg",
+            "spark.chronon.table_write.upload.format": "ion",
+            "spark.chronon.table_write.upload.location": "s3://zipline-warehouse-canary/data/ion_uploads/",
+            "spark.default.parallelism": "10",
+            "spark.driver.cores": "1",
+            "spark.driver.memory": "1g",
+            "spark.executor.cores": "1",
+            "spark.executor.memory": "1g",
+            "spark.hadoop.hive.metastore.client.factory.class": "com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+            "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkSessionCatalog",
+            "spark.sql.catalog.spark_catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+            "spark.sql.catalog.spark_catalog.warehouse": "s3://zipline-warehouse-canary/data/tables/",
+            "spark.sql.defaultUrlStreamHandlerFactory.enabled": "false",
+            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            "spark.sql.shuffle.partitions": "10",
+            "taskmanager.memory.process.size": "4G"
+          }
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary-aws",
+          "AWS_REGION": "us-west-2",
+          "CHRONON_ONLINE_ARGS": " -Ztasks=1",
+          "CLOUD_PROVIDER": "aws",
+          "CUSTOMER_ID": "canary",
+          "ENABLE_KINESIS": "true",
+          "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+          "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
+          "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
+          "FRONTEND_URL": "https://canary-aws.zipline.ai",
+          "HUB_URL": "https://canary-orch-aws.zipline.ai",
+          "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "s3://zipline-warehouse-canary"
+        },
+        "modeEnvironments": {
+          "upload": {
+            "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary-aws",
+            "AWS_REGION": "us-west-2",
+            "CHRONON_ONLINE_ARGS": " -Ztasks=1",
+            "CLOUD_PROVIDER": "aws",
+            "CUSTOMER_ID": "canary",
+            "ENABLE_KINESIS": "true",
+            "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+            "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
+            "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
+            "FRONTEND_URL": "https://canary-aws.zipline.ai",
+            "HUB_URL": "https://canary-orch-aws.zipline.ai",
+            "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3://zipline-warehouse-canary"
+          }
+        }
+      },
+      "offlineSchedule": "@daily",
+      "onlineSchedule": "@daily"
+    },
+    "name": "aws.demo_chaining.downstream_join__0",
+    "online": 1,
+    "outputNamespace": "data",
+    "production": 0,
+    "samplePercent": 100.0,
+    "sourceFile": "joins/aws/demo_chaining.py",
+    "team": "aws",
+    "version": "0"
+  },
+  "rowIds": [
+    "event_id"
+  ],
+  "useLongNames": 0
+}

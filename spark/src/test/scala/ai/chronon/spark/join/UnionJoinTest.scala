@@ -194,6 +194,79 @@ class UnionJoinTest extends BaseJoinTest {
     Math.abs(avgAmount7d - (amountSum7d.toDouble / amountCount7d)) should be < 0.001
   }
 
+  it should "preserve true left columns for rename-only join derivations" in {
+
+    val rightSchema = List(
+      Column("user_id", api.StringType, 3),
+      Column("listing_id", api.StringType, 5)
+    )
+
+    val rightTable = s"$namespace.rename_only_join_derivation_right"
+    DataFrameGen
+      .events(spark, rightSchema, count = 2000, partitions = 20)
+      .save(rightTable)
+
+    val rightSource = Builders.Source.events(
+      table = rightTable,
+      query = Builders.Query(
+        selects = Builders.Selects("listing_id"),
+        startPartition = tableUtils.partitionSpec.minus(today, new Window(14, TimeUnit.DAYS))
+      )
+    )
+
+    val listingByUser = Builders
+      .GroupBy(
+        sources = Seq(rightSource),
+        keyColumns = Seq("user_id"),
+        aggregations = Seq(
+          Builders.Aggregation(
+            operation = Operation.LAST,
+            inputColumn = "listing_id",
+            windows = Seq(new Window(7, TimeUnit.DAYS))
+          )
+        ),
+        metaData = Builders.MetaData(name = "unit_test.rename_only_listing_by_user", namespace = namespace)
+      )
+      .setAccuracy(Accuracy.TEMPORAL)
+
+    val leftTable = s"$namespace.rename_only_join_derivation_left"
+    DataFrameGen
+      .events(spark, List(Column("user_id", api.StringType, 3)), count = 500, partitions = 10)
+      .save(leftTable)
+
+    val start = tableUtils.partitionSpec.minus(today, new Window(14, TimeUnit.DAYS))
+    val dateRange = PartitionRange(start, today)(tableUtils.partitionSpec)
+
+    val joinConf = Builders.Join(
+      left = Builders.Source.events(
+        table = leftTable,
+        query = Builders.Query(startPartition = start)
+      ),
+      joinParts = Seq(Builders.JoinPart(groupBy = listingByUser).setUseLongNames(false)),
+      derivations = Seq(
+        Builders.Derivation(
+          name = "derived_listing_id",
+          expression = "user_id_listing_id_last_7d"
+        )
+      ),
+      metaData =
+        Builders.MetaData(name = "test.rename_only_join_derivation.union_join", namespace = namespace, team = "test")
+    )
+
+    UnionJoin.computeJoinAndSave(joinConf, dateRange)
+
+    val outputDf = tableUtils.loadTable(joinConf.metaData.outputTable)
+    val schema = outputDf.schema
+
+    schema.fieldNames should contain("ds")
+    schema.fieldNames should contain("ts")
+    schema.fieldNames should contain("user_id")
+    schema.fieldNames should contain("derived_listing_id")
+    schema.fieldNames should not contain("user_id_listing_id_last_7d")
+
+    outputDf.where("user_id IS NOT NULL and ts IS NOT NULL").count() should be > 0L
+  }
+
   it should "test UnionJoin schema with GB derivations" in {
 
     val namespace = "union_join_gb_derivation"

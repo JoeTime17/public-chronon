@@ -91,6 +91,5 @@ enriched_listings = Join(
 - The goal of chaining is to use output of a Join as input to downstream computations like GroupBy or a Join. As of today we support the case 1 and case 2 in future plan
     - Case 1: A Join output is the source of another GroupBy
     - Case 2: A Join output is the source of another Join – To be supported
-
-
+- Chaining GroupBys that use a `JoinSource` follow the same strict right boundary as other temporal event aggregations: events with the same timestamp as the query are excluded.
 

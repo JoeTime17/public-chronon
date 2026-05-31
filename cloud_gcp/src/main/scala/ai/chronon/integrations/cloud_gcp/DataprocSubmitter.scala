@@ -30,7 +30,6 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
                         clusterControllerClient: Option[ClusterControllerClient] = None,
                         rawStorageClient: Option[Storage] = None,
                         bigtableInstanceId: String = "",
-                        override val tablePartitionsDataset: String = "",
                         override val dqMetricsDataset: String = "",
                         flinkHealthCheckFn: Option[String] => Boolean = _ => true,
                         flinkInternalJobIdFetchFn: Option[String] => Option[String] = _ => None)
@@ -105,7 +104,8 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
     try {
       val job: Job = jobControllerClient.getJob(projectId, region, jobId)
 
-      val isFlinkJob = job.getTypeJobCase == Job.TypeJobCase.FLINK_JOB
+      val isFlinkJob =
+        job.getTypeJobCase == Job.TypeJobCase.FLINK_JOB || job.getLabelsMap.asScala.get(JobType).contains(FlinkJobType)
       lazy val isRunningAndHealthy =
         job.getStatus.getState == JobStatus.State.RUNNING && flinkHealthCheckFn(getFlinkUrl(jobId))
 
@@ -168,7 +168,7 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
           val jobType = job.getTypeJobCase match {
             case Job.TypeJobCase.SPARK_JOB => "spark"
             case Job.TypeJobCase.FLINK_JOB => "flink"
-            case _                         => "unknown"
+            case _                         => job.getLabelsMap.asScala.getOrElse(JobType, "unknown")
           }
 
           val tags = Map(
@@ -196,6 +196,7 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
                       jobProperties: Map[String, String],
                       files: List[String],
                       labels: Map[String, String],
+                      envVars: Map[String, String],
                       rawArgs: String*): String = {
     val args = JobSubmitter.getApplicationArgs(
       jobType = jobType,
@@ -212,10 +213,12 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
       .map(_.split(",").map(_.trim).filter(_.nonEmpty))
       .getOrElse(Array.empty)
 
+    val effectiveJobProperties = jobProperties ++ envVarsToSparkProperties(envVars)
+
     val jobBuilder = jobType match {
       case TypeSparkJob =>
         val jarUris = Array(jarUri) ++ additionalJars
-        buildSparkJob(mainClass, jarUris, files, jobProperties, args: _*)
+        buildSparkJob(mainClass, jarUris, files, effectiveJobProperties, args: _*)
       case TypeFlinkJob =>
         val mainJarUri =
           submissionProperties.getOrElse(FlinkMainJarURI,
@@ -227,14 +230,32 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
         val maybeFlinkJarsBasePath = submissionProperties.get(FlinkJarsUri)
         val maybePubSubConnectorJarUri = submissionProperties.get(FlinkPubSubConnectorJarURI)
         val jarUris = Array(jarUri) ++ maybePubSubConnectorJarUri.toList ++ additionalJars
-        buildFlinkJob(mainClass,
-                      mainJarUri,
-                      jarUris,
-                      flinkCheckpointPath,
-                      maybeSavepointUri,
-                      maybeFlinkJarsBasePath,
-                      jobProperties,
-                      (args :+ "--parent-job-id" :+ jobId): _*)
+        val flinkDeploymentMode = JobSubmitter
+          .getArgValue(rawArgs.toArray, FlinkDeploymentModeArgKeyword)
+          .getOrElse(FlinkDeploymentModeDefault)
+        val flinkArgs = (args :+ "--parent-job-id" :+ jobId)
+
+        flinkDeploymentMode match {
+          case FlinkDeploymentModeApplication =>
+            buildFlinkApplicationJob(mainClass,
+                                     mainJarUri,
+                                     jarUri,
+                                     jarUris,
+                                     flinkCheckpointPath,
+                                     maybeSavepointUri,
+                                     maybeFlinkJarsBasePath,
+                                     effectiveJobProperties,
+                                     flinkArgs: _*)
+          case _ =>
+            buildFlinkJob(mainClass,
+                          mainJarUri,
+                          jarUris,
+                          flinkCheckpointPath,
+                          maybeSavepointUri,
+                          maybeFlinkJarsBasePath,
+                          effectiveJobProperties,
+                          flinkArgs: _*)
+        }
     }
 
     val metadataName =
@@ -293,6 +314,50 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
     Job.newBuilder().setSparkJob(sparkJob)
   }
 
+  // JobManager is primarily responsible for coordinating the job (task slots, checkpoint triggering) and not much else
+  // so 4G should suffice.
+  // We go with 64G TM containers (4 task slots per container)
+  // Broadly Flink splits TM memory into:
+  // 1) Metaspace, framework offheap etc
+  // 2) Network buffers
+  // 3) Managed Memory (rocksdb)
+  // 4) JVM heap
+  // We tune down the network buffers to 1G-2G (default would be ~6.3G) and use some of the extra memory for
+  // managed mem + jvm heap
+  // Good doc - https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/memory/mem_setup_tm
+  private[cloud_gcp] def flinkEnvProps(flinkCheckpointUri: String): Map[String, String] =
+    Map(
+      "jobmanager.memory.process.size" -> "4G",
+      "taskmanager.memory.process.size" -> "64G",
+      "taskmanager.memory.network.min" -> "1G",
+      "taskmanager.memory.network.max" -> "2G",
+      // explicitly set the number of task slots as otherwise it defaults to the number of cores
+      // we go with multiple slots per TM as it allows us to squeeze more parallelism out of our resources
+      "taskmanager.numberOfTaskSlots" -> "4",
+      "taskmanager.memory.managed.fraction" -> "0.5f",
+      // default is 256m, we seem to be close to the limit so we give ourselves some headroom
+      "taskmanager.memory.jvm-metaspace.size" -> "512m",
+      // bump this a bit as Kafka and KV stores often need direct buffers
+      "taskmanager.memory.task.off-heap.size" -> "1G",
+      "yarn.classpath.include-user-jar" -> "FIRST",
+      "state.savepoints.dir" -> flinkCheckpointUri,
+      "state.checkpoints.dir" -> flinkCheckpointUri,
+      // override the local dir for rocksdb as the default ends up being too large file name size wise
+      "state.backend.rocksdb.localdir" -> "/tmp/flink-state",
+      "state.checkpoint-storage" -> "filesystem",
+      "rest.flamegraph.enabled" -> "true",
+      // wire up prometheus reporter - prom reporter plays well with Google ops agent that can be installed in DataProc
+      // as we can have a couple of containers on a given node, we use a port range
+      "metrics.reporters" -> "prom",
+      "metrics.reporter.prom.factory.class" -> "org.apache.flink.metrics.prometheus.PrometheusReporterFactory",
+      "metrics.reporter.prom.host" -> "localhost",
+      "metrics.reporter.prom.port" -> "9250-9260",
+      "metrics.reporter.statsd.interval" -> "60 SECONDS",
+      "state.backend.type" -> "rocksdb",
+      "state.backend.incremental" -> "true",
+      "state.checkpoints.num-retained" -> MaxRetainedCheckpoints
+    )
+
   private[cloud_gcp] def buildFlinkJob(mainClass: String,
                                        mainJarUri: String,
                                        jarUris: Array[String],
@@ -302,50 +367,7 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
                                        jobProperties: Map[String, String],
                                        args: String*): Job.Builder = {
 
-    // JobManager is primarily responsible for coordinating the job (task slots, checkpoint triggering) and not much else
-    // so 4G should suffice.
-    // We go with 64G TM containers (4 task slots per container)
-    // Broadly Flink splits TM memory into:
-    // 1) Metaspace, framework offheap etc
-    // 2) Network buffers
-    // 3) Managed Memory (rocksdb)
-    // 4) JVM heap
-    // We tune down the network buffers to 1G-2G (default would be ~6.3G) and use some of the extra memory for
-    // managed mem + jvm heap
-    // Good doc - https://nightlies.apache.org/flink/flink-docs-master/docs/deployment/memory/mem_setup_tm
-    val envProps =
-      Map(
-        "jobmanager.memory.process.size" -> "4G",
-        "taskmanager.memory.process.size" -> "64G",
-        "taskmanager.memory.network.min" -> "1G",
-        "taskmanager.memory.network.max" -> "2G",
-        // explicitly set the number of task slots as otherwise it defaults to the number of cores
-        // we go with multiple slots per TM as it allows us to squeeze more parallelism out of our resources
-        // this is something we can revisit if we update Spark settings in CatalystUtil as we occasionally see them being overridden
-        "taskmanager.numberOfTaskSlots" -> "4",
-        "taskmanager.memory.managed.fraction" -> "0.5f",
-        // default is 256m, we seem to be close to the limit so we give ourselves some headroom
-        "taskmanager.memory.jvm-metaspace.size" -> "512m",
-        // bump this a bit as Kafka and KV stores often need direct buffers
-        "taskmanager.memory.task.off-heap.size" -> "1G",
-        "yarn.classpath.include-user-jar" -> "FIRST",
-        "state.savepoints.dir" -> flinkCheckpointUri,
-        "state.checkpoints.dir" -> flinkCheckpointUri,
-        // override the local dir for rocksdb as the default ends up being too large file name size wise
-        "state.backend.rocksdb.localdir" -> "/tmp/flink-state",
-        "state.checkpoint-storage" -> "filesystem",
-        "rest.flamegraph.enabled" -> "true",
-        // wire up prometheus reporter - prom reporter plays well with Google ops agent that can be installed in DataProc
-        // as we can have a couple of containers on a given node, we use a port range
-        "metrics.reporters" -> "prom",
-        "metrics.reporter.prom.factory.class" -> "org.apache.flink.metrics.prometheus.PrometheusReporterFactory",
-        "metrics.reporter.prom.host" -> "localhost",
-        "metrics.reporter.prom.port" -> "9250-9260",
-        "metrics.reporter.statsd.interval" -> "60 SECONDS",
-        "state.backend.type" -> "rocksdb",
-        "state.backend.incremental" -> "true",
-        "state.checkpoints.num-retained" -> MaxRetainedCheckpoints
-      )
+    val envProps = flinkEnvProps(flinkCheckpointUri)
 
     val updatedJarUris = jarUris ++ DataprocAdditionalJars.additionalFlinkJobJars(maybeFlinkJarsBasePath)
 
@@ -366,6 +388,61 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
     Job
       .newBuilder()
       .setFlinkJob(updatedFlinkJobBuilder.build())
+  }
+
+  private[cloud_gcp] def buildFlinkApplicationJob(mainClass: String,
+                                                  mainJarUri: String,
+                                                  launcherJarUri: String,
+                                                  jarUris: Array[String],
+                                                  flinkCheckpointUri: String,
+                                                  maybeSavePointUri: Option[String],
+                                                  maybeFlinkJarsBasePath: Option[String],
+                                                  jobProperties: Map[String, String],
+                                                  args: String*): Job.Builder = {
+
+    val allProperties = flinkEnvProps(flinkCheckpointUri) ++ jobProperties
+
+    // Serialize Flink properties as launcher arguments
+    val launcherArgs = new scala.collection.mutable.ArrayBuffer[String]()
+    launcherArgs += "--flink-main-class"
+    launcherArgs += mainClass
+    launcherArgs += "--flink-main-jar"
+    launcherArgs += mainJarUri
+    launcherArgs += "--flink-checkpoint-uri"
+    launcherArgs += flinkCheckpointUri
+
+    allProperties.foreach { case (k, v) =>
+      launcherArgs += "--flink-property"
+      launcherArgs += s"$k=$v"
+    }
+
+    val updatedJarUris = jarUris ++ DataprocAdditionalJars.additionalFlinkJobJars(maybeFlinkJarsBasePath)
+    if (updatedJarUris.nonEmpty) {
+      launcherArgs += "--flink-jar-uris"
+      launcherArgs += updatedJarUris.mkString(",")
+    }
+
+    maybeSavePointUri.foreach { uri =>
+      launcherArgs += "--savepoint-uri"
+      launcherArgs += uri
+    }
+
+    // Pass application args for FlinkJob.main()
+    args.foreach { arg =>
+      launcherArgs += "--flink-arg"
+      launcherArgs += arg
+    }
+
+    val hadoopJob = HadoopJob
+      .newBuilder()
+      .setMainClass("ai.chronon.integrations.cloud_gcp.FlinkApplicationLauncher")
+      .addAllJarFileUris(Seq(launcherJarUri).asJava)
+      .addAllArgs(launcherArgs.toSeq.asJava)
+      .build()
+
+    Job
+      .newBuilder()
+      .setHadoopJob(hadoopJob)
   }
 
   private def jobReference(jobId: String): JobReference = {
@@ -441,7 +518,8 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
       jobProperties = maybeConf.getOrElse(JobSubmitter.getModeConfigProperties(args).getOrElse(Map.empty)),
       files = DataprocSubmitter.getDataprocFilesArgs(args),
       labels = labels,
-      args: _*
+      envVars = Map.empty,
+      rawArgs = args: _*
     )
     logger.info("Dataproc submitter job id: " + jobId)
     logger.info(

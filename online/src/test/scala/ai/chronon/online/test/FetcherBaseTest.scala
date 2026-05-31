@@ -17,7 +17,7 @@
 package ai.chronon.online.test
 
 import ai.chronon.aggregator.windowing.FinalBatchIr
-import ai.chronon.api.{MetaData, TimeUnit, Window}
+import ai.chronon.api.{Accuracy, Builders, GroupByServingInfo, MetaData, StringType, StructField, StructType, TimeUnit, Window}
 import ai.chronon.api.Extensions.{GroupByOps, WindowOps}
 import ai.chronon.online.fetcher.Fetcher.ColumnSpec
 import ai.chronon.online.fetcher.Fetcher.Request
@@ -26,6 +26,7 @@ import ai.chronon.online.fetcher.FetcherCache.BatchResponses
 import ai.chronon.online.KVStore.TimedValue
 import ai.chronon.online.fetcher.{FetchContext, GroupByFetcher, MetadataStore}
 import ai.chronon.online.{fetcher, _}
+import ai.chronon.online.serde.AvroConversions
 import org.junit.Assert.assertEquals
 import org.mockito.Answers
 import org.mockito.ArgumentCaptor
@@ -245,6 +246,101 @@ class FetcherBaseTest extends AnyFlatSpec with MockitoSugar with Matchers with M
 
     val result = baseFetcher.parseGroupByResponse("prefix_", request, response)
     result.keySet shouldBe Set(s"prefix${FetcherUtil.FeatureExceptionSuffix}")
+  }
+
+  it should "reuse one serving info lookup for cached selected key mappings" in {
+    val queryGroupBy: ai.chronon.api.GroupBy = Builders.GroupBy(
+      metaData = Builders.MetaData(name = "unit_test.query_group_by"),
+      keyColumns = Seq("query_normalized"),
+      accuracy = Accuracy.SNAPSHOT
+    )
+    val queryJoin: ai.chronon.api.Join = Builders.Join(
+      metaData = Builders.MetaData(name = "unit_test.query_join"),
+      left = Builders.Source.events(
+        query = Builders.Query(selects = Map("query_normalized" -> "lower(query)")),
+        table = "unit_test.queries"
+      ),
+      joinParts = Seq(
+        Builders.JoinPart(
+          groupBy = queryGroupBy,
+          keyMapping = Map("query_normalized" -> "query_normalized")
+        ))
+    )
+
+    val groupByServingInfo = new GroupByServingInfo()
+    groupByServingInfo.setGroupBy(queryGroupBy)
+    groupByServingInfo.setKeyAvroSchema(
+      AvroConversions.fromChrononSchema(StructType("Key", Array(StructField("query_normalized", StringType)))).toString)
+    groupByServingInfo.setInputAvroSchema(
+      AvroConversions.fromChrononSchema(StructType("Input", Array(StructField("query", StringType)))).toString)
+    val servingInfo = new GroupByServingInfoParsed(groupByServingInfo)
+
+    val ttlCache = mock[TTLCache[String, Try[GroupByServingInfoParsed]]]
+    doReturn(ttlCache).when(metadataStore).getGroupByServingInfo
+    doReturn(Success(servingInfo)).when(ttlCache).apply(queryGroupBy.metaData.name)
+    val joinCodec = metadataStore.buildJoinCodec(queryJoin, refreshOnFail = true)
+    clearInvocations(ttlCache)
+
+    doAnswer(new Answer[Future[Seq[Response]]] {
+      def answer(invocation: InvocationOnMock): Future[Seq[Response]] = {
+        val requests = invocation.getArgument(0).asInstanceOf[Seq[Request]]
+        Future.successful(requests.map(request => Response(request, Success(Map.empty))))
+      }
+    }).when(joinPartFetcher).fetchGroupBys(any())
+
+    Await.result(
+      joinPartFetcher.fetchJoins(
+        Seq(Request(queryJoin.metaData.name, Map("query" -> "SHOES"))),
+        Some(queryJoin),
+        joinName => Map(queryJoin.metaData.name -> Success(joinCodec)).get(joinName)
+      ),
+      1.second
+    )
+
+    val requestsCaptor = ArgumentCaptor.forClass(classOf[Seq[_]])
+    verify(joinPartFetcher).fetchGroupBys(requestsCaptor.capture().asInstanceOf[Seq[Request]])
+    val groupByRequest = requestsCaptor.getValue.asInstanceOf[Seq[Request]].head
+    groupByRequest.name shouldBe queryGroupBy.metaData.name
+    groupByRequest.keys shouldBe Map("query_normalized" -> "shoes")
+    verify(ttlCache, times(1)).apply(queryGroupBy.metaData.name)
+  }
+
+  it should "skip join codec lookup when join keys are direct" in {
+    val queryGroupBy: ai.chronon.api.GroupBy = Builders.GroupBy(
+      metaData = Builders.MetaData(name = "unit_test.direct_query_group_by"),
+      keyColumns = Seq("query"),
+      accuracy = Accuracy.SNAPSHOT
+    )
+    val queryJoin: ai.chronon.api.Join = Builders.Join(
+      metaData = Builders.MetaData(name = "unit_test.direct_query_join"),
+      joinParts = Seq(
+        Builders.JoinPart(
+          groupBy = queryGroupBy,
+          keyMapping = Map("query" -> "query")
+        ))
+    )
+
+    doAnswer(new Answer[Future[Seq[Response]]] {
+      def answer(invocation: InvocationOnMock): Future[Seq[Response]] = {
+        val requests = invocation.getArgument(0).asInstanceOf[Seq[Request]]
+        Future.successful(requests.map(request => Response(request, Success(Map.empty))))
+      }
+    }).when(joinPartFetcher).fetchGroupBys(any())
+
+    Await.result(
+      joinPartFetcher.fetchJoins(
+        Seq(Request(queryJoin.metaData.name, Map("query" -> "SHOES"))),
+        Some(queryJoin),
+        _ => fail("join codec should not be loaded for direct-key joins")
+      ),
+      1.second
+    )
+
+    val requestsCaptor = ArgumentCaptor.forClass(classOf[Seq[_]])
+    verify(joinPartFetcher).fetchGroupBys(requestsCaptor.capture().asInstanceOf[Seq[Request]])
+    val groupByRequest = requestsCaptor.getValue.asInstanceOf[Seq[Request]].head
+    groupByRequest.name shouldBe queryGroupBy.metaData.name
+    groupByRequest.keys shouldBe Map("query" -> "SHOES")
   }
 
   it should "check late batch data is handled correctly" in {

@@ -22,6 +22,7 @@ import ai.chronon.api.DataModel.EVENTS
 import ai.chronon.api.Extensions._
 import ai.chronon.api.ScalaJavaConversions._
 import ai.chronon.api.planner.JoinPlanner
+import ai.chronon.spark.batch.ModularMonolith
 import ai.chronon.spark.Extensions._
 import ai.chronon.spark.catalog.TableUtils
 import com.google.gson.Gson
@@ -37,6 +38,29 @@ import scala.jdk.CollectionConverters._
 
 object JoinUtils {
   @transient lazy val logger: Logger = LoggerFactory.getLogger(getClass)
+
+  def materializeJoin(joinConf: api.Join,
+                      endPartition: String,
+                      tableUtils: TableUtils,
+                      showDf: Boolean = false): String =
+    materializeJoin(joinConf, None, endPartition, tableUtils, showDf)
+
+  def materializeJoin(joinConf: api.Join,
+                      startPartition: Option[String],
+                      endPartition: String,
+                      tableUtils: TableUtils,
+                      showDf: Boolean): String = {
+    if (joinConf.hasSeparateDerivedOutput) {
+      val range = new api.DateRange()
+        .setStartDate(startPartition.getOrElse(endPartition))
+        .setEndDate(endPartition)
+      ModularMonolith.run(joinConf, range)(tableUtils)
+    } else {
+      new ai.chronon.spark.Join(joinConf, endPartition, tableUtils, showDf = showDf)
+        .computeJoin(overrideStartPartition = startPartition)
+    }
+    joinConf.finalOutputTable
+  }
 
   val set_add: UserDefinedFunction =
     udf((set: Seq[String], item: String) => {
@@ -67,26 +91,49 @@ object JoinUtils {
     * Util methods for join computation
     */
 
+  def materializeJoinSource(source: api.Source,
+                            endPartition: String,
+                            tableUtils: TableUtils,
+                            showDf: Boolean = false): api.Source =
+    materializeJoinSource(source, None, endPartition, tableUtils, showDf)
+
+  def materializeJoinSource(source: api.Source,
+                            startPartition: Option[String],
+                            endPartition: String,
+                            tableUtils: TableUtils,
+                            showDf: Boolean): api.Source = {
+    if (!source.isSetJoinSource) {
+      source
+    } else {
+      val joinSource = source.getJoinSource
+      logger.info(s"Materializing upstream join for chained left source: ${joinSource.join.metaData.name}")
+      val joinOutputTable = materializeJoin(joinSource.join, startPartition, endPartition, tableUtils, showDf)
+      joinSource.toDirectSource(joinOutputTable)
+    }
+  }
+
   def leftDf(joinConf: ai.chronon.api.Join,
              range: PartitionRange,
              tableUtils: TableUtils,
              allowEmpty: Boolean = false,
              limit: Option[Int] = None): Option[DataFrame] = {
 
-    val timeProjection = if (joinConf.left.dataModel == EVENTS) {
-      Seq(Constants.TimeColumn -> Option(joinConf.left.query).map(_.timeColumn).orNull)
+    val leftSource = joinConf.left
+
+    val timeProjection = if (leftSource.dataModel == EVENTS) {
+      Seq(Constants.TimeColumn -> Option(leftSource.query).map(_.timeColumn).orNull)
     } else {
       Seq()
     }
 
     implicit val tu: TableUtils = tableUtils
-    val effectiveLeftSpec = joinConf.left.query.partitionSpec(tableUtils.partitionSpec)
+    val effectiveLeftSpec = leftSource.query.partitionSpec(tableUtils.partitionSpec)
     val effectiveLeftRange = range.translate(effectiveLeftSpec)
 
     val partitionColumnOfLeft = effectiveLeftSpec.column
 
-    var df = tableUtils.scanDf(joinConf.left.query,
-                               joinConf.left.table,
+    var df = tableUtils.scanDf(leftSource.query,
+                               leftSource.table,
                                Some((Map(partitionColumnOfLeft -> null) ++ timeProjection).toMap),
                                range = Some(effectiveLeftRange))
 
@@ -131,7 +178,9 @@ object JoinUtils {
       tableUtils.firstAvailablePartition(leftSource.table,
                                          leftSpec,
                                          subPartitionFilters = leftSource.subPartitionFilters)
-    lazy val defaultLeftStart = Option(leftSource.query.startPartition)
+    val configuredStartPartition = Option(leftSource.query.startPartition)
+      .orElse(Option(leftSource.rootQuery).flatMap(query => Option(query.startPartition)))
+    lazy val defaultLeftStart = configuredStartPartition
       .getOrElse {
         require(
           firstAvailablePartitionOpt.isDefined,

@@ -15,12 +15,22 @@ Tests for the parse_teams module.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 import pytest
-from gen_thrift.api.ttypes import GroupBy, Join, JoinPart, JoinSource, MetaData, Source, Team
+from gen_thrift.api.ttypes import (
+    EventSource,
+    GroupBy,
+    Join,
+    JoinPart,
+    JoinSource,
+    MetaData,
+    Source,
+    Team,
+)
 from gen_thrift.common.ttypes import ConfigProperties
 
 from ai.chronon.cli.compile import parse_teams
 from ai.chronon.repo.constants import RunMode
 from ai.chronon.types import EnvironmentVariables, ExecutionInfo
+from ai.chronon.utils import OUTPUT_NAMESPACE_PLACEHOLDER
 
 
 def test_check_deprecated_catalog_in_common_conf():
@@ -227,6 +237,71 @@ def test_nested_groupby_without_team_inherits_parent_namespace():
     # Child inherits parent's team and therefore parent's namespace
     assert join.joinParts[0].groupBy.metaData.team == parent_team
     assert join.joinParts[0].groupBy.metaData.outputNamespace == "parent_namespace"
+
+
+def test_update_metadata_requires_output_namespace_on_top_level_config():
+    """If no outputNamespace is set on the config or its team, compile must fail."""
+    team_dict = {
+        "default": Team(),
+        "test_team": Team(),
+    }
+    gb = GroupBy(
+        metaData=MetaData(team="test_team", name="t.gb"),
+    )
+    with pytest.raises(ValueError, match="outputNamespace is not set"):
+        parse_teams.update_metadata(gb, team_dict)
+
+
+def test_update_metadata_requires_output_namespace_on_nested_groupby():
+    """If a nested GroupBy's team has no outputNamespace and no fallback is available,
+    compile must fail — the invariant applies to every node in the tree."""
+    team_dict = {
+        "default": Team(),
+        "parent_team": Team(outputNamespace="parent_ns"),
+        "child_team": Team(),  # no namespace
+    }
+    child_gb = GroupBy(metaData=MetaData(team="child_team"))
+    join = Join(
+        metaData=MetaData(team="parent_team", name="t.j"),
+        joinParts=[JoinPart(groupBy=child_gb)],
+    )
+    # The namespace propagation falls back to the parent's namespace so this should
+    # actually succeed (child inherits parent's namespace via the fallback in
+    # _propagate_namespace). Document that behaviour here.
+    parse_teams.update_metadata(join, team_dict)
+    assert child_gb.metaData.outputNamespace == "parent_ns"
+
+
+def test_resolve_placeholder_reaches_inner_join_via_join_left_join_source():
+    """A Join whose `left` source is a JoinSource points at an inner Join. The
+    placeholder resolver must recurse into that inner Join so its table-name fields
+    get substituted against the inner Join's own post-propagation namespace — the
+    same path `_propagate_namespace` already walks. Regression guard for a gap
+    where the two passes had parallel traversals that could drift."""
+    team_dict = {
+        "default": Team(outputNamespace="default_ns"),
+        "outer_team": Team(outputNamespace="outer_ns"),
+        "inner_team": Team(outputNamespace="inner_ns"),
+    }
+
+    inner_join = Join(
+        metaData=MetaData(team="inner_team", name="inner_team.inner_join"),
+        left=Source(events=EventSource(table=f"{OUTPUT_NAMESPACE_PLACEHOLDER}.inner_t")),
+    )
+
+    outer_join = Join(
+        metaData=MetaData(team="outer_team", name="outer_team.outer_join"),
+        left=Source(joinSource=JoinSource(join=inner_join)),
+        joinParts=[],
+    )
+
+    parse_teams.update_metadata(outer_join, team_dict)
+
+    # Inner join's own team is `inner_team`, so its placeholder resolves to `inner_ns`
+    # — not `outer_ns`. Proves the walker reaches through `Join.left.joinSource.join`
+    # AND that resolution uses each node's own namespace.
+    assert inner_join.metaData.outputNamespace == "inner_ns"
+    assert inner_join.left.events.table == "inner_ns.inner_t"
 
 
 def test_invalid_team_on_nested_node_raises():

@@ -1,4 +1,5 @@
 package ai.chronon.integrations.cloud_gcp
+import ai.chronon.spark.catalog.Format
 import com.google.cloud.bigquery.connector.common.BigQueryUtil
 import org.apache.spark.sql.SparkSession
 import com.google.cloud.bigquery.TableId
@@ -7,8 +8,8 @@ import org.apache.spark.sql.connector.catalog.Identifier
 object SparkBQUtils {
 
   def toTableId(tableName: String)(implicit spark: SparkSession): TableId = {
-    val parseIdentifier = spark.sessionState.sqlParser.parseMultipartIdentifier(tableName)
-    val shadedTid = BigQueryUtil.parseTableId(parseIdentifier.mkString("."))
+    val parts = Format.parseIdentifier(tableName)
+    val shadedTid = BigQueryUtil.parseTableId(parts.mkString("."))
     scala
       .Option(shadedTid.getProject)
       .map(TableId.of(_, shadedTid.getDataset, shadedTid.getTable))
@@ -16,8 +17,8 @@ object SparkBQUtils {
   }
 
   def toIdentifier(tableName: String)(implicit spark: SparkSession): Identifier = {
-    val parseIdentifier = spark.sessionState.sqlParser.parseMultipartIdentifier(tableName)
-    Identifier.of(parseIdentifier.init.toArray, parseIdentifier.last)
+    val parts = Format.parseIdentifier(tableName)
+    Identifier.of(parts.init.toArray, parts.last)
   }
 
   def toIdentifierNoCatalog(tableName: String)(implicit spark: SparkSession): Identifier = {

@@ -1,0 +1,214 @@
+{
+  "joinParts": [
+    {
+      "groupBy": {
+        "keyColumns": [
+          "listing_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "brief_description": "3c179cccf0a9f57fda2fdfe3085a239f",
+            "currency": "8477ea4ad6b46f96255ce0905dfed26d",
+            "headline": "6bf685e11e97f4863d36fa953b964800",
+            "inventory_count": "9d63ce6eddf70502ad498603ec8b18b3",
+            "is_active": "9c9adf7999f230fc316c491f829b12d0",
+            "is_expensive": "255e0f554c8337c87a2a7f0b799c8d4b",
+            "is_in_stock": "80d7c029ebb919cfa22a82600ae3a3e1",
+            "listing_id": "e1d191582f23aad87ee1f5422600051f",
+            "long_description": "f3f74af9625f16c5d935e96d96e08698",
+            "main_image_path": "3ff96284663e8d05ad728b37f6acf122",
+            "merchant_id": "56b9c531a57e6d3f5320b72df8d63521",
+            "price_cents": "7be4ba1e811c96c5a4e5023ce1e05c38",
+            "primary_category": "d6beb0afb36cada1f65a9b1acdb5b995",
+            "secondary_image_paths": "de717ca6563464c24d63f8473a75ef85",
+            "tags": "f9ead5f03020ff66ff14e98fec19a774",
+            "weight_grams": "ac84b5b0b11dca76306214d5d2f12fa9"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.coalesce.factor": "10",
+                "spark.chronon.partition.column": "ds",
+                "spark.chronon.partition.format": "yyyy-MM-dd",
+                "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_azure.AzureFormatProvider",
+                "spark.chronon.table_write.format": "iceberg",
+                "spark.default.parallelism": "10",
+                "spark.driver.cores": "1",
+                "spark.driver.memory": "4g",
+                "spark.driver.memoryOverhead": "1g",
+                "spark.executor.cores": "1",
+                "spark.executor.memory": "512m",
+                "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkCatalog",
+                "spark.sql.catalog.spark_catalog.credential": "{OC_CREDENTIAL}",
+                "spark.sql.catalog.spark_catalog.header.X-Iceberg-Access-Delegation": "vended-credentials",
+                "spark.sql.catalog.spark_catalog.scope": "PRINCIPAL_ROLE:engine",
+                "spark.sql.catalog.spark_catalog.type": "rest",
+                "spark.sql.catalog.spark_catalog.uri": "https://vejlulx-azure-oc.snowflakecomputing.com/polaris/api/catalog",
+                "spark.sql.catalog.spark_catalog.warehouse": "demo-v2",
+                "spark.sql.shuffle.partitions": "10",
+                "taskmanager.memory.process.size": "4G"
+              }
+            },
+            "env": {
+              "common": {
+                "ARTIFACT_PREFIX": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net",
+                "AUTH_SCOPE": "api://dev-zipline-auth",
+                "CHRONON_ONLINE_ARGS": " -Ztasks=1 -Zbootstrap=zipline-demo-events.servicebus.windows.net:9093",
+                "CLOUD_PROVIDER": "azure",
+                "CUSTOMER_ID": "dev",
+                "EVAL_URL": "https://dev-azure.zipline.ai/services/eval",
+                "FLINK_JARS_URI": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/spark-3.5.3/libs/",
+                "FLINK_SASL_JAAS_CONFIG_VAULT_URI": "https://eventhub-sasl-jaas.vault.azure.net/secrets/sasl-jass-config",
+                "FLINK_STATE_URI": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net/flink-state",
+                "FRONTEND_URL": "https://dev-azure.zipline.ai",
+                "HUB_URL": "https://dev-orch-azure.zipline.ai",
+                "OC_CREDENTIAL_VAULT_URI": "https://dev-zipline-secrets.vault.azure.net/secrets/oc-catalog-credential",
+                "SNOWFLAKE_JDBC_URL": "jdbc:snowflake://VEJLULX-AZURE.snowflakecomputing.com/?user=demo_batch_service&db=Demo&schema=public&warehouse=demo_wh",
+                "SNOWFLAKE_PRIVATE_KEY_VAULT_URI": "https://demo-service-writer-pkey.vault.azure.net/secrets/snowflake-private-key",
+                "SPARK_CLUSTER_NAME": "http://dev-zipline-kyuubi.westus.cloudapp.azure.com:10099",
+                "VERSION": "latest",
+                "WAREHOUSE_PREFIX": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net"
+              }
+            },
+            "historicalBackfill": 0,
+            "onlineSchedule": "@daily"
+          },
+          "name": "azure.dim_listings.v3",
+          "online": 1,
+          "outputNamespace": "data",
+          "team": "azure"
+        },
+        "sources": [
+          {
+            "entities": {
+              "query": {
+                "selects": {
+                  "brief_description": "brief_description",
+                  "currency": "currency",
+                  "headline": "headline",
+                  "inventory_count": "inventory_count",
+                  "is_active": "is_active",
+                  "is_expensive": "IF(price_cents > 10000, 1, 0)",
+                  "is_in_stock": "IF(inventory_count > 0, 1, 0)",
+                  "listing_id": "CAST(listing_id AS INT)",
+                  "long_description": "long_description",
+                  "main_image_path": "main_image_path",
+                  "merchant_id": "merchant_id",
+                  "price_cents": "price_cents",
+                  "primary_category": "primary_category",
+                  "secondary_image_paths": "secondary_image_paths",
+                  "tags": "tags",
+                  "weight_grams": "weight_grams"
+                },
+                "startPartition": "2025-01-01"
+              },
+              "snapshotTable": "data.azure_exports_dim_listings__0"
+            }
+          }
+        ]
+      },
+      "useLongNames": 0
+    }
+  ],
+  "left": {
+    "events": {
+      "query": {
+        "selects": {
+          "listing_id": "listing_id",
+          "row_id": "event_id",
+          "ts": "unix_millis(TIMESTAMP(event_time_ms))",
+          "user_id": "user_id"
+        },
+        "timeColumn": "unix_millis(TIMESTAMP(event_time_ms))"
+      },
+      "table": "data.azure_exports_user_activities__0",
+      "topic": "pubsub://user-activities-v2/project=canary-443022/subscription=user-activities-v2-sub/serde=pubsub_schema/schemaId=user-activities"
+    }
+  },
+  "metaData": {
+    "columnHashes": {
+      "listing_id": "a781ec55d64e705d8ce51d0c587b40e2",
+      "listing_id_brief_description": "b96d5becf2658a66afe8c8a0e9b9f2d5",
+      "listing_id_currency": "45826e45199d48668b21465ff002c2d8",
+      "listing_id_headline": "a1769b8d92ae9b95f2c6446ac41b8229",
+      "listing_id_inventory_count": "986aed22f9c8471e18edce1e828d290a",
+      "listing_id_is_active": "27f958bac2b8eabb23551bf8221a1401",
+      "listing_id_is_expensive": "9acfbac83a11c5d91dc2d1004f85156a",
+      "listing_id_is_in_stock": "4cce091dcbd28805c474bcda0092dce5",
+      "listing_id_listing_id": "1300f351e6450538a6a18b6faa422fc1",
+      "listing_id_long_description": "5d8f289cc48193c21b584ebaa224f6e8",
+      "listing_id_main_image_path": "99ca3d1632007760b2161e57bf9a67ac",
+      "listing_id_merchant_id": "eb1873d87e1f53a6faee6ba43adef019",
+      "listing_id_price_cents": "ef37b2a77b73b56083739233e5c92c35",
+      "listing_id_primary_category": "e10b1e53275e0cd7b1214c8f5778c0b0",
+      "listing_id_secondary_image_paths": "7c400bbaf41234338820447d2074d757",
+      "listing_id_tags": "ddc35d6e9b8ae3b0948a3c083485dc8d",
+      "listing_id_weight_grams": "9ad552c5fceef5c31116f090b6175924",
+      "row_id": "a815aba076a56303f2c896256f1ba0ff",
+      "ts": "32cfb4df811008307e03612be49442ec",
+      "user_id": "275e18a643e12228f787cd9a9b03eaed"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_azure_exports_user_activities__0_with_offset_0\", \"spec\": \"data.azure_exports_user_activities__0/ds={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_data_azure_exports_dim_listings__0_with_offset_0\", \"spec\": \"data.azure_exports_dim_listings__0/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.chronon.partition.format": "yyyy-MM-dd",
+          "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_azure.AzureFormatProvider",
+          "spark.chronon.table_write.format": "iceberg",
+          "spark.default.parallelism": "10",
+          "spark.driver.cores": "1",
+          "spark.driver.memory": "4g",
+          "spark.driver.memoryOverhead": "1g",
+          "spark.executor.cores": "1",
+          "spark.executor.memory": "512m",
+          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkCatalog",
+          "spark.sql.catalog.spark_catalog.credential": "{OC_CREDENTIAL}",
+          "spark.sql.catalog.spark_catalog.header.X-Iceberg-Access-Delegation": "vended-credentials",
+          "spark.sql.catalog.spark_catalog.scope": "PRINCIPAL_ROLE:engine",
+          "spark.sql.catalog.spark_catalog.type": "rest",
+          "spark.sql.catalog.spark_catalog.uri": "https://vejlulx-azure-oc.snowflakecomputing.com/polaris/api/catalog",
+          "spark.sql.catalog.spark_catalog.warehouse": "demo-v2",
+          "spark.sql.shuffle.partitions": "10",
+          "taskmanager.memory.process.size": "4G"
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net",
+          "AUTH_SCOPE": "api://dev-zipline-auth",
+          "CHRONON_ONLINE_ARGS": " -Ztasks=1 -Zbootstrap=zipline-demo-events.servicebus.windows.net:9093",
+          "CLOUD_PROVIDER": "azure",
+          "CUSTOMER_ID": "dev",
+          "EVAL_URL": "https://dev-azure.zipline.ai/services/eval",
+          "FLINK_JARS_URI": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/spark-3.5.3/libs/",
+          "FLINK_SASL_JAAS_CONFIG_VAULT_URI": "https://eventhub-sasl-jaas.vault.azure.net/secrets/sasl-jass-config",
+          "FLINK_STATE_URI": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net/flink-state",
+          "FRONTEND_URL": "https://dev-azure.zipline.ai",
+          "HUB_URL": "https://dev-orch-azure.zipline.ai",
+          "OC_CREDENTIAL_VAULT_URI": "https://dev-zipline-secrets.vault.azure.net/secrets/oc-catalog-credential",
+          "SNOWFLAKE_JDBC_URL": "jdbc:snowflake://VEJLULX-AZURE.snowflakecomputing.com/?user=demo_batch_service&db=Demo&schema=public&warehouse=demo_wh",
+          "SNOWFLAKE_PRIVATE_KEY_VAULT_URI": "https://demo-service-writer-pkey.vault.azure.net/secrets/snowflake-private-key",
+          "SPARK_CLUSTER_NAME": "http://dev-zipline-kyuubi.westus.cloudapp.azure.com:10099",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net"
+        }
+      },
+      "offlineSchedule": "17 0 * * *",
+      "onlineSchedule": "@daily"
+    },
+    "name": "azure.demo_parent.parent_join__0",
+    "online": 1,
+    "outputNamespace": "data",
+    "production": 0,
+    "samplePercent": 100.0,
+    "sourceFile": "joins/azure/demo_parent.py",
+    "team": "azure",
+    "version": "0"
+  },
+  "rowIds": [
+    "event_id"
+  ],
+  "useLongNames": 0
+}

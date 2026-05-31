@@ -41,9 +41,9 @@ class NaiveAggregator(aggregator: RowAggregator,
         for (col <- aggregator.indices) {
 
           val windowStart = TsUtils.round(queryTime - windows(col).millis, tailHops(col))
+          val windowEnd = TsUtils.round(queryTime, headRoundingMillis)
 
-          // Use <= for inclusive temporal window boundary [T-window, T]
-          if (windowStart <= inputRow.ts && inputRow.ts <= TsUtils.round(queryTime, headRoundingMillis)) {
+          if (windowStart <= inputRow.ts && inputRow.ts < windowEnd) {
             aggregator.columnAggregators(col).update(results(endTimeIndex), inputRow)
           }
         }

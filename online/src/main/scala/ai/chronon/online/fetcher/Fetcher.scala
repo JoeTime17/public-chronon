@@ -25,6 +25,8 @@ import ai.chronon.online._
 import ai.chronon.online.fetcher.Fetcher.{
   AvroResponseValue,
   BaseResponse,
+  GroupBySchemaResponse,
+  GroupByStatusResponse,
   JoinSchemaResponse,
   Request,
   Response,
@@ -144,6 +146,21 @@ object Fetcher {
                                 valueSchema: String,
                                 schemaHash: String,
                                 valueInfos: Array[JoinCodec.ValueInfo])
+
+  /** Response for a groupBy schema request. The inputSchema and selectedSchema fields are both returned to show schema
+    * shape before and after select expressions, alongside groupByName, keySchema, and valueSchema.
+    */
+  case class GroupBySchemaResponse(groupByName: String,
+                                   keySchema: String,
+                                   valueSchema: String,
+                                   inputSchema: String,
+                                   selectedSchema: String)
+
+  /** Response for a groupBy status request.
+    * @param groupByName - Name of the groupBy
+    * @param batchEndDate - Date through which batch upload data is available in the KV store
+    */
+  case class GroupByStatusResponse(groupByName: String, batchEndDate: String)
 }
 
 private[online] case class FetcherResponseWithTs[T <: BaseResponse](responses: Seq[T], endTs: Long)
@@ -159,12 +176,22 @@ class Fetcher(val kvStore: KVStore,
               callerName: String = null,
               flagStore: FlagStore = null,
               disableErrorThrows: Boolean = false,
-              executionContextOverride: ExecutionContext = null) {
+              executionContextOverride: ExecutionContext = null,
+              joinConfTtlMillis: Long = TTLCache.DefaultTtlMillis,
+              joinCodecTtlMillis: Long = TTLCache.DefaultTtlMillis) {
 
   @transient implicit lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
   private val fetchContext: FetchContext =
-    FetchContext(kvStore, metaDataSet, timeoutMillis, debug, flagStore, disableErrorThrows, executionContextOverride)
+    FetchContext(kvStore,
+                 metaDataSet,
+                 timeoutMillis,
+                 debug,
+                 flagStore,
+                 disableErrorThrows,
+                 executionContextOverride,
+                 joinConfTtlMillis,
+                 joinCodecTtlMillis)
 
   implicit private val executionContext: ExecutionContext = fetchContext.getOrCreateExecutionContext
   val metadataStore: MetadataStore = new MetadataStore(fetchContext)
@@ -173,6 +200,26 @@ class Fetcher(val kvStore: KVStore,
   lazy val joinCodecCache: TTLCache[String, Try[JoinCodec]] = metadataStore.buildJoinCodecCache(
     Some(logControlEvent)
   )
+
+  private class JoinConfCacheKey(val joinName: String, val confHash: String, val join: api.Join) {
+    override def equals(obj: Any): Boolean = obj match {
+      case other: JoinConfCacheKey => joinName == other.joinName && confHash == other.confHash
+      case _                       => false
+    }
+
+    override def hashCode(): Int = (joinName, confHash).hashCode()
+  }
+
+  private lazy val joinConfCodecCache: TTLCache[JoinConfCacheKey, Try[JoinCodec]] =
+    new TTLCache[JoinConfCacheKey, Try[JoinCodec]](
+      cacheKey => Try(metadataStore.buildJoinCodec(cacheKey.join, refreshOnFail = true)),
+      cacheKey => Metrics.Context(environment = "join.codec.fetch", join = cacheKey.joinName),
+      ttlMillis = fetchContext.joinCodecTtlMillis
+    )
+
+  private def joinConfCacheKey(join: api.Join): JoinConfCacheKey =
+    new JoinConfCacheKey(join.metaData.getName, ThriftJsonCodec.md5Digest(join), join)
+
   // Generic withTs method that works with any TimestampableResponse
   private[online] def withTs[T <: BaseResponse](responses: Future[Seq[T]]): Future[FetcherResponseWithTs[T]] = {
     responses.map { response =>
@@ -186,7 +233,15 @@ class Fetcher(val kvStore: KVStore,
 
   def fetchJoin(requests: Seq[Request], joinConf: Option[api.Join] = None): Future[Seq[Response]] = {
     val ts = System.currentTimeMillis()
-    val internalResponsesF = joinPartFetcher.fetchJoins(requests, joinConf)
+    val cachedJoinCodecsByName = mutable.Map.empty[String, Try[JoinCodec]]
+    val joinCodecForName: String => Option[Try[JoinCodec]] = joinConf match {
+      case Some(join) =>
+        lazy val codecTry = joinConfCodecCache(joinConfCacheKey(join))
+        _ => Some(codecTry)
+      case None =>
+        joinName => Some(cachedJoinCodecsByName.getOrElseUpdate(joinName, joinCodecCache(joinName)))
+    }
+    val internalResponsesF = joinPartFetcher.fetchJoins(requests, joinConf, joinCodecForName)
     val externalResponsesF = fetchExternal(requests)
     val combinedResponsesF =
       internalResponsesF.zip(externalResponsesF).map { case (internalResponses, externalResponses) =>
@@ -629,6 +684,8 @@ class Fetcher(val kvStore: KVStore,
           .onlineExternalParts // cheap since it is cached, valid since step-1
 
       parts.iterator().asScala.map { part =>
+        // Selected left-key derivation is currently scoped to internal GroupBy join parts. External parts retain the
+        // existing keyMapping behavior and require callers to provide any selected aliases used as external keys.
         val externalRequest = Try(part.applyMapping(joinRequest.keys)) match {
           case Success(mappedKeys)                     => Left(Request(part.source.metadata.name, mappedKeys))
           case Failure(exception: KeyMissingException) => Right(exception)
@@ -728,6 +785,70 @@ class Fetcher(val kvStore: KVStore,
       }
 
     joinSchemaResponse
+  }
+
+  def fetchGroupBySchema(groupByName: String): Try[GroupBySchemaResponse] = {
+    val startTime = System.currentTimeMillis()
+    val ctx =
+      Metrics.Context(Metrics.Environment.MetaDataFetching, groupBy = groupByName).withSuffix("group_by_schema")
+
+    val groupByConfTry = metadataStore.getConf[api.GroupBy](ConfPathOrName(confName = Some(groupByName)))
+
+    groupByConfTry
+      .flatMap { groupByConf =>
+        if (!groupByConf.metaData.online) {
+          Failure(
+            new IllegalArgumentException(
+              s"GroupBy $groupByName is not online. Fetcher schema is only available for online GroupBys. " +
+                "Use the Iceberg catalog schema via eval for the offline table schema, or enable online=True and upload the GroupBy."))
+        } else {
+          metadataStore.getGroupByServingInfo(groupByName)
+        }
+      }
+      .map { servingInfo =>
+        val response = GroupBySchemaResponse(groupByName,
+                                             servingInfo.keyAvroSchema,
+                                             servingInfo.responseAvroSchema,
+                                             servingInfo.inputAvroSchema,
+                                             servingInfo.selectedAvroSchema)
+        ctx.distribution(Metrics.Name.LatencyMillis, System.currentTimeMillis() - startTime)
+        response
+      }
+      .recover { case exception =>
+        logger.error(s"Failed to fetch groupBy schema for $groupByName", exception)
+        ctx.incrementException(exception)
+        throw exception
+      }
+  }
+
+  def fetchGroupByStatus(groupByName: String): Try[GroupByStatusResponse] = {
+    val startTime = System.currentTimeMillis()
+    val ctx =
+      Metrics.Context(Metrics.Environment.MetaDataFetching, groupBy = groupByName).withSuffix("group_by_status")
+
+    val groupByConfTry = metadataStore.getConf[api.GroupBy](ConfPathOrName(confName = Some(groupByName)))
+
+    groupByConfTry
+      .flatMap { groupByConf =>
+        if (!groupByConf.metaData.online) {
+          Failure(
+            new IllegalArgumentException(
+              s"GroupBy $groupByName is not online. Fetcher status is only available for online GroupBys. " +
+                "Enable online=True and upload the GroupBy."))
+        } else {
+          metadataStore.getGroupByServingInfo(groupByName)
+        }
+      }
+      .map { servingInfo =>
+        val response = GroupByStatusResponse(groupByName, servingInfo.batchEndDate)
+        ctx.distribution(Metrics.Name.LatencyMillis, System.currentTimeMillis() - startTime)
+        response
+      }
+      .recover { case exception =>
+        logger.error(s"Failed to fetch groupBy status for $groupByName", exception)
+        ctx.incrementException(exception)
+        throw exception
+      }
   }
 
   private def logControlEvent(encTry: Try[JoinCodec]): Unit = {

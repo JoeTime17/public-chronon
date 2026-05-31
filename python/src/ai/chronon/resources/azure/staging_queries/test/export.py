@@ -17,6 +17,6 @@ v1 = StagingQuery(
     engine_type=EngineType.SNOWFLAKE,
     dependencies=[
         # Your table must be partitioned by a time-based column.
-        TableDependency(table=table_name, partition_column=partition_column, offset=0),
+        TableDependency(table=table_name, partition_column=partition_column, start_offset=0, end_offset=0),
     ],
 )

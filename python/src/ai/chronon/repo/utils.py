@@ -307,17 +307,11 @@ def read_from_blob_store(remote_uri: str) -> str | None:
                     return None
                 LOG.warning(f"S3 ClientError reading {remote_uri}: {e}")
                 raise
-        elif "blob.core.windows.net" in remote_uri:
-            from urllib.parse import urlparse
-
+        elif remote_uri.startswith("abfss://") or "blob.core.windows.net" in remote_uri:
             from azure.identity import DefaultAzureCredential
             from azure.storage.blob import BlobServiceClient
 
-            parsed = urlparse(remote_uri)
-            account_url = f"{parsed.scheme}://{parsed.netloc}"
-            path_parts = parsed.path.lstrip("/").split("/", 1)
-            container = path_parts[0]
-            blob_name = path_parts[1] if len(path_parts) > 1 else ""
+            account_url, container, blob_name = _parse_azure_uri(remote_uri)
             blob_service = BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
             blob_client = blob_service.get_blob_client(container=container, blob=blob_name)
             return blob_client.download_blob().readall().decode("utf-8")
@@ -360,16 +354,14 @@ def download_from_blob_store(remote_uri: str, local_path: str) -> None:
     LOG.info(f"Downloaded {remote_uri} -> {local_path}")
 
 
-def _download_from_azure_blob(remote_uri: str, local_path: str) -> None:
-    from azure.identity import DefaultAzureCredential
-    from azure.storage.blob import BlobServiceClient
-
+def _parse_azure_uri(remote_uri: str):
+    """Parse an Azure URI (abfss:// or https://blob.core.windows.net) into (account_url, container, blob_name)."""
     if remote_uri.startswith("abfss://"):
         # abfss://container@account.dfs.core.windows.net/path
         without_scheme = remote_uri[len("abfss://"):]
         container, rest = without_scheme.split("@", 1)
         host, blob_name = rest.split("/", 1)
-        # Convert dfs.core.windows.net to blob.core.windows.net for the SDK
+        # BlobServiceClient works against the blob endpoint even for ADLS Gen2 accounts
         account_url = f"https://{host.replace('.dfs.core.windows.net', '.blob.core.windows.net')}"
     else:
         from urllib.parse import urlparse
@@ -378,7 +370,14 @@ def _download_from_azure_blob(remote_uri: str, local_path: str) -> None:
         path_parts = parsed.path.lstrip("/").split("/", 1)
         container = path_parts[0]
         blob_name = path_parts[1] if len(path_parts) > 1 else ""
+    return account_url, container, blob_name
 
+
+def _download_from_azure_blob(remote_uri: str, local_path: str) -> None:
+    from azure.identity import DefaultAzureCredential
+    from azure.storage.blob import BlobServiceClient
+
+    account_url, container, blob_name = _parse_azure_uri(remote_uri)
     blob_service = BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
     blob_client = blob_service.get_blob_client(container=container, blob=blob_name)
     with open(local_path, "wb") as f:
@@ -394,7 +393,7 @@ def upload_to_blob_store(local_path: str, remote_uri: str) -> str:
         return _upload_to_gcs(local_path, remote_uri)
     elif remote_uri.startswith("s3://"):
         return _upload_to_s3(local_path, remote_uri)
-    elif "blob.core.windows.net" in remote_uri:
+    elif remote_uri.startswith("abfss://") or "blob.core.windows.net" in remote_uri:
         return _upload_to_azure_blob(local_path, remote_uri)
     else:
         # Local filesystem path
@@ -428,16 +427,10 @@ def _upload_to_s3(local_path: str, s3_uri: str) -> str:
 
 
 def _upload_to_azure_blob(local_path: str, azure_uri: str) -> str:
-    from urllib.parse import urlparse
-
     from azure.identity import DefaultAzureCredential
     from azure.storage.blob import BlobServiceClient
 
-    parsed = urlparse(azure_uri)
-    account_url = f"{parsed.scheme}://{parsed.netloc}"
-    path_parts = parsed.path.lstrip("/").split("/", 1)
-    container = path_parts[0]
-    blob_name = path_parts[1] if len(path_parts) > 1 else ""
+    account_url, container, blob_name = _parse_azure_uri(azure_uri)
     blob_service = BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
     blob_client = blob_service.get_blob_client(container=container, blob=blob_name)
     with open(local_path, "rb") as f:
@@ -532,17 +525,11 @@ def blob_exists(remote_uri: str) -> bool:
                     return False
                 LOG.warning(f"S3 error checking existence of {remote_uri}: {e}")
                 return False
-        elif "blob.core.windows.net" in remote_uri:
-            from urllib.parse import urlparse
-
+        elif remote_uri.startswith("abfss://") or "blob.core.windows.net" in remote_uri:
             from azure.identity import DefaultAzureCredential
             from azure.storage.blob import BlobServiceClient
 
-            parsed = urlparse(remote_uri)
-            account_url = f"{parsed.scheme}://{parsed.netloc}"
-            path_parts = parsed.path.lstrip("/").split("/", 1)
-            container = path_parts[0]
-            blob_name = path_parts[1] if len(path_parts) > 1 else ""
+            account_url, container, blob_name = _parse_azure_uri(remote_uri)
             blob_service = BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
             blob_client = blob_service.get_blob_client(container=container, blob=blob_name)
             return blob_client.exists()

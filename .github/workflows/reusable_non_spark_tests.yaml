@@ -24,10 +24,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Flink tests
         run: |
@@ -45,10 +45,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Aggregator tests
         run: |
@@ -66,10 +66,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Online tests
         run: |
@@ -87,10 +87,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run api tests
         run: |
@@ -108,10 +108,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run service tests
         run: |
@@ -129,10 +129,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run service_commons tests
         run: |
@@ -150,10 +150,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run cloud gcp tests
         run: |
@@ -171,10 +171,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run cloud aws tests
         run: |
@@ -192,10 +192,10 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run cloud k8s tests
         run: |

@@ -3,6 +3,9 @@ package ai.chronon.integrations.cloud_azure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
+
 class SnowflakeConnectorTest extends AnyFlatSpec with Matchers {
 
   private val sampleJdbcUrl =
@@ -56,6 +59,12 @@ class SnowflakeConnectorTest extends AnyFlatSpec with Matchers {
     opts("sfSchema") shouldBe "PUBLIC"
     opts("sfWarehouse") shouldBe "WH"
     opts("tracing") shouldBe "all"
+    // Driver log redirect — CLIENT_CONFIG_FILE points at a writable tmpdir path and
+    // the same path is exposed via SF_CLIENT_CONFIG_FILE as a system property for
+    // driver versions that prefer that lookup.
+    val cfgPath = opts("CLIENT_CONFIG_FILE")
+    cfgPath should include(System.getProperty("java.io.tmpdir"))
+    System.getProperty("SF_CLIENT_CONFIG_FILE") shouldBe cfgPath
   }
 
   it should "throw when a required JDBC param is missing" in {
@@ -92,6 +101,62 @@ class SnowflakeConnectorTest extends AnyFlatSpec with Matchers {
       SnowflakeConnector.validateJdbcUrl("https://account.snowflakecomputing.com/")
     }
     ex.getMessage should include("jdbc:snowflake://")
+  }
+
+  // --- SF_CLIENT_CONFIG_FILE log redirect ---
+
+  private def invokeOptions(): Map[String, String] =
+    SnowflakeConnector.buildSparkConnectorOptions(sampleJdbcUrl, "-----BEGIN KEY-----\nAA\n-----END KEY-----")
+
+  "SF client config redirect" should "include CLIENT_CONFIG_FILE in connector options" in {
+    val opts = invokeOptions()
+    opts.keys should contain("CLIENT_CONFIG_FILE")
+  }
+
+  it should "write a unique sf_client_config-*.json file under java.io.tmpdir" in {
+    val opts = invokeOptions()
+    val cfgPath = Paths.get(opts("CLIENT_CONFIG_FILE"))
+    // Normalize — java.io.tmpdir can carry a trailing slash that
+    // Paths.get(...).toString strips.
+    val tmpdir = Paths.get(System.getProperty("java.io.tmpdir")).toString
+    cfgPath.toString should startWith(tmpdir)
+    // Per-process unique filename: sf_client_config-<random>.json
+    cfgPath.getFileName.toString should startWith("sf_client_config-")
+    cfgPath.getFileName.toString should endWith(".json")
+    Files.exists(cfgPath) shouldBe true
+  }
+
+  it should "write valid JSON body pointing log_path at a writable dir" in {
+    val opts = invokeOptions()
+    val cfgPath = Paths.get(opts("CLIENT_CONFIG_FILE"))
+    val body = new String(Files.readAllBytes(cfgPath), StandardCharsets.UTF_8)
+    // Minimal schema check — we don't need a full JSON parser to assert the
+    // driver-facing contract (log_level + log_path under "common").
+    body should include("\"common\"")
+    body should include("\"log_level\":\"INFO\"")
+    body should include("\"log_path\":")
+    // log_path must be a directory the driver can actually write into;
+    // java.io.tmpdir is writable for any user, hubuser/spark included.
+    // Normalize because java.io.tmpdir can carry a trailing slash that
+    // Paths.get(...).toString strips.
+    body should include(Paths.get(System.getProperty("java.io.tmpdir")).toString)
+  }
+
+  it should "expose the same path via SF_CLIENT_CONFIG_FILE system property" in {
+    val opts = invokeOptions()
+    // Both lookup paths are wired so the fix works across driver versions:
+    // older drivers honor the env-var-like system property, newer ones honor
+    // the per-connection CLIENT_CONFIG_FILE.
+    System.getProperty("SF_CLIENT_CONFIG_FILE") shouldBe opts("CLIENT_CONFIG_FILE")
+  }
+
+  it should "be idempotent across repeated calls — same path, file stays consistent" in {
+    val path1 = invokeOptions()("CLIENT_CONFIG_FILE")
+    val body1 = new String(Files.readAllBytes(Paths.get(path1)), StandardCharsets.UTF_8)
+    val path2 = invokeOptions()("CLIENT_CONFIG_FILE")
+    val body2 = new String(Files.readAllBytes(Paths.get(path2)), StandardCharsets.UTF_8)
+    path2 shouldBe path1
+    body2 shouldBe body1
   }
 
   // --- Snowflake.buildPartitionQuery ---

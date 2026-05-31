@@ -24,7 +24,7 @@ import ai.chronon.online.serde.SparkConversions
 import ai.chronon.spark.Extensions._
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions.expr
-import org.apache.spark.sql.types.{StringType, StructType}
+import org.apache.spark.sql.types.{LongType, StringType, StructType}
 import org.slf4j.{Logger, LoggerFactory}
 import ai.chronon.spark.catalog.TableUtils
 
@@ -91,8 +91,15 @@ object BootstrapInfo {
           .toChrononSchema(gb.keySchema)
           .map(field => StructField(part.rightToLeft(field._1), field._2))
 
+        val temporalKeyFields =
+          if (part.groupBy.inferredAccuracy == api.Accuracy.TEMPORAL) {
+            Seq(org.apache.spark.sql.types.StructField(Constants.TimeColumn, LongType))
+          } else {
+            Seq.empty
+          }
         val keyAndPartitionFields =
-          gb.keySchema.fields ++ Seq(org.apache.spark.sql.types.StructField(tableUtils.partitionColumn, StringType))
+          (gb.keySchema.fields ++ temporalKeyFields ++ Seq(
+            org.apache.spark.sql.types.StructField(tableUtils.partitionColumn, StringType))).distinct
         // todo: this change is only valid for offline use case
         // we need to revisit logic for the logging part to make sure the derived columns are also logged
         // to make bootstrap continue to work

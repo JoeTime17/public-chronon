@@ -8,6 +8,8 @@
     "env": {
       "common": {
         "CUSTOMER_ID": "dev",
+        "EVAL_URL": "http://localhost:3904",
+        "FETCHER_URL": "http://localhost:9000",
         "FRONTEND_URL": "http://localhost:3000",
         "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
         "HUB_URL": "http://localhost:3903",
@@ -16,6 +18,8 @@
       "modeEnvironments": {
         "backfill": {
           "CUSTOMER_ID": "dev",
+          "EVAL_URL": "http://localhost:3904",
+          "FETCHER_URL": "http://localhost:9000",
           "FRONTEND_URL": "http://localhost:3000",
           "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
           "HUB_URL": "http://localhost:3903",
@@ -23,6 +27,8 @@
         },
         "upload": {
           "CUSTOMER_ID": "dev",
+          "EVAL_URL": "http://localhost:3904",
+          "FETCHER_URL": "http://localhost:9000",
           "FRONTEND_URL": "http://localhost:3000",
           "GCP_BIGTABLE_INSTANCE_ID": "test-instance",
           "HUB_URL": "http://localhost:3903",

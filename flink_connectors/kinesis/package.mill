@@ -38,8 +38,8 @@ trait KinesisConnectorModule extends Cross.Module[String] with build.BaseModule 
     mvn"software.amazon.awssdk:auth:2.17.295",
     mvn"software.amazon.awssdk:aws-core:2.17.295",
   ) ++ Seq(
-    mvn"io.netty:netty-codec-http2:4.1.132.Final",
-    mvn"io.netty:netty-codec-http:4.1.132.Final",
+    mvn"io.netty:netty-codec-http2:4.1.133.Final",
+    mvn"io.netty:netty-codec-http:4.1.133.Final",
   ).map(_.forceVersion())
 
   object test extends build.BaseTestModule {

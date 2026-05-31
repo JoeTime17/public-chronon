@@ -215,7 +215,10 @@ object UnionJoin {
     // Apply Join derivations if they exist
     if (joinConf.isSetDerivations && !joinConf.derivations.isEmpty) {
       val derivations = joinConf.derivations.toScala
-      val finalOutputColumns = derivations.finalOutputColumn(prefixedDf.columns)
+      // Preserve true-left columns even when join derivations don't include `*`.
+      // This keeps the fast path aligned with the regular join/derivation codepath
+      // and ensures partition/time/key columns remain writable/readable downstream.
+      val finalOutputColumns = derivations.finalOutputColumn(prefixedDf.columns, ensureKeys = leftDf.columns.toSeq)
       prefixedDf.select(finalOutputColumns: _*)
     } else {
       prefixedDf

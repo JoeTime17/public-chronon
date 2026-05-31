@@ -142,4 +142,37 @@ class AvroStringHandlingTest extends AnyFlatSpec with Matchers {
     result(0) shouldBe "java_string"
     result(1) shouldBe "utf8_string"
   }
+
+  it should "treat avro enums as strings" in {
+    val avroSchemaStr = """{
+      "type": "record",
+      "name": "EnumTestSchema",
+      "namespace": "ai.chronon.data",
+      "fields": [
+        {
+          "name": "status",
+          "type": ["null", {
+            "type": "enum",
+            "name": "Status",
+            "symbols": ["ACTIVE", "INACTIVE"]
+          }],
+          "default": null
+        }
+      ]
+    }"""
+
+    val avroSchema = new Schema.Parser().parse(avroSchemaStr)
+
+    val chrononSchema = AvroConversions.toChrononSchema(avroSchema).asInstanceOf[StructType]
+    chrononSchema.fields(0).fieldType shouldBe StringType
+
+    val statusSchema = avroSchema.getField("status").schema().getTypes.get(1)
+    val record = new GenericData.Record(avroSchema)
+    record.put("status", new GenericData.EnumSymbol(statusSchema, "ACTIVE"))
+
+    val converter = AvroConversions.genericRecordToChrononRowConverter(chrononSchema)
+    val result = converter(record)
+
+    result(0) shouldBe "ACTIVE"
+  }
 }

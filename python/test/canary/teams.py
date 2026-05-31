@@ -18,6 +18,8 @@ default = Team(
             "CUSTOMER_ID": "dev",
             "FRONTEND_URL": "http://localhost:3000",
             "HUB_URL": "http://localhost:3903",
+            "EVAL_URL": "http://localhost:3904",
+            "FETCHER_URL": "http://localhost:9000",
         },
     ),
 )
@@ -55,6 +57,12 @@ gcp = Team(
             "CHRONON_ONLINE_ARGS": " -Ztasks=4",
             "FRONTEND_URL": "http://localhost:3000",
             "HUB_URL": "http://localhost:3903",
+            "EVAL_URL": "http://localhost:3904",
+            # Sentinel — referenced by test_canary_compile.py to verify that
+            # the prod compile pass uses only this `teams.py` file (never
+            # `teams.canary.py`). Must not appear in any file under
+            # compiled_canary/.
+            "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
         },
         modeEnvironments={
             RunMode.UPLOAD: {
@@ -83,6 +91,16 @@ gcp = Team(
             "spark.driver.cores": "1",
             "spark.executor.memory": "512m",
             "spark.executor.cores": "1",
+
+            # Chronon OTel metrics. Default off + HTTP to localhost:4318. The canary cluster's
+            # Ops Agent listens on the gRPC port (4317), not 4318, so steer the SDK accordingly.
+            "spark.driver.extraJavaOptions": " ".join([
+                "-Dai.chronon.metrics.enabled=true",
+                "-Dai.chronon.metrics.reader=grpc",
+                "-Dai.chronon.metrics.exporter.url=http://localhost:4317",
+            ]),
+            # Sentinel — prod-only conf marker for the test.
+            "spark.chronon.test.prod_only_sentinel": "prod-only-conf-sentinel-4f5a6b",
         },
         modeConfigs={
         }
@@ -93,7 +111,9 @@ gcp = Team(
                 "dataproc.config": generate_dataproc_cluster_config(2, "canary-443022", "gs://zipline-artifacts-canary",
                                                                     idle_timeout="7200s",
                                                                     worker_host_type="n2-highmem-4",
-                                                                    master_host_type="n2-highmem-8")
+                                                                    master_host_type="n2-highmem-8"),
+                # Sentinel — prod-only cluster-conf marker for the test.
+                "prod_only_sentinel_cluster": "prod-only-cluster-sentinel-2e3f4a",
             }
         }
     ),
@@ -114,6 +134,7 @@ aws = Team(
             "CHRONON_ONLINE_ARGS": " -Ztasks=1",
             "FRONTEND_URL": "https://canary-aws.zipline.ai",
             "HUB_URL": "https://canary-orch-aws.zipline.ai",
+            "EVAL_URL": "https://canary-eval-aws.zipline.ai",
             "ENABLE_KINESIS": "true",
             "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
         },
@@ -233,17 +254,21 @@ azure = Team(
             "CLOUD_PROVIDER": "azure",
             "CUSTOMER_ID": "dev",
             "VERSION": "latest",
-            "SPARK_CLUSTER_NAME": "http://kyuubi-dev.westus.cloudapp.azure.com:10099",
+            "SPARK_CLUSTER_NAME": "http://dev-zipline-kyuubi.westus.cloudapp.azure.com:10099",
             "ARTIFACT_PREFIX": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net",
             "WAREHOUSE_PREFIX": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net",
             "CHRONON_ONLINE_ARGS": " -Ztasks=4",
             "FRONTEND_URL": "https://dev-azure.zipline.ai",
             "HUB_URL": "https://dev-orch-azure.zipline.ai",
+            "CHRONON_ONLINE_ARGS": " -Ztasks=1 -Zbootstrap=zipline-demo-events.servicebus.windows.net:9093",
             "SNOWFLAKE_JDBC_URL": "jdbc:snowflake://VEJLULX-AZURE.snowflakecomputing.com/?user=demo_batch_service&db=Demo&schema=public&warehouse=demo_wh",
             "SNOWFLAKE_PRIVATE_KEY_VAULT_URI": "https://demo-service-writer-pkey.vault.azure.net/secrets/snowflake-private-key",
+            "FLINK_SASL_JAAS_CONFIG_VAULT_URI": "https://eventhub-sasl-jaas.vault.azure.net/secrets/sasl-jass-config",
             "OC_CREDENTIAL_VAULT_URI": "https://dev-zipline-secrets.vault.azure.net/secrets/oc-catalog-credential",
             "EVAL_URL": "https://dev-azure.zipline.ai/services/eval",
-            "AUTH_SCOPE": "api://dev-zipline-auth"
+            "AUTH_SCOPE": "api://dev-zipline-auth",
+            "FLINK_JARS_URI": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/spark-3.5.3/libs/",
+            "FLINK_STATE_URI": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net/flink-state",
         },
     ),
     conf=ConfigProperties(
@@ -262,10 +287,12 @@ azure = Team(
             "spark.chronon.coalesce.factor": "10",
             "spark.default.parallelism": "10",
             "spark.sql.shuffle.partitions": "10",
-            "spark.driver.memory": "512m",
+            "spark.driver.memory": "4g",
+            "spark.driver.memoryOverhead": "1g",
             "spark.driver.cores": "1",
             "spark.executor.memory": "512m",
             "spark.executor.cores": "1",
+            "taskmanager.memory.process.size": "4G",
         },
     ),
 )

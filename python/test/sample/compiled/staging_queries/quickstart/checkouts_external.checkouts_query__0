@@ -1,0 +1,93 @@
+{
+  "metaData": {
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_purchases_with_offset_0\", \"spec\": \"data.purchases/ds={{ macros.ds_add(ds, 0) }}\"}, {\"name\": \"wf_data_checkouts_external_with_offset_0\", \"spec\": \"data.checkouts_external/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.partition.column": "_DATE"
+        }
+      },
+      "env": {
+        "common": {
+          "CUSTOMER_ID": "canary",
+          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+          "GCP_PROJECT_ID": "canary-443022",
+          "GCP_REGION": "us-central1",
+          "VERSION": "latest"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "streaming": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "upload": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          }
+        }
+      },
+      "offlineSchedule": "@daily"
+    },
+    "name": "quickstart.checkouts_external.checkouts_query__0",
+    "outputNamespace": "data",
+    "sourceFile": "staging_queries/quickstart/checkouts_external.py",
+    "team": "quickstart",
+    "version": "0"
+  },
+  "query": "\n    SELECT\n        purchases.ds,\n        purchases.ts as purchase_ts,\n        purchases.user_id,\n        purchases.purchase_price,\n        checkouts.return_id,\n        checkouts.refund_amt,\n        checkouts.product_id,\n        checkouts.ts as checkout_ts\n    FROM data.purchases AS purchases \n    LEFT OUTER JOIN data.checkouts_external AS checkouts\n    USING (user_id)\n    WHERE purchases.ds BETWEEN '{{ start_date }}' AND '{{ end_date }}'\n",
+  "tableDependencies": [
+    {
+      "endOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "startOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "tableInfo": {
+        "partitionColumn": "ds",
+        "partitionInterval": {
+          "length": 1,
+          "timeUnit": 1
+        },
+        "table": "data.purchases"
+      }
+    },
+    {
+      "endOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "startOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "tableInfo": {
+        "partitionColumn": "ds",
+        "partitionInterval": {
+          "length": 1,
+          "timeUnit": 1
+        },
+        "table": "data.checkouts_external"
+      }
+    }
+  ]
+}

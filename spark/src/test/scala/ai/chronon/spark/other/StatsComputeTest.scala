@@ -153,13 +153,13 @@ class StatsComputeTest extends AnyFlatSpec {
            s"high_card_value should be high-cardinality so __str must NOT be in selectedSchema, got: $selectedCols")
 
     // Online: stale cardinality map (column missing → defaults to 0 = low-cardinality)
-    val staleCardinalityMap = Map.empty[String, Long]
+    val staleCardinalityMap = Map.empty[String, Double]
     val noKeysFields = toChrononSchema(compute.enhancedSelectedDf.schema)
     val onlineMetrics =
       StatsGenerator.buildEnhancedMetrics(
         noKeysFields,
         staleCardinalityMap,
-        cardinalityThreshold = 100
+        cardinalityThreshold = 0.01
       )
 
     // Before the fix this was: NoSuchElementException: None.get (completely opaque)

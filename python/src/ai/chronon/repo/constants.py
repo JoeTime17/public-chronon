@@ -181,6 +181,7 @@ PUBLIC_JARS_FOR_ADMIN = [
 ]
 
 SPARK_3_5_3_VERSION = "3.5.3"
+FLINK_IMAGE_TAG = "1.20.3"
 
 def get_public_spark_jars_for_admin(spark_version: str):
     if spark_version not in [SPARK_3_5_3_VERSION]:

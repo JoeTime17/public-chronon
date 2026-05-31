@@ -142,13 +142,14 @@ class TableUtils(@transient val sparkSession: SparkSession) extends Serializable
         }
       })
       .map { partitions =>
-        if (partitions.isEmpty) {
+        val nonNullPartitions = Format.sanitizePartitionValues(partitions)
+        if (nonNullPartitions.isEmpty) {
           logger.info(s"No partitions found for table: $tableName with subpartition filters ${subPartitionsFilter}")
         } else {
           logger.info(
-            s"Found ${partitions.size}, between (${partitions.min}, ${partitions.max}) partitions for table: $tableName")
+            s"Found ${nonNullPartitions.size}, between (${nonNullPartitions.min}, ${nonNullPartitions.max}) partitions for table: $tableName")
         }
-        partitions
+        nonNullPartitions
       }
       .getOrElse(List.empty)
 
@@ -221,8 +222,8 @@ class TableUtils(@transient val sparkSession: SparkSession) extends Serializable
     val effectivePartColumn = effectiveSpec.column
     if (subPartitionFilters.nonEmpty) {
       // Fall back to enumeration when sub-partition filters are needed
-      partitions(tableName, subPartitionFilters, partitionRange, tablePartitionSpec = tablePartitionSpec).reduceOption(
-        (x, y) => Ordering[String].max(x, y))
+      Format.pickMaxPartition(
+        partitions(tableName, subPartitionFilters, partitionRange, tablePartitionSpec = tablePartitionSpec))
     } else {
       val result = tableFormatProvider
         .readFormat(tableName)
@@ -238,12 +239,13 @@ class TableUtils(@transient val sparkSession: SparkSession) extends Serializable
                               subPartitionFilters: Map[String, String] = Map.empty): Option[String] = {
     if (subPartitionFilters.nonEmpty) {
       // Fall back to enumeration when sub-partition filters are needed
-      partitions(
-        tableName,
-        subPartitionFilters,
-        partitionRange.map(_.translate(partitionSpec)),
-        tablePartitionSpec = Some(partitionSpec)
-      ).reduceOption((x, y) => Ordering[String].min(x, y))
+      Format.pickMinPartition(
+        partitions(
+          tableName,
+          subPartitionFilters,
+          partitionRange.map(_.translate(partitionSpec)),
+          tablePartitionSpec = Some(partitionSpec)
+        ))
     } else {
       val effectivePartColumn = partitionSpec.column
       val result = tableFormatProvider
@@ -447,7 +449,7 @@ class TableUtils(@transient val sparkSession: SparkSession) extends Serializable
     // If a user fills a new partition in the newer end of the range, then we will never fill any partitions before that range.
     // We instead log a message saying why we won't fill the earliest hole.
     val cutoffPartition = if (outputExisting.nonEmpty) {
-      Seq[String](outputExisting.min, outputPartitionRange.start).filter(_ != null).max
+      Format.pickMaxPartition(Seq(outputExisting.min, outputPartitionRange.start)).getOrElse(outputPartitionRange.start)
     } else {
       validPartitionRange.start
     }

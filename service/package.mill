@@ -35,7 +35,7 @@ trait ServiceModule extends Cross.Module[String] with build.BaseModule {
       ) ++ Seq(
         // Force specific versions to get around security vulnerabilities in older versions
         mvn"com.fasterxml.woodstox:woodstox-core:5.4.0",
-        mvn"org.apache.commons:commons-configuration2:2.10.1",
+        mvn"org.apache.commons:commons-configuration2:2.15.0",
         mvn"dnsjava:dnsjava:3.6.1",
         mvn"com.nimbusds:nimbus-jose-jwt:9.37.4",
         mvn"commons-net:commons-net:3.9.0",
@@ -48,7 +48,7 @@ trait ServiceModule extends Cross.Module[String] with build.BaseModule {
           .exclude("org.apache.zookeeper" -> "zookeeper")
           .exclude("org.apache.zookeeper" -> "zookeeper-jute"),
         mvn"io.airlift:aircompressor:2.0.3",
-        mvn"io.netty:netty-all:4.1.132.Final",
+        mvn"io.netty:netty-all:4.1.133.Final",
       ).map(_.forceVersion())
 
   override def resources = Task.Sources(

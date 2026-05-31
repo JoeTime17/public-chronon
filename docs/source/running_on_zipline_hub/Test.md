@@ -30,6 +30,26 @@ Before running expensive backfill jobs, use eval to quickly validate your config
 - Derivations compile and type-check correctly
 - Dependencies between configurations resolve correctly
 
+### Prerequisites
+
+Set `EVAL_URL` in your team's `env.common` in `teams.py` so `zipline hub eval` knows where to reach the eval service. For example:
+
+```python
+default = Team(
+    conf=ConfigProperties(
+        ...
+    ),
+    env=EnvironmentVariables(
+        common={
+            ...
+            "EVAL_URL": "https://your-hub.zipline.ai/services/eval",
+        },
+    ),
+)
+```
+
+Without this, eval invocations will fail to dispatch to the eval service. The CLI also accepts `--eval-url` as a one-off override.
+
 ### Quick Schema Validation
 
 The most common use case - validate your configuration without running any computations:

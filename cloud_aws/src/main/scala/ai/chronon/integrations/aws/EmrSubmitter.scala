@@ -17,7 +17,7 @@ import ai.chronon.spark.submission.{
 }
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import ai.chronon.integrations.cloud_k8s.K8sFlinkSubmitter
+import ai.chronon.integrations.cloud_k8s.{K8sFlinkStatusProvider, K8sFlinkSubmitter}
 import io.fabric8.kubernetes.client.Config
 import software.amazon.awssdk.core.exception.SdkException
 import software.amazon.awssdk.services.ec2.Ec2Client
@@ -27,7 +27,9 @@ import software.amazon.awssdk.services.emr.model.{Unit => _, _}
 import software.amazon.awssdk.services.s3.S3Client
 
 import java.time.Instant
-import scala.concurrent.{ExecutionContext, Future}
+import java.util.concurrent.Executors
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -37,7 +39,6 @@ class EmrSubmitter(customerId: String,
                    eksFlinkSubmitter: Option[K8sFlinkSubmitter] = None,
                    s3Client: Option[S3Client] = None,
                    awsRegion: String = "",
-                   override val tablePartitionsDataset: String = "",
                    override val dqMetricsDataset: String = "",
                    flinkEksServiceAccount: Option[String] = None,
                    flinkEksNamespace: Option[String] = None,
@@ -237,7 +238,12 @@ class EmrSubmitter(customerId: String,
       s"${tokenFetchScript.getOrElse("")}spark-submit $confArgs --class $mainClass $jarUri ${args.mkString(" ")}"
 
     val finalArgs = List("bash", "-c", (awsS3CpArgs ++ List(sparkSubmitCmd)).mkString("; \n"))
-    logger.debug(s"Step config args: $finalArgs")
+    // Don't log $finalArgs directly — it contains the fully-rendered spark-submit
+    // command with --conf <secret>=<value> for every jobProperty. Log keys and
+    // counts instead, matching the redaction policy on EmrServerlessSubmitter.
+    logger.debug(
+      s"Step config: confKeys=${jobProperties.keys.toSeq.sorted.mkString(",")}; " +
+        s"filesToMount=${filesToMount.size}; argsCount=${args.size}")
     StepConfig
       .builder()
       .name("Run Zipline Job")
@@ -487,6 +493,7 @@ class EmrSubmitter(customerId: String,
                       jobProperties: Map[String, String],
                       files: List[String],
                       labels: Map[String, String],
+                      envVars: Map[String, String],
                       args: String*): String = {
     val userArgs = JobSubmitter.getApplicationArgs(jobType, args.toArray)
 
@@ -514,6 +521,10 @@ class EmrSubmitter(customerId: String,
           throw new RuntimeException(s"Missing expected $EksServiceAccount"))
         val namespace =
           submissionProperties.getOrElse(EksNamespace, throw new RuntimeException(s"Missing expected $EksNamespace"))
+        val nodeSelector = submissionProperties
+          .get(EksNodeSelector)
+          .map(EmrServerlessSubmitter.parseNodeSelector)
+          .getOrElse(Map.empty)
 
         val deploymentName = eksFlinkSubmitter
           .getOrElse(
@@ -530,14 +541,17 @@ class EmrSubmitter(customerId: String,
             jobProperties = jobProperties,
             args = userArgs,
             serviceAccount = serviceAccount,
-            namespace = namespace
+            namespace = namespace,
+            envVars = envVars,
+            nodeSelector = nodeSelector
           )
         // Encode namespace into the job ID so status/kill can target the right namespace
         s"flink:$namespace:$deploymentName"
 
       case TypeSparkJob =>
         val existingJobId = submissionProperties.getOrElse(ClusterId, throw new RuntimeException("JobFlowId not found"))
-        val stepConfig = createStepConfig(files, submissionProperties, jobProperties, userArgs: _*)
+        val sparkJobProperties = jobProperties ++ envVarsToSparkProperties(envVars)
+        val stepConfig = createStepConfig(files, submissionProperties, sparkJobProperties, userArgs: _*)
 
         val request = AddJobFlowStepsRequest
           .builder()
@@ -640,12 +654,13 @@ class EmrSubmitter(customerId: String,
     val eksNamespace = this.flinkEksNamespace
       .orElse(env.get("FLINK_EKS_NAMESPACE"))
       .getOrElse(throw new IllegalArgumentException("FLINK_EKS_NAMESPACE must be set for GROUP_BY_STREAMING"))
+    val maybeNodeSelector = env.get("FLINK_EKS_NODE_SELECTOR")
     val base = Map(
       FlinkMainJarURI -> flinkJarUri,
       FlinkCheckpointUri -> s"$flinkStateUri/checkpoints",
       EksServiceAccount -> eksServiceAccount,
       EksNamespace -> eksNamespace
-    )
+    ) ++ maybeNodeSelector.map(EksNodeSelector -> _)
     val enableKinesis = env.getOrElse("ENABLE_KINESIS", "false").toBoolean
     if (enableKinesis)
       base + (FlinkKinesisConnectorJarURI -> s"$artifactPrefix/release/$version/jars/connectors_kinesis_deploy.jar")
@@ -763,7 +778,9 @@ class EmrSubmitter(customerId: String,
 object EmrSubmitter {
   private val DatabricksOAuthTokenVar = "$DATABRICKS_OAUTH_TOKEN"
 
-  def apply(k8sConfig: Option[Config] = None): EmrSubmitter = {
+  def apply(k8sConfig: Option[Config] = None,
+            flinkHealthCheckFn: Option[String] => Boolean = _ => true,
+            flinkInternalJobIdFetchFn: Option[String] => Option[String] = _ => None): EmrSubmitter = {
     val customerId = sys.env.getOrElse("CUSTOMER_ID", throw new Exception("CUSTOMER_ID not set")).toLowerCase
     val awsRegion = sys.env.getOrElse("AWS_REGION", sys.env.getOrElse("AWS_DEFAULT_REGION", ""))
     val ingressBaseUrl = sys.env.get("HUB_BASE_URL")
@@ -777,7 +794,9 @@ object EmrSubmitter {
       flinkEksServiceAccount = sys.env.get("FLINK_EKS_SERVICE_ACCOUNT"),
       flinkEksNamespace = sys.env.get("FLINK_EKS_NAMESPACE"),
       eksClusterName = sys.env.get("EKS_CLUSTER_NAME"),
-      ingressBaseUrl = ingressBaseUrl
+      ingressBaseUrl = ingressBaseUrl,
+      flinkHealthCheckFn = flinkHealthCheckFn,
+      flinkInternalJobIdFetchFn = flinkInternalJobIdFetchFn
     )
   }
 
@@ -838,6 +857,8 @@ object EmrSubmitter {
         val maybeFlinkJarsUri = JobSubmitter.getArgValue(args, FlinkJarsUriArgKeyword)
         val maybeAdditionalJarsUri = JobSubmitter.getArgValue(args, AdditionalJarsUriArgKeyword)
 
+        val maybeNodeSelector = JobSubmitter.getArgValue(args, EksNodeSelectorArgKeyword)
+
         val baseJobProps = Map(
           JobId -> jobId,
           MainClass -> mainClass,
@@ -848,7 +869,8 @@ object EmrSubmitter {
           EksNamespace -> eksNamespace
         ) ++ maybeKinesisJarUri.map(FlinkKinesisConnectorJarURI -> _) ++
           maybeFlinkJarsUri.map(FlinkJarsUri -> _) ++
-          maybeAdditionalJarsUri.map(AdditionalJars -> _)
+          maybeAdditionalJarsUri.map(AdditionalJars -> _) ++
+          maybeNodeSelector.map(EksNodeSelector -> _)
 
         val userPassedSavepoint = JobSubmitter.getArgValue(args, StreamingCustomSavepointArgKeyword)
         val maybeSavepointUri =
@@ -921,7 +943,12 @@ object EmrSubmitter {
       filesArgs(0).split("=")(1).split(",")
     }
 
-    val emrSubmitter = EmrSubmitter()
+    val flinkStatusProvider = new K8sFlinkStatusProvider()
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newCachedThreadPool())
+    val emrSubmitter = EmrSubmitter(
+      flinkHealthCheckFn = uri => Await.result(flinkStatusProvider.isFlinkJobHealthy(uri), 30.seconds),
+      flinkInternalJobIdFetchFn = uri => Await.result(flinkStatusProvider.getFlinkInternalJobId(uri), 30.seconds)
+    )
 
     val jobType = jobTypeValue.toLowerCase match {
       case "spark" => TypeSparkJob
@@ -947,7 +974,8 @@ object EmrSubmitter {
       jobProperties = modeConfigProperties.getOrElse(Map.empty),
       files = files.toList,
       labels = Map.empty,
-      finalArgs: _*
+      envVars = Map.empty,
+      args = finalArgs: _*
     )
   }
 }

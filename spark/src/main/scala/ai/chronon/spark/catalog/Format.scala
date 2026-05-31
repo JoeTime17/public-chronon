@@ -26,7 +26,7 @@ trait Format {
                   semanticHash: Option[String] = None)(implicit sparkSession: SparkSession): Unit = {
     val (creationName, quotedOriginal) = semanticHash match {
       case Some(hash) =>
-        val parts = sparkSession.sessionState.sqlParser.parseMultipartIdentifier(tableName).toList
+        val parts = Format.parseIdentifier(tableName).toList
         val hashedParts = parts.init :+ s"${parts.last}_$hash"
         (hashedParts.map(QuotingUtils.quoteIdentifier).mkString("."), tableName)
       case None => (tableName, tableName)
@@ -100,7 +100,9 @@ trait Format {
           partitionMap.get(k).contains(v)
         }
       ) {
-        partitionMap.get(effectiveColumn)
+        // partitionMap values come from a Java-interop catalog, so .get can
+        // yield Some(null). Rehydrate via Option(_) to collapse that to None.
+        partitionMap.get(effectiveColumn).flatMap(Option(_))
       } else {
         None
       }
@@ -119,27 +121,27 @@ trait Format {
   // Does this format support sub partitions filters
   def supportSubPartitionsFilter: Boolean
 
-  // Unified last available partition: handles both string partition columns and timestamp/date columns.
-  // For string columns that are catalog partitions (Hive/Iceberg/Delta), uses metadata-only lookup — no data scan.
-  // For timestamp/date columns, falls back to a scan: DATE(MAX(col)) - 1 day.
-  def lastAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(implicit
-      sparkSession: SparkSession): Option[String] = {
-    // Try metadata-based partition listing first (free for Hive/Iceberg/Delta)
-    val metadataResult = Try(primaryPartitions(tableName, partitionColumn, "")(sparkSession)) match {
+  protected def metadataPartitions(tableName: String, partitionColumn: String)(implicit
+      sparkSession: SparkSession): Option[List[String]] =
+    Try(primaryPartitions(tableName, partitionColumn, "")(sparkSession)) match {
       case Success(metadata) =>
-        metadata.flatMap(Option(_)) match {
-          // Partition metadata might not exist, if it does not then there are no partitions.
-          case parts if parts.nonEmpty => Some(parts.max)
-          case _                       => None
-        }
+        Some(Format.sanitizePartitionValues(metadata).distinct)
       case Failure(ex) =>
         logger.warn(
-          s"[NonFatal] Failed to check primary partitions for ${tableName}, falling back to data scan: ${ex.getMessage}");
+          s"[NonFatal] Failed to check primary partitions for ${tableName}, falling back to another boundary lookup: ${ex.getMessage}")
         None
     }
-    if (metadataResult.isDefined) return metadataResult
 
-    // Fall back to data scan for non-partitioned tables or timestamp/date columns
+  protected def metadataFirstAvailablePartition(tableName: String, partitionColumn: String)(implicit
+      sparkSession: SparkSession): Option[String] =
+    metadataPartitions(tableName, partitionColumn).flatMap(Format.pickMinPartition)
+
+  protected def metadataLastAvailablePartition(tableName: String, partitionColumn: String)(implicit
+      sparkSession: SparkSession): Option[String] =
+    metadataPartitions(tableName, partitionColumn).flatMap(Format.pickMaxPartition)
+
+  protected def scanLastAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(
+      implicit sparkSession: SparkSession): Option[String] = {
     import sparkSession.implicits._
     Try {
       val df = sparkSession.read.table(tableName)
@@ -171,21 +173,8 @@ trait Format {
     }
   }
 
-  // Unified first available partition: handles both string partition columns and timestamp/date columns.
-  // For string columns that are catalog partitions, uses metadata-only lookup.
-  // For timestamp/date columns, falls back to a scan.
-  def firstAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(implicit
-      sparkSession: SparkSession): Option[String] = {
-    val metadataResult = Try(primaryPartitions(tableName, partitionColumn, "")(sparkSession)) match {
-      case Success(metadata) =>
-        metadata.flatMap(Option(_)) match {
-          case parts if parts.nonEmpty => Some(parts.min)
-          case _                       => None
-        }
-      case _ => None
-    }
-    if (metadataResult.isDefined) return metadataResult
-
+  protected def scanFirstAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(
+      implicit sparkSession: SparkSession): Option[String] = {
     import sparkSession.implicits._
     Try {
       val df = sparkSession.read.table(tableName)
@@ -215,6 +204,22 @@ trait Format {
         None
     }
   }
+
+  // Unified last available partition: handles both string partition columns and timestamp/date columns.
+  // For string columns that are catalog partitions (Hive/Iceberg/Delta), uses metadata-only lookup.
+  // For non-string columns, falls back to the historical scan behavior: DATE(MAX(col)) - 1 day.
+  def lastAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(implicit
+      sparkSession: SparkSession): Option[String] =
+    metadataLastAvailablePartition(tableName, partitionColumn)
+      .orElse(scanLastAvailablePartition(tableName, partitionColumn, partitionSpec))
+
+  // Unified first available partition: handles both string partition columns and timestamp/date columns.
+  // For string columns that are catalog partitions, uses metadata-only lookup.
+  // For timestamp/date columns, falls back to a scan.
+  def firstAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(implicit
+      sparkSession: SparkSession): Option[String] =
+    metadataFirstAvailablePartition(tableName, partitionColumn)
+      .orElse(scanFirstAvailablePartition(tableName, partitionColumn, partitionSpec))
 
   @deprecated("Use lastAvailablePartition instead", "0.1.0")
   def maxTimestampDate(tableName: String, timestampColumn: String, partitionSpec: PartitionSpec)(implicit
@@ -266,11 +271,45 @@ trait Format {
 
 }
 
+private[catalog] case class StatsDateRange(start: String, end: String) {
+  def virtualPartitions(partitionSpec: PartitionSpec): List[String] =
+    partitionSpec.expandRange(start, end)
+
+  def firstAvailablePartition: String = start
+
+  def lastAvailablePartition: String = end
+}
+
 case class ResolvedTableName(catalog: String, namespace: String, table: String) {
   def toIdentifier: Identifier = Identifier.of(Array(namespace), table)
 }
 
 object Format {
+
+  private val stringOrdering: Ordering[String] = Ordering.String
+
+  def sanitizePartitionValues(partitions: Iterable[String]): List[String] = partitions.iterator
+    .flatMap(Option(_))
+    .toList
+
+  def pickMinPartition(partitions: Iterable[String]): Option[String] = {
+    sanitizePartitionValues(partitions).reduceOption((x, y) => stringOrdering.min(x, y))
+  }
+
+  def pickMaxPartition(partitions: Iterable[String]): Option[String] = {
+    sanitizePartitionValues(partitions).reduceOption((x, y) => stringOrdering.max(x, y))
+  }
+
+  /** Parse a (possibly multipart, possibly backticked) table identifier into its dotted segments,
+    * using the session parser so any session-level parser extensions apply. Does NOT fill in a
+    * default catalog: callers (e.g. [[resolveTableName]]) own that policy since different contexts
+    * have different defaults (read vs. write catalog, ephemeral eval catalog, etc.).
+    *
+    * Prefer this over `split("\\.")` wherever you need to break up a table identifier — the naive
+    * split drops backticks and corrupts segments containing escaped dots.
+    */
+  def parseIdentifier(identifier: String)(implicit sparkSession: SparkSession): Seq[String] =
+    sparkSession.sessionState.sqlParser.parseMultipartIdentifier(identifier)
 
   def parseHiveStylePartition(pstring: String): List[(String, String)] = {
     pstring
@@ -283,7 +322,7 @@ object Format {
   }
 
   def resolveTableName(tableName: String)(implicit sparkSession: SparkSession): ResolvedTableName = {
-    val parsed = sparkSession.sessionState.sqlParser.parseMultipartIdentifier(tableName)
+    val parsed = parseIdentifier(tableName)
     def defaultCatalog: String = sparkSession.conf.get("spark.sql.defaultCatalog", "spark_catalog")
     parsed.toList match {
       case catalog :: namespace :: table :: Nil => ResolvedTableName(catalog, namespace, table)
@@ -296,7 +335,7 @@ object Format {
 
   // Lightweight version that avoids triggering catalog initialization
   def getCatalog(inputTableName: String)(implicit sparkSession: SparkSession): String = {
-    val parsed = sparkSession.sessionState.sqlParser.parseMultipartIdentifier(inputTableName)
+    val parsed = parseIdentifier(inputTableName)
     def defaultCatalog: String = sparkSession.conf.get("spark.sql.defaultCatalog", "spark_catalog")
     parsed.toList match {
       case catalog :: _ :: _ :: Nil => catalog

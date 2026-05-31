@@ -65,7 +65,9 @@ The service exposes the following HTTP endpoints:
 |GET |`/ping` | Health check endpoint            |
 |GET |`/config` | Fetcher service configuration            |
 |GET |`/v1/joins` | List of Chronon joins marked online            |
-|GET|`/v1/join/:name/schema` | Returns a join schema payload (consists of join name, entity key schema as an Avro string, value schema as an Avro string, schema hash
+|GET|`/v1/join/:name/schema` | Returns a join schema payload |
+|GET|`/v1/groupby/:name/schema` | Returns an online GroupBy schema payload |
+|GET|`/v1/groupby/:name/status` | Returns online GroupBy upload status |
 |POST|`/v1/fetch/groupby/:name`| Retrieve features for a specific GroupBy
 |POST|`/v1/fetch/join/:name`| Retrieve features for a specific Join
 |POST|`/v2/fetch/join/:name`| Retrieve features for a specific Join with the features response as an Avro binary string (base64 encoded)

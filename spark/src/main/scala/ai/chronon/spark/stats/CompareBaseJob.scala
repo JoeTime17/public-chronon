@@ -22,6 +22,7 @@ import ai.chronon.online._
 import ai.chronon.spark.Extensions._
 import ai.chronon.spark.catalog.TableUtils
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.functions
 import org.apache.spark.sql.types.DataType
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -36,7 +37,8 @@ object CompareBaseJob {
       keys: Seq[String],
       tableUtils: TableUtils,
       mapping: Map[String, String] = Map.empty,
-      migrationCheck: Boolean = false
+      migrationCheck: Boolean = false,
+      requireTimeColumn: Boolean = true
   ): Unit = {
     val errors = ListBuffer[String]()
     // Make sure the number of fields are comparable on either side.
@@ -95,7 +97,7 @@ object CompareBaseJob {
     }
 
     // Make sure the passed keys has one of the time elements in it
-    if (keys.intersect(Constants.ReservedColumns(tableUtils.partitionColumn)).length == 0) {
+    if (requireTimeColumn && keys.intersect(Constants.ReservedColumns(tableUtils.partitionColumn)).length == 0) {
       errors += "Ensure that one of the key columns is a time column"
     }
 
@@ -112,12 +114,13 @@ object CompareBaseJob {
       tableUtils: TableUtils,
       mapping: Map[String, String] = Map.empty,
       migrationCheck: Boolean = false,
-      name: String = "undefined"
+      name: String = "undefined",
+      requireTimeColumn: Boolean = true
   ): (DataFrame, DataFrame, fetcher.DataMetrics) = {
     // 1. Check for schema consistency issues
     val leftFields: Map[String, DataType] = leftDf.schema.fields.map(sb => (sb.name, sb.dataType)).toMap
     val rightFields: Map[String, DataType] = rightDf.schema.fields.map(sb => (sb.name, sb.dataType)).toMap
-    checkConsistency(leftFields, rightFields, keys, tableUtils, mapping, migrationCheck)
+    checkConsistency(leftFields, rightFields, keys, tableUtils, mapping, migrationCheck, requireTimeColumn)
 
     // 2. Prune the extra columns that we may have on the left side for migration use cases
     // so that the comparison becomes consistent across both sides.
@@ -169,6 +172,14 @@ object CompareBaseJob {
       }
     })
 
+    // If no time column is present and not required, inject a synthetic ts=0 so metrics computation works
+    val hasTimeColumn = keys.contains(Constants.TimeColumn) || keys.contains(tableUtils.partitionColumn)
+    val (effectiveCompareDf, effectiveKeys) = if (!hasTimeColumn) {
+      (compareDf.withColumn(Constants.TimeColumn, functions.lit(0L)), keys :+ Constants.TimeColumn)
+    } else {
+      (compareDf, keys)
+    }
+
     val leftChrononSchema = StructType("input",
                                        SparkConversions
                                          .toChrononSchema(prunedLeftDf.schema)
@@ -176,7 +187,8 @@ object CompareBaseJob {
                                          .map(tup => StructField(tup._1, tup._2)))
 
     // 5. Run the consistency check
-    val (metricsFlatDf, metrics) = CompareMetrics.compute(leftChrononSchema.fields, compareDf, keys, name, mapping)
+    val (metricsFlatDf, metrics) =
+      CompareMetrics.compute(leftChrononSchema.fields, effectiveCompareDf, effectiveKeys, name, mapping)
 
     // Return the data frame of the actual comparison table, metrics flat df and the metrics itself
     (compareDf, metricsFlatDf, metrics)

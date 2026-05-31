@@ -332,3 +332,20 @@ recommendations = Team(
 ```
 
 Entities defined under the `recommendations/` directory (e.g. `joins/recommendations/user_features.py`) will use the `recommendations` team's configuration. The team name is determined by the subdirectory name under each entity type.
+
+## Multi-Environment Setup
+
+To run the same configs against a separate canary deployment (smaller cluster, non-prod cloud project, different upstream data, etc.), drop a sibling `teams.canary.py` next to `teams.py`:
+
+```
+<repo-root>/
+├── teams.py           # → compiles to compiled/         (prod)
+├── teams.canary.py    # → compiles to compiled_canary/  (canary, optional)
+├── group_bys/
+├── joins/
+└── staging_queries/
+```
+
+`zipline compile` discovers `teams.canary.py` automatically and runs a second compile pass. Only `canary` is supported as a non-prod env today.
+
+See **[Multi-Environment Compile & Deploy](MultiEnvironment.md)** for the full guide — the recommended `from teams import …` authoring pattern, per-entity `environments=[...]` opt-in, the `--env` deploy contract, and the CI workflow.

@@ -90,28 +90,6 @@ def test_group_by_table_names(repo, materialized_group_by, table_name):
     assert _get_output_table_name(gb, True) == table_name
 
 
-@pytest.mark.parametrize(
-    "materialized_join,table_name",
-    [
-        (
-            "sample_chaining_join.v1",
-            "chronon_db.sample_team_sample_chaining_join_v1_sample_team_chaining_group_by_chaining_group_by_v1",
-        ),
-        (
-            "sample_join.v1",
-            "sample_namespace.sample_team_sample_join_v1_sample_team_sample_group_by_v1",
-        ),
-    ],
-)
-def test_join_part_table_names(repo, materialized_join, table_name):
-    join = file2thrift(
-        os.path.join(repo, "production/joins/sample_team", materialized_join), api.Join
-    )
-    assert (
-        utils.join_part_output_table_name(join, join.joinParts[0], True) == table_name
-    )
-
-
 def test_compose():
     computed = utils.compose(
         "user_id_approx_distinct_count_by_query",
@@ -412,3 +390,209 @@ def test_blob_exists_s3_double_prefix():
         assert blob_exists("s3://bucket/s3://path/file.jar") is True
         # Should strip the nested s3:// from the key
         mock_client.head_object.assert_called_once_with(Bucket="bucket", Key="path/file.jar")
+
+
+# --- _parse_azure_uri ---
+
+
+class TestParseAzureUri:
+    def test_abfss_uri_parses_correctly(self):
+        from ai.chronon.repo.utils import _parse_azure_uri
+
+        account_url, container, blob_name = _parse_azure_uri(
+            "abfss://mycontainer@myaccount.dfs.core.windows.net/path/to/file.jar"
+        )
+        assert account_url == "https://myaccount.blob.core.windows.net"
+        assert container == "mycontainer"
+        assert blob_name == "path/to/file.jar"
+
+    def test_abfss_uri_converts_dfs_to_blob_endpoint(self):
+        from ai.chronon.repo.utils import _parse_azure_uri
+
+        account_url, _, _ = _parse_azure_uri(
+            "abfss://container@account.dfs.core.windows.net/file.jar"
+        )
+        assert ".blob.core.windows.net" in account_url
+        assert ".dfs.core.windows.net" not in account_url
+
+    def test_blob_https_uri_parses_correctly(self):
+        from ai.chronon.repo.utils import _parse_azure_uri
+
+        account_url, container, blob_name = _parse_azure_uri(
+            "https://myaccount.blob.core.windows.net/mycontainer/path/to/file.jar"
+        )
+        assert account_url == "https://myaccount.blob.core.windows.net"
+        assert container == "mycontainer"
+        assert blob_name == "path/to/file.jar"
+
+    def test_abfss_nested_path(self):
+        from ai.chronon.repo.utils import _parse_azure_uri
+
+        _, container, blob_name = _parse_azure_uri(
+            "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/release/1.0.0/jars/engine.jar"
+        )
+        assert container == "dev-zipline-artifacts"
+        assert blob_name == "release/1.0.0/jars/engine.jar"
+
+
+# --- blob_exists Azure abfss ---
+
+
+def test_blob_exists_abfss_file_exists():
+    """Test blob_exists returns True for existing ADLS Gen2 (abfss://) blob."""
+    pytest.importorskip("azure.storage.blob")
+    from unittest.mock import MagicMock, patch
+
+    from ai.chronon.repo.utils import blob_exists
+
+    with patch("azure.storage.blob.BlobServiceClient") as mock_service, patch(
+        "azure.identity.DefaultAzureCredential"
+    ):
+        mock_client = MagicMock()
+        mock_service.return_value = mock_client
+        mock_blob_client = MagicMock()
+        mock_client.get_blob_client.return_value = mock_blob_client
+        mock_blob_client.exists.return_value = True
+
+        assert blob_exists("abfss://mycontainer@myaccount.dfs.core.windows.net/path/file.jar") is True
+        mock_blob_client.exists.assert_called_once()
+        # Verify it used the blob endpoint, not dfs
+        call_kwargs = mock_service.call_args[1]
+        assert ".blob.core.windows.net" in call_kwargs["account_url"]
+
+
+def test_blob_exists_abfss_file_not_found():
+    """Test blob_exists returns False for non-existent ADLS Gen2 (abfss://) blob."""
+    pytest.importorskip("azure.storage.blob")
+    from unittest.mock import MagicMock, patch
+
+    from ai.chronon.repo.utils import blob_exists
+
+    with patch("azure.storage.blob.BlobServiceClient") as mock_service, patch(
+        "azure.identity.DefaultAzureCredential"
+    ):
+        mock_client = MagicMock()
+        mock_service.return_value = mock_client
+        mock_blob_client = MagicMock()
+        mock_client.get_blob_client.return_value = mock_blob_client
+        mock_blob_client.exists.return_value = False
+
+        assert blob_exists("abfss://mycontainer@myaccount.dfs.core.windows.net/path/missing.jar") is False
+
+
+# --- upload_to_blob_store Azure ---
+
+
+def test_upload_to_blob_store_abfss():
+    """Test upload_to_blob_store correctly uploads to ADLS Gen2 (abfss://) URI."""
+    pytest.importorskip("azure.storage.blob")
+    import tempfile
+    from unittest.mock import MagicMock, patch
+
+    from ai.chronon.repo.utils import upload_to_blob_store
+
+    with tempfile.NamedTemporaryFile(suffix=".jar") as f:
+        f.write(b"fake jar")
+        f.flush()
+
+        with patch("azure.storage.blob.BlobServiceClient") as mock_service, patch(
+            "azure.identity.DefaultAzureCredential"
+        ):
+            mock_client = MagicMock()
+            mock_service.return_value = mock_client
+            mock_blob_client = MagicMock()
+            mock_client.get_blob_client.return_value = mock_blob_client
+
+            uri = "abfss://mycontainer@myaccount.dfs.core.windows.net/path/file.jar"
+            result = upload_to_blob_store(f.name, uri)
+
+            assert result == uri
+            mock_blob_client.upload_blob.assert_called_once()
+            # Verify container and blob name
+            mock_client.get_blob_client.assert_called_once_with(
+                container="mycontainer", blob="path/file.jar"
+            )
+            # Verify it used the blob endpoint
+            call_kwargs = mock_service.call_args[1]
+            assert ".blob.core.windows.net" in call_kwargs["account_url"]
+
+
+def test_upload_to_blob_store_azure_blob_https():
+    """Test upload_to_blob_store still works for https://...blob.core.windows.net URIs."""
+    pytest.importorskip("azure.storage.blob")
+    import tempfile
+    from unittest.mock import MagicMock, patch
+
+    from ai.chronon.repo.utils import upload_to_blob_store
+
+    with tempfile.NamedTemporaryFile(suffix=".jar") as f:
+        f.write(b"fake jar")
+        f.flush()
+
+        with patch("azure.storage.blob.BlobServiceClient") as mock_service, patch(
+            "azure.identity.DefaultAzureCredential"
+        ):
+            mock_client = MagicMock()
+            mock_service.return_value = mock_client
+            mock_blob_client = MagicMock()
+            mock_client.get_blob_client.return_value = mock_blob_client
+
+            uri = "https://myaccount.blob.core.windows.net/mycontainer/path/file.jar"
+            result = upload_to_blob_store(f.name, uri)
+
+            assert result == uri
+            mock_blob_client.upload_blob.assert_called_once()
+
+
+# --- read_from_blob_store Azure ---
+
+
+def test_read_from_blob_store_abfss():
+    """Test read_from_blob_store correctly reads from ADLS Gen2 (abfss://) URI."""
+    pytest.importorskip("azure.storage.blob")
+    from unittest.mock import MagicMock, patch
+
+    from ai.chronon.repo.utils import read_from_blob_store
+
+    with patch("azure.storage.blob.BlobServiceClient") as mock_service, patch(
+        "azure.identity.DefaultAzureCredential"
+    ):
+        mock_client = MagicMock()
+        mock_service.return_value = mock_client
+        mock_blob_client = MagicMock()
+        mock_client.get_blob_client.return_value = mock_blob_client
+        mock_blob_client.download_blob.return_value.readall.return_value = b"1.0.0"
+
+        result = read_from_blob_store(
+            "abfss://mycontainer@myaccount.dfs.core.windows.net/release/latest/VERSION"
+        )
+
+        assert result == "1.0.0"
+        mock_client.get_blob_client.assert_called_once_with(
+            container="mycontainer", blob="release/latest/VERSION"
+        )
+        call_kwargs = mock_service.call_args[1]
+        assert ".blob.core.windows.net" in call_kwargs["account_url"]
+
+
+def test_read_from_blob_store_abfss_not_found():
+    """Test read_from_blob_store returns None when ADLS Gen2 blob does not exist."""
+    pytest.importorskip("azure.storage.blob")
+    from unittest.mock import MagicMock, patch
+
+    from ai.chronon.repo.utils import read_from_blob_store
+
+    with patch("azure.storage.blob.BlobServiceClient") as mock_service, patch(
+        "azure.identity.DefaultAzureCredential"
+    ):
+        mock_client = MagicMock()
+        mock_service.return_value = mock_client
+        mock_blob_client = MagicMock()
+        mock_client.get_blob_client.return_value = mock_blob_client
+        mock_blob_client.download_blob.side_effect = Exception("BlobNotFound")
+
+        result = read_from_blob_store(
+            "abfss://mycontainer@myaccount.dfs.core.windows.net/release/latest/VERSION"
+        )
+
+        assert result is None

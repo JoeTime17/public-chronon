@@ -95,6 +95,67 @@ See the [Computation examples](#computation-examples) for an explanation of how 
 a group_by on the right keyed by `user`. On the left you have chosen to call the user `user_id` or `vendor`. Then you
 can use the remapping facility to specify this relation for each group_by.
 
+### Transformed Join Keys
+
+A `Join` can also use fields that are transformed in the left-side `Query.selects` as join keys. This is useful when the
+feature storage key should be normalized from the request, such as a lower-cased search query.
+
+```python
+search_events = Source(
+    events=EventSource(
+        table="data.search_events",
+        query=Query(
+            selects=select(
+                query_normalized="lower(query)",
+            ),
+            time_column="ts",
+        ),
+    )
+)
+
+search_features = GroupBy(
+    sources=...,
+    keys=["query_normalized"],
+    aggregations=[...],
+)
+
+v1 = Join(
+    left=search_events,
+    right_parts=[
+        JoinPart(
+            group_by=search_features,
+            key_mapping={
+                "query_normalized": "query_normalized",
+            },
+        )
+    ],
+)
+```
+
+Zipline applies the left-side key derivation in both offline and online flows. Offline backfills compute
+`query_normalized` from the left source before joining to the `GroupBy`. Online fetching follows the same pattern for
+internal `GroupBy` join parts: callers can provide the raw input used by the left-side expression, and Zipline derives
+the transformed key before fetching the underlying `GroupBy`.
+
+For the example above, an online request may pass:
+
+```json
+{"query": "SHOES"}
+```
+
+Zipline will derive `query_normalized = "shoes"` for the `GroupBy` fetch. Existing callers that already provide the
+transformed alias directly can continue to do so:
+
+```json
+{"query_normalized": "shoes"}
+```
+
+When a selected key keeps the same name as the raw input, such as `selects=select(query="lower(query)")`, online fetch
+treats the request's `query` value as the raw input and applies the expression before fetching the `GroupBy`.
+
+This transformed-key support is scoped to internal `GroupBy` join parts. `ExternalPart` key mapping keeps the existing
+behavior: if an external part uses a selected alias as a key, the online request must provide that alias directly.
+
 ## Labels / Training Data
 
 The `LabelPart` API has been removed. To generate training data that combines features with labels, use a [StagingQuery](./StagingQuery.md) with `recomputeDays` instead. This approach is simpler, more intuitive, and significantly faster since it operates directly on partitioned data without converting to on-heap Java objects.
@@ -110,15 +171,13 @@ before running the regular group by backfills if necessary.
 
 More details and scenarios about bootstrap can be found in Bootstrap documentation.
 
-##
-
 ## Computation examples
 
 The following explain the backfill accuracy for each possible combination of left-side source type and right-side/GroupBy source type.
 
 ### Left side events, right side streaming events
 
-In this case you will get point-in-time correct feature backfills in your join table, meaning that every feature for this GroupBy will be accurate as of the millisecond that is provided on the left side `time_column`. For example, if a row on the left side has a timestamp of `2023-12-20 12:01:01.923` and an aggregation in the `GroupBy` has a `10 day` window, then only raw events between `2023-12-10 12:01:01.923` and `2023-12-20 12:01:01.923` will be included in the aggregation value.
+In this case you will get point-in-time correct feature backfills in your join table, meaning that every feature for this GroupBy will be accurate as of the millisecond that is provided on the left side `time_column`. For example, if a row on the left side has a timestamp of `2023-12-20 12:01:01.923` and an aggregation in the `GroupBy` has a `10 day` window, then only raw events in `[2023-12-10 12:01:01.923, 2023-12-20 12:01:01.923)` will be included in the aggregation value.
 
 This is because these are the values that would have been observed online for that feature at that particular left side timestamp (values are updated in realtime).
 

@@ -1,12 +1,25 @@
 package ai.chronon.api.test.planner
 
 import ai.chronon.api.Extensions.{WindowUtils, MetadataOps}
-import ai.chronon.api.planner.TableDependencies
-import ai.chronon.api.{Builders, Operation, TimeUnit, Window}
+import ai.chronon.api.planner.{DependencyResolver, TableDependencies}
+import ai.chronon.api.{
+  Accuracy,
+  Builders,
+  DataModel,
+  Operation,
+  PartitionRange,
+  PartitionSpec,
+  TableDependency,
+  TableInfo,
+  TimeUnit,
+  Window
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class TableDependenciesTest extends AnyFlatSpec with Matchers {
+
+  private implicit val testPartitionSpec: PartitionSpec = PartitionSpec.daily
 
   "TableDependencies.fromTable" should "handle left Source with null query (default behavior)" in {
     val table = "test.events_table"
@@ -318,5 +331,171 @@ class TableDependenciesTest extends AnyFlatSpec with Matchers {
     val deps = TableDependencies.fromGroupBy(groupBy)
     deps should not be empty
     deps.head.getTableInfo.getPartitionColumn should equal("created_at")
+  }
+
+  "TableDependencies.fromGroupBy" should "include snapshot and mutation dependencies for temporal entity sources when the left side is events" in {
+    val entityQuery = Builders.Query(
+      startPartition = "2025-01-01",
+      partitionColumn = "ds"
+    )
+    entityQuery.setPartitionInterval(WindowUtils.Day)
+
+    val groupBy = Builders.GroupBy(
+      sources = Seq(Builders.Source.entities(
+        query = entityQuery,
+        snapshotTable = "test.dim_snapshot",
+        mutationTable = "test.dim_mutations"
+      )),
+      keyColumns = Seq("listing_id"),
+      aggregations = Seq(Builders.Aggregation(Operation.LAST, "headline", Seq(WindowUtils.Unbounded))),
+      accuracy = Accuracy.TEMPORAL
+    )
+
+    val deps = TableDependencies.fromGroupBy(groupBy, leftDataModel = Some(DataModel.EVENTS))
+
+    deps.map(_.getTableInfo.getTable) should equal(Seq("test.dim_snapshot", "test.dim_mutations"))
+    deps.head.getStartOffset should equal(WindowUtils.Day)
+    deps.head.getEndOffset should equal(WindowUtils.Day)
+    deps.head.getStartCutOff should equal("2025-01-01")
+    deps(1).getStartOffset should equal(WindowUtils.zero())
+    deps(1).getEndOffset should equal(WindowUtils.zero())
+    deps(1).getStartCutOff should equal("2025-01-01")
+  }
+
+  "TableDependencies.fromJoin" should "include mutation dependencies for temporal entity join parts when the left side is events" in {
+    val leftQuery = Builders.Query(partitionColumn = "ds")
+    val entityQuery = Builders.Query(
+      startPartition = "2025-01-01",
+      partitionColumn = "ds"
+    )
+    entityQuery.setPartitionInterval(WindowUtils.Day)
+
+    val join = Builders.Join(
+      left = Builders.Source.events(leftQuery, table = "test.left_events"),
+      joinParts = Seq(Builders.JoinPart(groupBy = Builders.GroupBy(
+        sources = Seq(Builders.Source.entities(
+          query = entityQuery,
+          snapshotTable = "test.dim_snapshot",
+          mutationTable = "test.dim_mutations"
+        )),
+        keyColumns = Seq("listing_id"),
+        aggregations = Seq(Builders.Aggregation(Operation.LAST, "headline", Seq(WindowUtils.Unbounded))),
+        accuracy = Accuracy.TEMPORAL
+      ))),
+      bootstrapParts = Seq.empty
+    )
+
+    val deps = TableDependencies.fromJoin(join)
+
+    deps.map(_.getTableInfo.getTable) should equal(
+      Seq("test.left_events", "test.dim_snapshot", "test.dim_mutations")
+    )
+    deps(1).getStartOffset should equal(WindowUtils.Day)
+    deps(1).getEndOffset should equal(WindowUtils.Day)
+    deps(2).getStartOffset should equal(WindowUtils.zero())
+    deps(2).getEndOffset should equal(WindowUtils.zero())
+  }
+
+  it should "include root entity mutation dependencies for temporal entity-backed join sources" in {
+    val leftQuery = Builders.Query(partitionColumn = "ds")
+    val entityQuery = Builders.Query(
+      startPartition = "2025-01-01",
+      partitionColumn = "ds"
+    )
+    entityQuery.setPartitionInterval(WindowUtils.Day)
+
+    val parentJoin = Builders.Join(
+      metaData = Builders.MetaData(namespace = "test", name = "parent_join"),
+      left = Builders.Source.entities(
+        query = entityQuery,
+        snapshotTable = "test.dim_snapshot",
+        mutationTable = "test.dim_mutations"
+      ),
+      joinParts = Seq.empty,
+      bootstrapParts = Seq.empty
+    )
+
+    val childJoin = Builders.Join(
+      metaData = Builders.MetaData(namespace = "test", name = "child_join"),
+      left = Builders.Source.joinSource(parentJoin, Builders.Query(partitionColumn = "ds")),
+      joinParts = Seq.empty,
+      bootstrapParts = Seq.empty
+    )
+
+    val downstreamGroupBy = Builders.GroupBy(
+      sources = Seq(Builders.Source.joinSource(childJoin, Builders.Query(partitionColumn = "ds"))),
+      keyColumns = Seq("listing_id"),
+      aggregations = Seq(Builders.Aggregation(Operation.LAST, "headline", Seq(WindowUtils.Unbounded))),
+      accuracy = Accuracy.TEMPORAL
+    )
+
+    val join = Builders.Join(
+      left = Builders.Source.events(leftQuery, table = "test.left_events"),
+      joinParts = Seq(Builders.JoinPart(groupBy = downstreamGroupBy)),
+      bootstrapParts = Seq.empty
+    )
+
+    val deps = TableDependencies.fromJoin(join)
+
+    deps.map(_.getTableInfo.getTable) should equal(
+      Seq("test.left_events", "test.child_join", "test.dim_mutations")
+    )
+    deps(1).getStartOffset should equal(WindowUtils.Day)
+    deps(1).getEndOffset should equal(WindowUtils.Day)
+    deps(2).getStartOffset should equal(WindowUtils.zero())
+    deps(2).getEndOffset should equal(WindowUtils.zero())
+  }
+
+  // Mirrors the three shapes the Python TableDependency dataclass can produce after
+  // exposing start_cutoff / end_cutoff. These pin down what each shape resolves to
+  // in the planner — critical because the platform orchestrator expands the full
+  // resolved range and requires every date in it to be Filled on the upstream.
+  private def tableDepOf(startOffset: Window,
+                         endOffset: Window,
+                         startCutOff: String = null,
+                         endCutOff: String = null): TableDependency = {
+    new TableDependency()
+      .setTableInfo(new TableInfo().setTable("ns.upstream"))
+      .setStartOffset(startOffset)
+      .setEndOffset(endOffset)
+      .setStartCutOff(startCutOff)
+      .setEndCutOff(endCutOff)
+  }
+
+  "DependencyResolver.computeInputRange" should "return [Q.start, Q.end] for symmetric offset=0" in {
+    val queryRange = PartitionRange("2026-01-10", "2026-01-10")
+    val dep = tableDepOf(WindowUtils.zero(), WindowUtils.zero())
+
+    DependencyResolver.computeInputRange(queryRange, dep) should equal(
+      Some(PartitionRange("2026-01-10", "2026-01-10"))
+    )
+  }
+
+  it should "pin the start at startCutOff when startOffset is null and endOffset is zero" in {
+    val queryRange = PartitionRange("2026-01-10", "2026-01-10")
+    val dep = tableDepOf(
+      startOffset = null,
+      endOffset = WindowUtils.zero(),
+      startCutOff = "2024-01-01"
+    )
+
+    DependencyResolver.computeInputRange(queryRange, dep) should equal(
+      Some(PartitionRange("2024-01-01", "2026-01-10"))
+    )
+  }
+
+  it should "honor both startCutOff and offset — cutoff wins when query.start - offset goes past it" in {
+    val queryRange = PartitionRange("2024-01-03", "2024-01-10")
+    val sevenDays = new Window(7, TimeUnit.DAYS)
+    val dep = tableDepOf(
+      startOffset = sevenDays,
+      endOffset = sevenDays,
+      startCutOff = "2024-01-01"
+    )
+
+    // query.start - 7d = 2023-12-27 which is < startCutOff, so start clamps to the cutoff.
+    DependencyResolver.computeInputRange(queryRange, dep) should equal(
+      Some(PartitionRange("2024-01-01", "2024-01-03"))
+    )
   }
 }

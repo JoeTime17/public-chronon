@@ -25,10 +25,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Other Spark tests
         run: |
@@ -47,10 +47,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Batch tests
         run: |
@@ -69,10 +69,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Fetcher tests
         run: |
@@ -91,10 +91,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Join tests
         run: |
@@ -113,10 +113,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run GroupBy tests
         run: |
@@ -135,10 +135,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Analyzer tests
         run: |
@@ -157,10 +157,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Streaming tests
         run: |
@@ -179,10 +179,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run KV Store tests
         run: |
@@ -201,10 +201,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run UDAFs tests
         run: |
@@ -223,10 +223,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install curl
-        run: |
-          apt-get update && apt-get install -y curl
+      - uses: ./.github/actions/setup-mill-cache
+        with:
+          scala-version: ${{ env.SCALA_VERSION }}
+          coursier-repositories: ${{ vars.COURSIER_REPOSITORIES }}
 
       - name: Run Stats tests
         run: |

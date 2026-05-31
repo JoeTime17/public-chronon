@@ -23,6 +23,7 @@ import ai.chronon.utils as utils
 import ai.chronon.windows as window_utils
 import gen_thrift.api.ttypes as ttypes
 import gen_thrift.common.ttypes as common
+from ai.chronon.cli.compile.config_origin import mark_factory_created_config
 
 OperationType = int  # type(zthrift.Operation.FIRST)
 OperationWithArgs = Tuple[ttypes.Operation, Dict[str, str]]
@@ -40,9 +41,7 @@ def _get_output_table_name(obj, full_name: bool = False):
     Group by backfill output table name
     To be synced with api.Extensions.scala
     """
-    if not obj.metaData.name:
-        utils.__set_name(obj, ttypes.GroupBy, "group_bys")
-    return utils.output_table_name(obj, full_name)
+    return utils._ensure_name_and_get_output_table(obj, ttypes.GroupBy, "group_bys", full_name)
 
 
 #  The GroupBy's default online/production status is None and it will inherit
@@ -499,6 +498,7 @@ def GroupBy(
     cluster_conf: common.ClusterConfigProperties = None,
     step_days: int = None,
     disable_historical_backfill: bool = False,
+    environments: Optional[List[str]] = None,
 ) -> ttypes.GroupBy:
     """
 
@@ -636,9 +636,20 @@ def GroupBy(
         Cluster configuration properties for the join.
     :param step_days
         The maximum number of days to output at once
+    :param environments:
+        List of environments where this GroupBy should be deployed/available.
+        Defaults to ['prod']. Valid values: 'prod', 'canary' (case-insensitive).
+    :type environments: List[str]
     :return:
         A GroupBy object containing specified aggregations.
     """
+    # `environments` is left unset (None) when the author doesn't specify it.
+    # Downstream consumers (e.g. hub schedule-all) default the missing/empty
+    # case to ['prod']. Keeping it unset on disk avoids baking a default into
+    # every compiled conf.
+    if environments:
+        environments = utils.convert_environments_to_enum(environments)
+
     assert sources, "Sources are not specified"
 
     assert version is None or isinstance(version, int), (
@@ -724,6 +735,7 @@ def GroupBy(
         tags=tags if tags else None,
         columnTags=column_tags if column_tags else None,
         version=str(version) if version is not None else None,
+        environments=environments,
     )
 
     group_by = ttypes.GroupBy(
@@ -739,4 +751,4 @@ def GroupBy(
     # Add the table property that calls the private function
     group_by.__class__.table = property(lambda self: _get_output_table_name(self, full_name=True))
 
-    return group_by
+    return mark_factory_created_config(group_by)

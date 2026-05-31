@@ -78,24 +78,48 @@ v1 = GroupBy(
     ),
 )
 
-kafka_source = EventSource(
-    table="demo.user_activities_raw",
-    topic="kafka://user-activities-js/serde=glue_registry/registry_name=zipline-canary/schema_name=user-activities-js",
-    query=Query(
-            selects=selects(
-                user_id="user_id",
-                listing_id="listing_id",
-                view_event="IF(event_type = 'view', 1, 0)",
-                click_event="IF(event_type = 'click', 1, 0)",
-                purchase_event="IF(event_type = 'purchase', 1, 0)",
-                favorite_event="IF(event_type = 'favorite', 1, 0)",
-                add_to_cart_event="IF(event_type = 'add_to_cart', 1, 0)",
-                is_mobile="IF(device_type = 'mobile', 1, 0)",
-                is_desktop="IF(device_type = 'desktop', 1, 0)",
-                is_tablet="IF(device_type = 'tablet', 1, 0)",
-                user_event_struct="STRUCT(event_type, listing_id, unix_millis(TIMESTAMP(event_time_ms)) as timestamp)",
-            ),
-            time_column="unix_millis(TIMESTAMP(event_time_ms))",
+def make_kafka_source(topic: str) -> EventSource:
+    return EventSource(
+        table="demo.user_activities_raw",
+        topic=topic,
+        query=Query(
+                selects=selects(
+                    user_id="user_id",
+                    listing_id="listing_id",
+                    view_event="IF(event_type = 'view', 1, 0)",
+                    click_event="IF(event_type = 'click', 1, 0)",
+                    purchase_event="IF(event_type = 'purchase', 1, 0)",
+                    favorite_event="IF(event_type = 'favorite', 1, 0)",
+                    add_to_cart_event="IF(event_type = 'add_to_cart', 1, 0)",
+                    is_mobile="IF(device_type = 'mobile', 1, 0)",
+                    is_desktop="IF(device_type = 'desktop', 1, 0)",
+                    is_tablet="IF(device_type = 'tablet', 1, 0)",
+                    user_event_struct="STRUCT(event_type, listing_id, unix_millis(TIMESTAMP(event_time_ms)) as timestamp)",
+                ),
+                time_column="unix_millis(TIMESTAMP(event_time_ms))",
+        ),
+    )
+
+schema_registry_kv = "serde=glue_registry/registry_name=zipline-canary/schema_name=user-activities-js"
+kafka_source = make_kafka_source(f"kafka://user-activities-js/{schema_registry_kv}")
+
+# IAM credentials are picked up automatically via IRSA (Web Identity Token).
+# For cross-account access, add awsRoleArn="arn:..." to the sasl.jaas.config value.
+msk_iam_kv = "security.protocol=SASL_SSL/sasl.mechanism=AWS_MSK_IAM/sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;/sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+kafka_iam_source = make_kafka_source(f"kafka://user-activities-js/{schema_registry_kv}/{msk_iam_kv}")
+
+kafka_iam_v1 = GroupBy(
+    sources=[kafka_iam_source],
+    keys=["user_id"],
+    online=True,
+    version=1,
+    aggregations=aggregations,
+    step_days=10,
+    env_vars=EnvironmentVariables(
+        common={
+            # MSK IAM auth (AWS_MSK_IAM mechanism) — port 9098 is the MSK IAM auth port.
+            "CHRONON_ONLINE_ARGS": "-Ztasks=1 -Zbootstrap=b-1.ziplinecanarykafka.hak90r.c4.kafka.us-west-2.amazonaws.com:9098",
+        }
     ),
 )
 

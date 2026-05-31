@@ -276,12 +276,13 @@ class JoinPlanner(join: Join)(implicit outputPartitionSpec: PartitionSpec)
       // Return both the GroupBy dependency and any upstream join dependencies
       Seq(groupByDep) ++ upstreamJoinDeps
     }
+    val metadataUploadDeps = allDeps
 
     val metaData =
       MetaDataUtils.layer(join.metaData,
                           "metadata_upload",
                           join.metaData.name + "__metadata_upload",
-                          allDeps.toSeq,
+                          metadataUploadDeps.toSeq,
                           Some(stepDays))
     val node = new JoinMetadataUpload().setJoin(joinWithoutExecutionInfo)
 

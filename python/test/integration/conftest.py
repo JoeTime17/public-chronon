@@ -1,21 +1,48 @@
 """Fixtures for Hub/Orchestrator integration tests.
 
+Tests:
+    - test_hub_backfill.py  — compile → backfill → poll workflow
+    - test_hub_schedule.py  — schedule lifecycle (deploy, verify, delete)
+    - test_hub_run_adhoc.py — run-adhoc (streaming deploy) and cancel
+    - test_hub_eval.py      — compile → upload diffs → eval (schema + test-data)
+    - test_run_quickstart.py — full zipline run pipeline (compile → fetch)
+
+Environment variables:
+    HUB_URL         Hub / orchestrator base URL (default: http://localhost:3903)
+    EVAL_URL        Eval server base URL (default: http://localhost:3904)
+    CLOUD           Cloud provider: gcp | aws | azure (default: gcp)
+    VERSION         Zipline image version (required by test_run_quickstart)
+
+    Auth — pick one:
+    ZIPLINE_TOKEN + ZIPLINE_AUTH_URL   service-principal or short-lived JWT
+    GCP_ID_TOKEN                       cloud IAM identity token
+
 Usage::
 
     # Run all integration tests (using ZIPLINE_TOKEN — service principal):
     ZIPLINE_TOKEN=<session_token> \\
         ZIPLINE_AUTH_URL=https://canary.zipline.ai \\
         HUB_URL=https://canary-orch.zipline.ai \\
+        EVAL_URL=https://canary-eval.zipline.ai \\
         ./mill python.test_integration
 
     # Run all integration tests (using ZIPLINE_TOKEN — quick JWT):
     ZIPLINE_TOKEN=$(zipline auth get-access-token) \\
         HUB_URL=https://canary-orch.zipline.ai \\
+        EVAL_URL=https://canary-eval.zipline.ai \\
         ./mill python.test_integration
 
     # Run all integration tests (using cloud IAM token):
     GCP_ID_TOKEN=$(gcloud auth print-identity-token) \\
         HUB_URL=https://canary-orch.zipline.ai \\
+        EVAL_URL=https://canary-eval.zipline.ai \\
+        ./mill python.test_integration
+
+    # Run only eval tests:
+    PYTEST_ADDOPTS="-k test_eval" \\
+        ZIPLINE_TOKEN=<token> \\
+        HUB_URL=https://canary-orch.zipline.ai \\
+        EVAL_URL=https://canary-eval.zipline.ai \\
         ./mill python.test_integration
 
     # Run a specific test:
@@ -45,6 +72,11 @@ def pytest_addoption(parser):
         help="Hub base URL (env: HUB_URL)",
     )
     parser.addoption(
+        "--eval-url",
+        default=os.environ.get("EVAL_URL", "http://localhost:3904"),
+        help="Eval server base URL (env: EVAL_URL)",
+    )
+    parser.addoption(
         "--cloud",
         default=os.environ.get("CLOUD", "gcp"),
         choices=("gcp", "aws", "azure"),
@@ -59,6 +91,11 @@ def pytest_addoption(parser):
 @pytest.fixture(scope="session")
 def hub_url(request) -> str:
     return request.config.getoption("--hub-url")
+
+
+@pytest.fixture(scope="session")
+def eval_url(request) -> str:
+    return request.config.getoption("--eval-url")
 
 
 @pytest.fixture(scope="session")

@@ -33,6 +33,19 @@ Schedules all configs based on their versions in the `main`/`master` branch. Thi
 zipline hub schedule-all --cloud aws
 ```
 
+#### Targeting an environment with `--env`
+
+`schedule-all` takes an `--env` flag that selects which compile output to read and which configs to deploy:
+
+```bash
+zipline hub schedule-all --cloud aws --env prod    # default — reads compiled/
+zipline hub schedule-all --cloud aws --env canary  # reads compiled_canary/
+```
+
+`--env` accepts `prod` or `canary` today. The `canary` case requires a `teams.canary.py` in the repo root and per-entity opt-in via `environments=['prod', 'canary']` on the `GroupBy`/`Join`/`StagingQuery`. Entities default to prod-only — they're never scheduled under `--env canary` unless explicitly opted in.
+
+See **[Multi-Environment Compile & Deploy](MultiEnvironment.md)** for the full guide: authoring `teams.canary.py`, the `environments=` behavior matrix, and the CI workflow.
+
 ## Scheduled Jobs by Entity Type
 
 ### GroupBy

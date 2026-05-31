@@ -174,32 +174,27 @@ class SawtoothAggregatorTest extends AnyFlatSpec {
     timer.publish("comparison")
   }
 
-  it should "include events with same timestamp as query (temporal window boundary)" in {
-    // Test for the cumulate method fix - events at exact query timestamp should be included
-    val baseTimestamp = 1700000000000L // Fixed base timestamp
+  it should "exclude events with same timestamp as query by default" in {
+    val baseTimestamp = 1700000000000L
 
-    // Create events at specific timestamps
     val columns = Seq(Column("ts", LongType, 180), Column("value", LongType, 100))
     val schema = columns.map(_.schema)
 
-    // Events: [500ms, 2000ms, 2000ms (duplicate), 2500ms, 4000ms]
     val events = Array(
-      new TestRow(baseTimestamp + 500, 10L)(0),     // Event A: before first query
-      new TestRow(baseTimestamp + 2000, 100L)(0),   // Event B: exact match with query
-      new TestRow(baseTimestamp + 2000, 200L)(0),   // Event C: duplicate timestamp
-      new TestRow(baseTimestamp + 2500, 50L)(0),    // Event D: between queries
-      new TestRow(baseTimestamp + 4000, 300L)(0)    // Event E: after all queries
+      new TestRow(baseTimestamp + 500, 10L)(0),
+      new TestRow(baseTimestamp + 2000, 100L)(0),
+      new TestRow(baseTimestamp + 2000, 200L)(0),
+      new TestRow(baseTimestamp + 2500, 50L)(0),
+      new TestRow(baseTimestamp + 4000, 300L)(0)
     )
 
-    // Queries: [1000ms, 2000ms, 2000ms (duplicate), 3000ms]
     val queries = Array(
-      baseTimestamp + 1000,  // Query 0: should include Event A only
-      baseTimestamp + 2000,  // Query 1: should include Event A, B, C (events at exact timestamp)
-      baseTimestamp + 2000,  // Query 2: duplicate - should also include A, B, C
-      baseTimestamp + 3000   // Query 3: should include Event A, B, C, D
+      baseTimestamp + 1000,
+      baseTimestamp + 2000,
+      baseTimestamp + 2000,
+      baseTimestamp + 3000
     )
 
-    // Aggregation: COUNT and SUM with 1-day window
     val aggregations = Seq(
       Builders.Aggregation(Operation.COUNT, "value", Seq(new Window(1, TimeUnit.DAYS))),
       Builders.Aggregation(Operation.SUM, "value", Seq(new Window(1, TimeUnit.DAYS)))
@@ -208,31 +203,52 @@ class SawtoothAggregatorTest extends AnyFlatSpec {
     val result = sawtoothAggregate(events, queries, aggregations, schema)
     val rowAgg = new RowAggregator(schema, aggregations.flatMap(_.unpack))
 
-    // Verify results
     assertEquals(queries.length, result.length)
 
-    // Query 0 @ 1000ms: includes Event A (500ms)
     val result0 = rowAgg.finalize(result(0))
-    assertEquals(1L, result0(0))  // COUNT = 1
-    assertEquals(10L, result0(1)) // SUM = 10
+    assertEquals(1L, result0(0))
+    assertEquals(10L, result0(1))
 
-    // Query 1 @ 2000ms: includes Event A (500ms) + Event B (2000ms) + Event C (2000ms)
-    // This is the critical test - events at exact timestamp should be included
     val result1 = rowAgg.finalize(result(1))
-    assertEquals(3L, result1(0))  // COUNT = 3 (not 1!)
-    assertEquals(310L, result1(1)) // SUM = 10 + 100 + 200 = 310
+    assertEquals(1L, result1(0))
+    assertEquals(10L, result1(1))
 
-    // Query 2 @ 2000ms: same as Query 1 (duplicate timestamp)
     val result2 = rowAgg.finalize(result(2))
-    assertEquals(3L, result2(0))  // COUNT = 3
-    assertEquals(310L, result2(1)) // SUM = 310
+    assertEquals(1L, result2(0))
+    assertEquals(10L, result2(1))
 
-    // Query 3 @ 3000ms: includes Event A + B + C + D
     val result3 = rowAgg.finalize(result(3))
-    assertEquals(4L, result3(0))  // COUNT = 4
-    assertEquals(360L, result3(1)) // SUM = 10 + 100 + 200 + 50 = 360
+    assertEquals(4L, result3(0))
+    assertEquals(360L, result3(1))
+  }
 
-    // Event E at 4000ms should not be included in any query (it's in the future)
+  it should "exclude events with same timestamp as query in sorted cumulation" in {
+    val baseTimestamp = 1700000000000L
+    val columns = Seq(Column("ts", LongType, 180), Column("value", LongType, 100))
+    val schema = columns.map(_.schema)
+    val aggregations = Seq(
+      Builders.Aggregation(Operation.COUNT, "value", Seq(new Window(1, TimeUnit.DAYS))),
+      Builders.Aggregation(Operation.SUM, "value", Seq(new Window(1, TimeUnit.DAYS)))
+    )
+
+    val aggregator = new SawtoothAggregator(aggregations, schema, FiveMinuteResolution)
+    val events = mutable.Buffer[Row](
+      new TestRow(baseTimestamp + 500, 10L)(0),
+      new TestRow(baseTimestamp + 2000, 100L)(0),
+      new TestRow(baseTimestamp + 2000, 200L)(0)
+    )
+    val queries = mutable.Buffer[Row](
+      new TestRow(baseTimestamp + 2000, 0L)(0),
+      new TestRow(baseTimestamp + 3000, 0L)(0)
+    )
+    val results = mutable.ArrayBuffer.empty[Array[Any]]
+    aggregator.cumulateAndFinalizeSorted(events, queries, null, (_, finalized) => results += finalized)
+
+    assertEquals(1L, results(0)(0))
+    assertEquals(10L, results(0)(1))
+    assertEquals(3L, results(1)(0))
+    assertEquals(310L, results(1)(1))
+
   }
 
 }

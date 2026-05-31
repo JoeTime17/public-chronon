@@ -10,6 +10,7 @@ import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
 import java.nio.ByteBuffer
 import java.nio.file.Files
+import scala.collection.JavaConverters._
 
 class IcebergPartitionStatsExtractorTest
     extends AnyFlatSpec
@@ -75,6 +76,151 @@ class IcebergPartitionStatsExtractorTest
     val result = extractor.extractPartitionedStats("spark_catalog.default.test_partitioned_table", "test_conf")
 
     result should be(None)
+  }
+
+  it should "extract synthetic ds partition stats from unpartitioned table file metadata" in {
+    try {
+      spark.sql("""
+        CREATE TABLE test_unpartitioned_ds_stats (
+          id BIGINT,
+          name STRING,
+          ds STRING,
+          value DOUBLE
+        ) USING iceberg
+        TBLPROPERTIES (
+          'write.metadata.metrics.default' = 'full',
+          'write.metadata.metrics.column.ds' = 'full'
+        )
+        """)
+      spark.sql("ALTER TABLE test_unpartitioned_ds_stats WRITE ORDERED BY ds")
+
+      spark.sql("""
+        INSERT INTO test_unpartitioned_ds_stats VALUES
+        (1, 'Alice', '2024-01-15', 100.0),
+        (2, NULL, '2024-01-15', 200.0)
+        """)
+      spark.sql("""
+        INSERT INTO test_unpartitioned_ds_stats VALUES
+        (3, 'Charlie', '2024-01-16', NULL)
+        """)
+
+      spark.sql("REFRESH TABLE test_unpartitioned_ds_stats")
+
+      val extractor = new IcebergPartitionStatsExtractor(spark)
+      val maybeTileSummaries =
+        extractor.extractPartitionedStats("spark_catalog.default.test_unpartitioned_ds_stats", "test_conf")
+
+      maybeTileSummaries should be(defined)
+      val tileSummaries = maybeTileSummaries.get
+      tileSummaries should not be empty
+
+      def getTileSummary(datePartition: String, column: String): Option[TileSummary] = {
+        getFieldId("test_unpartitioned_ds_stats", column).flatMap { fieldId =>
+          tileSummaries.find { case (tileKey, _) =>
+            tileKey.getColumn == fieldId && tileKey.getSlice == s"ds=$datePartition"
+          }.map(_._2)
+        }
+      }
+
+      getTileSummary("2024-01-15", "id").get.getCount should be(2)
+      getTileSummary("2024-01-15", "name").get.getNullCount should be(1)
+      getTileSummary("2024-01-15", "value").get.getNullCount should be(0)
+      getTileSummary("2024-01-16", "id").get.getCount should be(1)
+      getTileSummary("2024-01-16", "value").get.getNullCount should be(1)
+
+      val table = spark.sessionState.catalogManager
+        .catalog("spark_catalog")
+        .asInstanceOf[org.apache.spark.sql.connector.catalog.TableCatalog]
+        .loadTable(org.apache.spark.sql.connector.catalog.Identifier.of(Array("default"), "test_unpartitioned_ds_stats"))
+        .asInstanceOf[org.apache.iceberg.spark.source.SparkTable]
+        .table()
+      val schema = table.schema()
+      val dsFieldId = schema.findField("ds").fieldId()
+      val idFieldId = schema.findField("id").fieldId()
+      val valueFieldId = schema.findField("value").fieldId()
+      val tasks = table.newScan().includeColumnStats().planFiles()
+      try {
+        val firstPartitionFileStats = tasks.iterator().asScala
+          .map(_.file())
+          .find(_.recordCount() == 2L)
+          .flatMap(file => IcebergClusteredStatsExtractor.extractStrictColumnStats(file, schema, Set(dsFieldId)))
+
+        firstPartitionFileStats should be(defined)
+        firstPartitionFileStats.get(idFieldId).minValue should be(Some(1L))
+        firstPartitionFileStats.get(idFieldId).maxValue should be(Some(2L))
+        firstPartitionFileStats.get(valueFieldId).minValue should be(Some(100.0))
+        firstPartitionFileStats.get(valueFieldId).maxValue should be(Some(200.0))
+      } finally {
+        tasks.close()
+      }
+
+      tileSummaries.keys.map(_.getColumn) should not contain dsFieldId.toString
+    } finally {
+      spark.sql("DROP TABLE IF EXISTS test_unpartitioned_ds_stats")
+    }
+  }
+
+  it should "return None for unpartitioned ds table when file metadata stats are missing" in {
+    try {
+      spark.sql("""
+        CREATE TABLE test_unpartitioned_ds_missing_stats (
+          id BIGINT,
+          name STRING,
+          ds STRING
+        ) USING iceberg
+        TBLPROPERTIES (
+          'write.metadata.metrics.default' = 'none'
+        )
+        """)
+
+      spark.sql("""
+        INSERT INTO test_unpartitioned_ds_missing_stats VALUES
+        (1, 'Alice', '2024-01-15')
+        """)
+
+      val extractor = new IcebergPartitionStatsExtractor(spark)
+      val result =
+        extractor.extractPartitionedStats("spark_catalog.default.test_unpartitioned_ds_missing_stats", "test_conf")
+
+      result should be(None)
+    } finally {
+      spark.sql("DROP TABLE IF EXISTS test_unpartitioned_ds_missing_stats")
+    }
+  }
+
+  it should "return None for unpartitioned ds table when a file spans multiple synthetic partitions" in {
+    try {
+      spark.sql("""
+        CREATE TABLE test_unpartitioned_ds_multiday_file (
+          id BIGINT,
+          name STRING,
+          ds STRING
+        ) USING iceberg
+        TBLPROPERTIES (
+          'write.metadata.metrics.default' = 'full',
+          'write.metadata.metrics.column.ds' = 'full'
+        )
+        """)
+
+      val sparkSession = spark
+      import sparkSession.implicits._
+      Seq(
+        (1L, "Alice", "2024-01-15"),
+        (2L, "Bob", "2024-01-16")
+      ).toDF("id", "name", "ds")
+        .coalesce(1)
+        .write
+        .mode("append")
+        .insertInto("test_unpartitioned_ds_multiday_file")
+
+      val extractor = new IcebergPartitionStatsExtractor(spark)
+      val result =
+        extractor.extractPartitionedStats("spark_catalog.default.test_unpartitioned_ds_multiday_file", "test_conf")
+
+      result should be(None)
+    } finally {
+      spark.sql("DROP TABLE IF EXISTS test_unpartitioned_ds_multiday_file")
+    }
   }
 
   it should "return empty map for empty partitioned table" in {

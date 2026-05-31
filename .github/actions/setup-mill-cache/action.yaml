@@ -1,0 +1,65 @@
+name: Setup Mill cache
+description: Restore Chronon CI dependency caches and optionally Mill build outputs.
+
+inputs:
+  cache-root:
+    description: Base directory for tool caches.
+    required: false
+    default: /root/.cache
+  scala-version:
+    description: Scala version for cache partitioning.
+    required: false
+    default: none
+  cache-output:
+    description: Whether to cache Mill's out directory.
+    required: false
+    default: "false"
+  output-cache-scope:
+    description: Job-specific scope for the Mill out cache.
+    required: false
+    default: default
+  coursier-repositories:
+    description: Optional COURSIER_REPOSITORIES value, usually a Maven proxy.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Configure cache paths
+      shell: bash
+      env:
+        CACHE_ROOT: ${{ inputs.cache-root }}
+        CHRONON_COURSIER_REPOSITORIES: ${{ inputs.coursier-repositories }}
+      run: |
+        mkdir -p "$CACHE_ROOT/coursier" "$CACHE_ROOT/mill" "$CACHE_ROOT/uv"
+        {
+          echo "XDG_CACHE_HOME=$CACHE_ROOT"
+          echo "COURSIER_CACHE=$CACHE_ROOT/coursier"
+          echo "UV_CACHE_DIR=$CACHE_ROOT/uv"
+        } >> "$GITHUB_ENV"
+
+        if [ -n "$CHRONON_COURSIER_REPOSITORIES" ]; then
+          echo "COURSIER_REPOSITORIES=$CHRONON_COURSIER_REPOSITORIES" >> "$GITHUB_ENV"
+        fi
+
+    - name: Restore dependency caches
+      uses: actions/cache@v5
+      with:
+        path: |
+          ${{ inputs.cache-root }}/coursier
+          ${{ inputs.cache-root }}/mill
+          ${{ inputs.cache-root }}/uv
+        key: mill-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.mill-version', 'mill', 'build.mill', '**/package.mill', 'python/pyproject.toml', 'python/uv.lock', 'python/requirements/**') }}
+        restore-keys: |
+          mill-deps-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Restore Mill output cache
+      if: ${{ inputs.cache-output == 'true' }}
+      uses: actions/cache@v5
+      with:
+        path: out
+        key: mill-out-${{ runner.os }}-${{ runner.arch }}-${{ inputs.output-cache-scope }}-${{ inputs.scala-version }}-${{ hashFiles('.github/image/Dockerfile', '.mill-version', 'mill', 'build.mill', '**/package.mill', '**/src/**', 'python/**') }}
+        restore-keys: |
+          mill-out-${{ runner.os }}-${{ runner.arch }}-${{ inputs.output-cache-scope }}-${{ inputs.scala-version }}-
+          mill-out-${{ runner.os }}-${{ runner.arch }}-${{ inputs.output-cache-scope }}-

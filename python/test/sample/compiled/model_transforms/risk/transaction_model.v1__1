@@ -1,0 +1,569 @@
+{
+  "metaData": {
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.partition.column": "_DATE"
+        }
+      },
+      "env": {
+        "common": {
+          "CUSTOMER_ID": "canary",
+          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+          "GCP_PROJECT_ID": "canary-443022",
+          "GCP_REGION": "us-central1",
+          "VERSION": "latest"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "streaming": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "upload": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          }
+        }
+      }
+    },
+    "name": "risk.transaction_model.v1__1",
+    "outputNamespace": "risk",
+    "sourceFile": "models/risk/transaction_model.py",
+    "team": "risk",
+    "version": "1"
+  },
+  "models": [
+    {
+      "inferenceSpec": {
+        "modelBackend": 0,
+        "modelBackendParams": {
+          "model_type": "xgboost"
+        }
+      },
+      "metaData": {
+        "executionInfo": {
+          "conf": {
+            "common": {
+              "spark.chronon.partition.column": "_DATE"
+            }
+          },
+          "env": {
+            "common": {
+              "CUSTOMER_ID": "canary",
+              "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+              "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+              "GCP_PROJECT_ID": "canary-443022",
+              "GCP_REGION": "us-central1",
+              "VERSION": "latest"
+            },
+            "modeEnvironments": {
+              "backfill": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "streaming": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "upload": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              }
+            }
+          }
+        },
+        "name": "risk.transaction_model.model__1.0",
+        "outputNamespace": "risk",
+        "team": "risk",
+        "version": "1.0"
+      }
+    }
+  ],
+  "passthroughFields": [
+    "user_id"
+  ],
+  "sources": [
+    {
+      "joinSource": {
+        "join": {
+          "joinParts": [
+            {
+              "groupBy": {
+                "aggregations": [
+                  {
+                    "argMap": {},
+                    "inputColumn": "transaction_amount",
+                    "operation": 6,
+                    "windows": [
+                      {
+                        "length": 1,
+                        "timeUnit": 1
+                      },
+                      {
+                        "length": 30,
+                        "timeUnit": 1
+                      },
+                      {
+                        "length": 365,
+                        "timeUnit": 1
+                      }
+                    ]
+                  },
+                  {
+                    "argMap": {},
+                    "inputColumn": "transaction_amount",
+                    "operation": 7,
+                    "windows": [
+                      {
+                        "length": 1,
+                        "timeUnit": 1
+                      }
+                    ]
+                  }
+                ],
+                "keyColumns": [
+                  "user_id"
+                ],
+                "metaData": {
+                  "executionInfo": {
+                    "conf": {
+                      "common": {
+                        "spark.chronon.partition.column": "_DATE"
+                      }
+                    },
+                    "env": {
+                      "common": {
+                        "CUSTOMER_ID": "canary",
+                        "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                        "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                        "GCP_PROJECT_ID": "canary-443022",
+                        "GCP_REGION": "us-central1",
+                        "VERSION": "latest"
+                      },
+                      "modeEnvironments": {
+                        "backfill": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        },
+                        "streaming": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        },
+                        "upload": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        }
+                      }
+                    },
+                    "historicalBackfill": 0,
+                    "onlineSchedule": "@daily"
+                  },
+                  "name": "risk.transaction_events.txn_group_by_user__0",
+                  "online": 1,
+                  "outputNamespace": "risk",
+                  "team": "risk",
+                  "version": "0"
+                },
+                "sources": [
+                  {
+                    "events": {
+                      "query": {
+                        "selects": {
+                          "transaction_amount": "transaction_amount",
+                          "transaction_type": "transaction_type",
+                          "user_id": "user_id"
+                        },
+                        "timeColumn": "transaction_time"
+                      },
+                      "table": "data.txn_events"
+                    }
+                  }
+                ]
+              },
+              "prefix": "user",
+              "useLongNames": 0
+            },
+            {
+              "groupBy": {
+                "aggregations": [
+                  {
+                    "argMap": {},
+                    "inputColumn": "transaction_amount",
+                    "operation": 6,
+                    "windows": [
+                      {
+                        "length": 1,
+                        "timeUnit": 1
+                      },
+                      {
+                        "length": 30,
+                        "timeUnit": 1
+                      },
+                      {
+                        "length": 365,
+                        "timeUnit": 1
+                      }
+                    ]
+                  },
+                  {
+                    "argMap": {},
+                    "inputColumn": "transaction_amount",
+                    "operation": 7,
+                    "windows": [
+                      {
+                        "length": 1,
+                        "timeUnit": 1
+                      }
+                    ]
+                  }
+                ],
+                "keyColumns": [
+                  "merchant_id"
+                ],
+                "metaData": {
+                  "executionInfo": {
+                    "conf": {
+                      "common": {
+                        "spark.chronon.partition.column": "_DATE"
+                      }
+                    },
+                    "env": {
+                      "common": {
+                        "CUSTOMER_ID": "canary",
+                        "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                        "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                        "GCP_PROJECT_ID": "canary-443022",
+                        "GCP_REGION": "us-central1",
+                        "VERSION": "latest"
+                      },
+                      "modeEnvironments": {
+                        "backfill": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        },
+                        "streaming": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        },
+                        "upload": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        }
+                      }
+                    },
+                    "historicalBackfill": 0,
+                    "onlineSchedule": "@daily"
+                  },
+                  "name": "risk.transaction_events.txn_group_by_merchant__0",
+                  "online": 1,
+                  "outputNamespace": "risk",
+                  "team": "risk",
+                  "version": "0"
+                },
+                "sources": [
+                  {
+                    "events": {
+                      "query": {
+                        "selects": {
+                          "merchant_id": "merchant_id",
+                          "transaction_amount": "transaction_amount",
+                          "transaction_type": "transaction_type"
+                        },
+                        "timeColumn": "transaction_time"
+                      },
+                      "table": "data.txn_events"
+                    }
+                  }
+                ]
+              },
+              "prefix": "merchant",
+              "useLongNames": 0
+            },
+            {
+              "groupBy": {
+                "keyColumns": [
+                  "user_id"
+                ],
+                "metaData": {
+                  "executionInfo": {
+                    "conf": {
+                      "common": {
+                        "spark.chronon.partition.column": "_DATE"
+                      }
+                    },
+                    "env": {
+                      "common": {
+                        "CUSTOMER_ID": "canary",
+                        "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                        "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                        "GCP_PROJECT_ID": "canary-443022",
+                        "GCP_REGION": "us-central1",
+                        "VERSION": "latest"
+                      },
+                      "modeEnvironments": {
+                        "backfill": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        },
+                        "streaming": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        },
+                        "upload": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        }
+                      }
+                    },
+                    "historicalBackfill": 0
+                  },
+                  "name": "risk.user_data.user_group_by__0",
+                  "outputNamespace": "risk",
+                  "team": "risk",
+                  "version": "0"
+                },
+                "sources": [
+                  {
+                    "entities": {
+                      "query": {
+                        "selects": {
+                          "account_age": "account_age",
+                          "account_balance": "account_balance",
+                          "account_type": "account_type",
+                          "country": "country",
+                          "credit_score": "credit_score",
+                          "number_of_devices": "number_of_devices",
+                          "preferred_language": "preferred_language",
+                          "user_id": "user_id"
+                        }
+                      },
+                      "snapshotTable": "data.users"
+                    }
+                  }
+                ]
+              },
+              "prefix": "user",
+              "useLongNames": 0
+            },
+            {
+              "groupBy": {
+                "keyColumns": [
+                  "merchant_id"
+                ],
+                "metaData": {
+                  "executionInfo": {
+                    "conf": {
+                      "common": {
+                        "spark.chronon.partition.column": "_DATE"
+                      }
+                    },
+                    "env": {
+                      "common": {
+                        "CUSTOMER_ID": "canary",
+                        "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                        "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                        "GCP_PROJECT_ID": "canary-443022",
+                        "GCP_REGION": "us-central1",
+                        "VERSION": "latest"
+                      },
+                      "modeEnvironments": {
+                        "backfill": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        },
+                        "streaming": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        },
+                        "upload": {
+                          "CUSTOMER_ID": "canary",
+                          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                          "GCP_PROJECT_ID": "canary-443022",
+                          "GCP_REGION": "us-central1",
+                          "VERSION": "latest"
+                        }
+                      }
+                    },
+                    "historicalBackfill": 0
+                  },
+                  "name": "risk.merchant_data.merchant_group_by__0",
+                  "outputNamespace": "risk",
+                  "team": "risk",
+                  "version": "0"
+                },
+                "sources": [
+                  {
+                    "entities": {
+                      "query": {
+                        "selects": {
+                          "account_age": "account_age",
+                          "account_type": "account_type",
+                          "country": "country",
+                          "is_big_merchant": "is_big_merchant",
+                          "merchant_id": "merchant_id",
+                          "preferred_language": "preferred_language",
+                          "zipcode": "zipcode"
+                        }
+                      },
+                      "snapshotTable": "data.merchants"
+                    }
+                  }
+                ]
+              },
+              "prefix": "merchant",
+              "useLongNames": 0
+            }
+          ],
+          "left": {
+            "events": {
+              "query": {
+                "selects": {
+                  "ts": "ts",
+                  "user_id": "user_id"
+                },
+                "timeColumn": "ts"
+              },
+              "table": "data.users"
+            }
+          },
+          "metaData": {
+            "executionInfo": {
+              "conf": {
+                "common": {
+                  "spark.chronon.partition.column": "_DATE"
+                }
+              },
+              "env": {
+                "common": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "modeEnvironments": {
+                  "backfill": {
+                    "CUSTOMER_ID": "canary",
+                    "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                    "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                    "GCP_PROJECT_ID": "canary-443022",
+                    "GCP_REGION": "us-central1",
+                    "VERSION": "latest"
+                  },
+                  "streaming": {
+                    "CUSTOMER_ID": "canary",
+                    "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                    "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                    "GCP_PROJECT_ID": "canary-443022",
+                    "GCP_REGION": "us-central1",
+                    "VERSION": "latest"
+                  },
+                  "upload": {
+                    "CUSTOMER_ID": "canary",
+                    "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                    "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                    "GCP_PROJECT_ID": "canary-443022",
+                    "GCP_REGION": "us-central1",
+                    "VERSION": "latest"
+                  }
+                }
+              },
+              "offlineSchedule": "@daily"
+            },
+            "name": "risk.user_transactions.txn_join__0",
+            "online": 0,
+            "outputNamespace": "risk",
+            "production": 0,
+            "samplePercent": 100.0,
+            "team": "risk",
+            "version": "0"
+          },
+          "rowIds": [
+            "user_id"
+          ],
+          "useLongNames": 0
+        },
+        "query": {
+          "selects": {
+            "user_id": "user_id"
+          }
+        }
+      }
+    }
+  ]
+}

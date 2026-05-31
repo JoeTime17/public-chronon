@@ -15,7 +15,7 @@ def get_select_star_export(table: str, partition_column: str = "ds"):
         output_namespace="quickstart",
         engine_type=EngineType.SPARK,
         dependencies=[
-            TableDependency(table=f"demo.{table}", partition_column=partition_column, offset=0)
+            TableDependency(table=f"demo.{table}", partition_column=partition_column, start_offset=0, end_offset=0)
         ],
         version=0,
         step_days=20,

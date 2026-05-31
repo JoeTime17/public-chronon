@@ -75,6 +75,12 @@ Monitor the performance of various Flink operators in the pipeline.
 - **Tags**: `feature_group`, `team`, `production`, `environment`
 - **Use Case**: Identify performance bottlenecks
 
+**Metric: `spark_row_ser_time`**
+- **Type**: Histogram
+- **Description**: Time spent serializing a Spark row after expression evaluation
+- **Tags**: `feature_group`, `team`, `production`, `environment`
+- **Use Case**: Identify serialization bottlenecks in the expression evaluation stage
+
 **Metric: `row_aggregation_time`**
 - **Type**: Histogram
 - **Description**: Time spent aggregating individual rows within windows

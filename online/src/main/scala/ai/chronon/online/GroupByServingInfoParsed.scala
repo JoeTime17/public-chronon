@@ -21,7 +21,7 @@ import ai.chronon.api.Constants.{ReversalField, TimeField}
 import ai.chronon.api.Extensions.{GroupByOps, MetadataOps, WindowOps, WindowUtils}
 import ai.chronon.api.ScalaJavaConversions.ListOps
 import ai.chronon.api._
-import ai.chronon.online.OnlineDerivationUtil.{DerivationFunc, buildDerivationFunction}
+import ai.chronon.online.OnlineDerivationUtil.{DerivationFunc, buildDerivationFunction, buildDerivedFields}
 import ai.chronon.online.serde._
 import org.apache.avro.Schema
 
@@ -103,6 +103,21 @@ class GroupByServingInfoParsed(val groupByServingInfo: GroupByServingInfo)
 
   lazy val outputAvroSchema: String =
     AvroConversions.fromChrononSchema(outputChrononSchema).toString()
+
+  lazy val responseChrononSchema: StructType = {
+    val baseValueSchema =
+      if (groupByServingInfo.groupBy.aggregations == null) selectedChrononSchema
+      else outputChrononSchema
+    if (groupBy.hasDerivations) {
+      StructType(s"${groupBy.metaData.cleanName}_RESPONSE",
+                 buildDerivedFields(groupBy.derivationsScala, keyChrononSchema, baseValueSchema).toArray)
+    } else {
+      baseValueSchema
+    }
+  }
+
+  lazy val responseAvroSchema: String =
+    AvroConversions.fromChrononSchema(responseChrononSchema).toString()
 
   def inputChrononSchema: StructType = {
     AvroConversions.toChrononSchema(parser.parse(inputAvroSchema)).asInstanceOf[StructType]

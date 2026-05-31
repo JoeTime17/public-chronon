@@ -7,6 +7,7 @@ import ai.chronon.flink.deser.ProjectedEvent
 import ai.chronon.flink.source.FlinkSource
 import ai.chronon.online.KVStore.{GetRequest, GetResponse, PutRequest}
 import ai.chronon.online.fetcher.{FetchContext, Fetcher, MetadataStore}
+import ai.chronon.online.metrics.TTLCache
 import ai.chronon.online.serde.SerDe
 import ai.chronon.online._
 import org.apache.flink.api.common.eventtime.{SerializableTimestampAssigner, WatermarkStrategy}
@@ -58,7 +59,11 @@ class TestApi extends Api(Map.empty) with Serializable {
 
   override def genKvStore: KVStore = new TestKVStore()
 
-  override def buildFetcher(debug: Boolean = false, callerName: String = null, disableErrorThrows: Boolean = false): Fetcher = {
+  override def buildFetcher(debug: Boolean = false,
+                             callerName: String = null,
+                             disableErrorThrows: Boolean = false,
+                             joinConfTtlMillis: Long = TTLCache.DefaultTtlMillis,
+                             joinCodecTtlMillis: Long = TTLCache.DefaultTtlMillis): Fetcher = {
     new TestFetcher(genKvStore)
   }
 }
@@ -149,7 +154,14 @@ object TestJoinCodec {
     val keyCodec = AvroCodec.of(keyAvroSchema.toString())
     val valueCodec = AvroCodec.of(valueAvroSchema.toString())
 
-    new JoinCodec(conf, keySchema, valueSchema, keyCodec, valueCodec, Array.empty, false)
+    new JoinCodec(conf,
+                  keySchema,
+                  valueSchema,
+                  keyCodec,
+                  valueCodec,
+                  Array.empty,
+                  joinPartKeyMappings = Map.empty,
+                  hasPartialFailure = false)
   }
 }
 

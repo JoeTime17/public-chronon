@@ -29,7 +29,8 @@
             "clusterConf": {
               "modeClusterConfigs": {
                 "upload": {
-                  "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}"
+                  "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}",
+                  "prod_only_sentinel_cluster": "prod-only-cluster-sentinel-2e3f4a"
                 }
               }
             },
@@ -40,8 +41,10 @@
                 "spark.chronon.partition.format": "yyyy-MM-dd",
                 "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_gcp.GcpFormatProvider",
                 "spark.chronon.table_write.format": "iceberg",
+                "spark.chronon.test.prod_only_sentinel": "prod-only-conf-sentinel-4f5a6b",
                 "spark.default.parallelism": "10",
                 "spark.driver.cores": "1",
+                "spark.driver.extraJavaOptions": "-Dai.chronon.metrics.enabled=true -Dai.chronon.metrics.reader=grpc -Dai.chronon.metrics.exporter.url=http://localhost:4317",
                 "spark.driver.memory": "512m",
                 "spark.executor.cores": "1",
                 "spark.executor.memory": "512m",
@@ -62,12 +65,15 @@
                 "CLOUD_PROVIDER": "gcp",
                 "CUSTOMER_ID": "canary",
                 "ENABLE_PUBSUB": "true",
+                "EVAL_URL": "http://localhost:3904",
+                "FETCHER_URL": "http://localhost:9000",
                 "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
                 "FRONTEND_URL": "http://localhost:3000",
                 "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
                 "GCP_PROJECT_ID": "canary-443022",
                 "GCP_REGION": "us-central1",
                 "HUB_URL": "http://localhost:3903",
+                "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
                 "SPARK_CLUSTER_NAME": "zipline-canary-cluster",
                 "VERSION": "latest",
                 "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
@@ -79,12 +85,15 @@
                   "CLOUD_PROVIDER": "gcp",
                   "CUSTOMER_ID": "canary",
                   "ENABLE_PUBSUB": "true",
+                  "EVAL_URL": "http://localhost:3904",
+                  "FETCHER_URL": "http://localhost:9000",
                   "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
                   "FRONTEND_URL": "http://localhost:3000",
                   "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
                   "GCP_PROJECT_ID": "canary-443022",
                   "GCP_REGION": "us-central1",
                   "HUB_URL": "http://localhost:3903",
+                  "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
                   "SPARK_CLUSTER_NAME": "zipline-transient-upload-cluster",
                   "VERSION": "latest",
                   "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
@@ -115,7 +124,8 @@
                           "clusterConf": {
                             "modeClusterConfigs": {
                               "upload": {
-                                "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}"
+                                "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}",
+                                "prod_only_sentinel_cluster": "prod-only-cluster-sentinel-2e3f4a"
                               }
                             }
                           },
@@ -126,8 +136,10 @@
                               "spark.chronon.partition.format": "yyyy-MM-dd",
                               "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_gcp.GcpFormatProvider",
                               "spark.chronon.table_write.format": "iceberg",
+                              "spark.chronon.test.prod_only_sentinel": "prod-only-conf-sentinel-4f5a6b",
                               "spark.default.parallelism": "10",
                               "spark.driver.cores": "1",
+                              "spark.driver.extraJavaOptions": "-Dai.chronon.metrics.enabled=true -Dai.chronon.metrics.reader=grpc -Dai.chronon.metrics.exporter.url=http://localhost:4317",
                               "spark.driver.memory": "512m",
                               "spark.executor.cores": "1",
                               "spark.executor.memory": "512m",
@@ -148,12 +160,15 @@
                               "CLOUD_PROVIDER": "gcp",
                               "CUSTOMER_ID": "canary",
                               "ENABLE_PUBSUB": "true",
+                              "EVAL_URL": "http://localhost:3904",
+                              "FETCHER_URL": "http://localhost:9000",
                               "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
                               "FRONTEND_URL": "http://localhost:3000",
                               "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
                               "GCP_PROJECT_ID": "canary-443022",
                               "GCP_REGION": "us-central1",
                               "HUB_URL": "http://localhost:3903",
+                              "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
                               "SPARK_CLUSTER_NAME": "zipline-canary-cluster",
                               "VERSION": "latest",
                               "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
@@ -165,12 +180,15 @@
                                 "CLOUD_PROVIDER": "gcp",
                                 "CUSTOMER_ID": "canary",
                                 "ENABLE_PUBSUB": "true",
+                                "EVAL_URL": "http://localhost:3904",
+                                "FETCHER_URL": "http://localhost:9000",
                                 "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
                                 "FRONTEND_URL": "http://localhost:3000",
                                 "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
                                 "GCP_PROJECT_ID": "canary-443022",
                                 "GCP_REGION": "us-central1",
                                 "HUB_URL": "http://localhost:3903",
+                                "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
                                 "SPARK_CLUSTER_NAME": "zipline-transient-upload-cluster",
                                 "VERSION": "latest",
                                 "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
@@ -238,7 +256,8 @@
                     "clusterConf": {
                       "modeClusterConfigs": {
                         "upload": {
-                          "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}"
+                          "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}",
+                          "prod_only_sentinel_cluster": "prod-only-cluster-sentinel-2e3f4a"
                         }
                       }
                     },
@@ -249,8 +268,10 @@
                         "spark.chronon.partition.format": "yyyy-MM-dd",
                         "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_gcp.GcpFormatProvider",
                         "spark.chronon.table_write.format": "iceberg",
+                        "spark.chronon.test.prod_only_sentinel": "prod-only-conf-sentinel-4f5a6b",
                         "spark.default.parallelism": "10",
                         "spark.driver.cores": "1",
+                        "spark.driver.extraJavaOptions": "-Dai.chronon.metrics.enabled=true -Dai.chronon.metrics.reader=grpc -Dai.chronon.metrics.exporter.url=http://localhost:4317",
                         "spark.driver.memory": "512m",
                         "spark.executor.cores": "1",
                         "spark.executor.memory": "512m",
@@ -271,12 +292,15 @@
                         "CLOUD_PROVIDER": "gcp",
                         "CUSTOMER_ID": "canary",
                         "ENABLE_PUBSUB": "true",
+                        "EVAL_URL": "http://localhost:3904",
+                        "FETCHER_URL": "http://localhost:9000",
                         "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
                         "FRONTEND_URL": "http://localhost:3000",
                         "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
                         "GCP_PROJECT_ID": "canary-443022",
                         "GCP_REGION": "us-central1",
                         "HUB_URL": "http://localhost:3903",
+                        "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
                         "SPARK_CLUSTER_NAME": "zipline-canary-cluster",
                         "VERSION": "latest",
                         "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
@@ -288,12 +312,15 @@
                           "CLOUD_PROVIDER": "gcp",
                           "CUSTOMER_ID": "canary",
                           "ENABLE_PUBSUB": "true",
+                          "EVAL_URL": "http://localhost:3904",
+                          "FETCHER_URL": "http://localhost:9000",
                           "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
                           "FRONTEND_URL": "http://localhost:3000",
                           "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
                           "GCP_PROJECT_ID": "canary-443022",
                           "GCP_REGION": "us-central1",
                           "HUB_URL": "http://localhost:3903",
+                          "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
                           "SPARK_CLUSTER_NAME": "zipline-transient-upload-cluster",
                           "VERSION": "latest",
                           "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
@@ -359,7 +386,8 @@
       "clusterConf": {
         "modeClusterConfigs": {
           "upload": {
-            "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}"
+            "dataproc.config": "{\"gceClusterConfig\": {\"subnetworkUri\": \"default\", \"serviceAccount\": \"dataproc@canary-443022.iam.gserviceaccount.com\", \"serviceAccountScopes\": [\"https://www.googleapis.com/auth/cloud-platform\", \"https://www.googleapis.com/auth/monitoring\", \"https://www.googleapis.com/auth/cloud.useraccounts.readonly\", \"https://www.googleapis.com/auth/devstorage.read_write\", \"https://www.googleapis.com/auth/logging.write\"], \"metadata\": {\"hive-version\": \"3.1.2\", \"SPARK_BQ_CONNECTOR_URL\": \"gs://spark-lib/bigquery/spark-3.5-bigquery-0.42.1.jar\", \"artifact_prefix\": \"gs://zipline-artifacts-canary\"}, \"tags\": []}, \"masterConfig\": {\"numInstances\": 1, \"machineTypeUri\": \"n2-highmem-8\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 1024}}, \"workerConfig\": {\"numInstances\": 2, \"machineTypeUri\": \"n2-highmem-4\", \"diskConfig\": {\"bootDiskType\": \"pd-standard\", \"bootDiskSizeGb\": 64, \"numLocalSsds\": 2}}, \"softwareConfig\": {\"imageVersion\": \"2.2.66-debian12\", \"optionalComponents\": [\"FLINK\", \"JUPYTER\"], \"properties\": {\"dataproc:dataproc.logging.stackdriver.enable\": \"true\", \"dataproc:jobs.file-backed-output.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.driver.enable\": \"true\", \"dataproc:dataproc.logging.stackdriver.job.yarn.container.enable\": \"true\"}}, \"initializationActions\": [{\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/copy_java_security.sh\"}, {\"executable_file\": \"gs://zipline-artifacts-canary/release/latest/scripts/gcp/opsagent_setup.sh\"}], \"endpointConfig\": {\"enableHttpPortAccess\": true}, \"lifecycleConfig\": {\"idleDeleteTtl\": \"7200s\"}}",
+            "prod_only_sentinel_cluster": "prod-only-cluster-sentinel-2e3f4a"
           }
         }
       },
@@ -370,8 +398,10 @@
           "spark.chronon.partition.format": "yyyy-MM-dd",
           "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_gcp.GcpFormatProvider",
           "spark.chronon.table_write.format": "iceberg",
+          "spark.chronon.test.prod_only_sentinel": "prod-only-conf-sentinel-4f5a6b",
           "spark.default.parallelism": "10",
           "spark.driver.cores": "1",
+          "spark.driver.extraJavaOptions": "-Dai.chronon.metrics.enabled=true -Dai.chronon.metrics.reader=grpc -Dai.chronon.metrics.exporter.url=http://localhost:4317",
           "spark.driver.memory": "512m",
           "spark.executor.cores": "1",
           "spark.executor.memory": "512m",
@@ -392,12 +422,15 @@
           "CLOUD_PROVIDER": "gcp",
           "CUSTOMER_ID": "canary",
           "ENABLE_PUBSUB": "true",
+          "EVAL_URL": "http://localhost:3904",
+          "FETCHER_URL": "http://localhost:9000",
           "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
           "FRONTEND_URL": "http://localhost:3000",
           "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
           "GCP_PROJECT_ID": "canary-443022",
           "GCP_REGION": "us-central1",
           "HUB_URL": "http://localhost:3903",
+          "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
           "SPARK_CLUSTER_NAME": "zipline-canary-cluster",
           "VERSION": "latest",
           "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"
@@ -409,12 +442,15 @@
             "CLOUD_PROVIDER": "gcp",
             "CUSTOMER_ID": "canary",
             "ENABLE_PUBSUB": "true",
+            "EVAL_URL": "http://localhost:3904",
+            "FETCHER_URL": "http://localhost:9000",
             "FLINK_STATE_URI": "gs://zipline-warehouse-canary/flink-state",
             "FRONTEND_URL": "http://localhost:3000",
             "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
             "GCP_PROJECT_ID": "canary-443022",
             "GCP_REGION": "us-central1",
             "HUB_URL": "http://localhost:3903",
+            "PROD_ONLY_SENTINEL_GCP": "prod-only-sentinel-value-9b8a7c",
             "SPARK_CLUSTER_NAME": "zipline-transient-upload-cluster",
             "VERSION": "latest",
             "WAREHOUSE_PREFIX": "gs://zipline-warehouse-canary"

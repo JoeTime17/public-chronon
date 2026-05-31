@@ -9,13 +9,14 @@ object `package` extends Cross[CloudAzureModule](build.Constants.scalaVersions) 
 }
 
 trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
-  def moduleDeps = Seq(build.spark(crossValue), build.aggregator(crossValue), build.api(crossValue), build.online(crossValue), build.redis(crossValue))
+  def moduleDeps = Seq(build.spark(crossValue), build.aggregator(crossValue), build.api(crossValue), build.online(crossValue), build.redis(crossValue), build.cloud_k8s(crossValue))
 
   // Versions force-overridden to fix CVEs from uber-jar transitive deps.
   // Also used by patchAssemblyMetadata to write correct pom.properties.
   private val jettyVersion = build.Constants.jettyVersion
   private val avroVersion = build.Constants.avroVersion
   private val nimbusJoseJwtVersion = "9.37.4"
+  private val commonsConfiguration2Version = "2.15.0"
   // Azure Cosmos SDK requires Jackson >= 2.17.2; use 2.18.6 to fix GHSA-72hv-8253-57qq.
   private val jacksonVersion = "2.18.6"
 
@@ -73,14 +74,15 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
     mvn"com.fasterxml.jackson.module::jackson-module-scala:$jacksonVersion",
     mvn"com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion",
     // Reactor and Netty dependencies required by Cosmos SDK's internal ReactorNettyClient
-    // (used even in Gateway mode). 4.1.132.Final is compatible with azure-cosmos 4.76.0
+    // (used even in Gateway mode). 4.1.133.Final is compatible with azure-cosmos 4.76.0
     // (which requires reactor-netty 1.2.13, itself built against 4.1.128.Final).
-    mvn"io.netty:netty-all:4.1.132.Final",
+    mvn"io.netty:netty-all:4.1.133.Final",
     mvn"io.projectreactor:reactor-core:3.6.11",
     mvn"io.projectreactor.netty:reactor-netty-core:1.2.13",
     mvn"io.projectreactor.netty:reactor-netty-http:1.2.13",
     mvn"org.apache.hadoop:hadoop-client-runtime:3.4.1",
     mvn"org.apache.hadoop:hadoop-client-api:3.4.1",
+    mvn"org.apache.commons:commons-configuration2:$commonsConfiguration2Version",
     mvn"com.nimbusds:nimbus-jose-jwt:$nimbusJoseJwtVersion",
     mvn"org.eclipse.jetty:jetty-server:$jettyVersion",
     mvn"org.eclipse.jetty:jetty-http:$jettyVersion",
@@ -92,7 +94,16 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
     mvn"net.minidev:json-smart:2.5.2",
   ).map(_.forceVersion())
 
-  override def assemblyRules = super.assemblyRules ++ Seq(
+  override def assemblyRules = Seq(
+    // Must run before BaseModule's META-INF/services append rule. The cloud_azure
+    // runtime jar excludes Fabric8 classes, so its ServiceLoader descriptors must
+    // be excluded too.
+    Assembly.Rule.ExcludePattern("META-INF/services/io\\.fabric8\\..*"),
+    // Spark images already provide log4j-slf4j2-impl. Keeping logback's provider
+    // in the runtime jar makes SLF4J select logback first and bypass Spark's
+    // log4j2 configuration, which leaves Spark/Hadoop libraries at DEBUG.
+    Assembly.Rule.Exclude("META-INF/services/org.slf4j.spi.SLF4JServiceProvider"),
+  ) ++ super.assemblyRules ++ Seq(
     Assembly.Rule.Exclude("META-INF/versions/17/reactor/netty/resources/DefaultLoopNIO.class"),
     Assembly.Rule.Relocate("io.netty.**", "shaded.io.netty.@1"),
     Assembly.Rule.Relocate("reactor.netty.**", "shaded.reactor.netty.@1"),
@@ -100,6 +111,14 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
     // (azure-core-http-okhttp requires OkHttp 4.x for RequestBody.create(byte[]))
     Assembly.Rule.Relocate("okhttp3.**", "shaded.okhttp3.@1"),
     Assembly.Rule.Relocate("okio.**", "shaded.okio.@1"),
+    // The cloud_k8s module is a compile-time dependency for Azure submitter classes, but
+    // Spark-on-Kubernetes already provides its own Fabric8 client at runtime. Packaging a
+    // second Fabric8 version in this Spark runtime jar can shadow Spark's client classes.
+    Assembly.Rule.ExcludePattern("io/fabric8/.*"),
+    Assembly.Rule.ExcludePattern("ch/qos/logback/.*"),
+    Assembly.Rule.ExcludePattern("net/logstash/logback/.*"),
+    Assembly.Rule.ExcludePattern("META-INF/maven/ch\\.qos\\.logback/.*"),
+    Assembly.Rule.ExcludePattern("META-INF/maven/net\\.logstash\\.logback/.*"),
     // Uber-jars (spark-core, hadoop-client-runtime, iceberg-spark-runtime) embed
     // stale pom.properties that override the correct versions during assembly merge.
     // Exclude all conflicting metadata here; the assembly task patches the correct
@@ -109,6 +128,9 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
     Assembly.Rule.ExcludePattern("META-INF/maven/commons-beanutils/.*"),
     Assembly.Rule.ExcludePattern("META-INF/maven/org\\.apache\\.avro/.*"),
     Assembly.Rule.ExcludePattern("META-INF/maven/com\\.nimbusds/nimbus-jose-jwt/.*"),
+    // hadoop-client-runtime bundles a stale commons-configuration2 pom; the real classes
+    // come from the force-pinned managed jar. Strip the stale copy, patch the version back.
+    Assembly.Rule.ExcludePattern("META-INF/maven/org\\.apache\\.commons/commons-configuration2/.*"),
     // iceberg-spark-runtime shades aircompressor but leaves the original pom metadata,
     // which grype flags as vulnerable. Strip it since the code is shaded.
     Assembly.Rule.ExcludePattern("META-INF/maven/io\\.airlift/aircompressor/.*"),
@@ -126,6 +148,7 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
     ("org.eclipse.jetty", "jetty-http", jettyVersion),
     ("org.apache.avro", "avro", avroVersion),
     ("com.nimbusds", "nimbus-jose-jwt", nimbusJoseJwtVersion),
+    ("org.apache.commons", "commons-configuration2", commonsConfiguration2Version),
   )
 
   private def patchAssemblyMetadata(jar: os.Path): Unit = {
@@ -133,6 +156,12 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
     val env = new java.util.HashMap[String, String]()
     val fs = java.nio.file.FileSystems.newFileSystem(uri, env)
     try {
+      val slf4jProvider = fs.getPath("META-INF/services/org.slf4j.spi.SLF4JServiceProvider")
+      java.nio.file.Files.createDirectories(slf4jProvider.getParent)
+      java.nio.file.Files.write(
+        slf4jProvider,
+        "org.apache.logging.slf4j.SLF4JServiceProvider\n".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+
       patchedMetadata.foreach { case (groupId, artifactId, version) =>
         val entry = fs.getPath(s"META-INF/maven/$groupId/$artifactId/pom.properties")
         java.nio.file.Files.createDirectories(entry.getParent)
@@ -155,8 +184,9 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
   object test extends build.BaseTestModule {
     def scalaVersion = crossValue
 
-    def moduleDeps = Seq(build.cloud_azure(crossValue), build.api(crossValue), build.online(crossValue), build.spark(crossValue).test, build.redis(crossValue).test)
+    def moduleDeps = Seq(build.cloud_azure(crossValue), build.api(crossValue), build.online(crossValue), build.spark(crossValue).test, build.redis(crossValue).test, build.cloud_k8s(crossValue))
     def mvnDeps = super.mvnDeps() ++ Seq(
+      mvn"org.mockito:mockito-core:4.11.0",
       mvn"org.testcontainers:testcontainers:2.0.2",
       // Azure Cosmos Spark Connector - only for tests, not included in assembly
       // This is a shaded JAR so we keep it out of the main module dependencies

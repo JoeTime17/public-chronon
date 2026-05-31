@@ -1,0 +1,472 @@
+{
+  "aggregations": [
+    {
+      "argMap": {},
+      "inputColumn": "view_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "click_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "purchase_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "favorite_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "add_to_cart_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "view_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "click_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "purchase_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "favorite_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "add_to_cart_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "is_mobile",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "is_desktop",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "is_tablet",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {
+        "k": "128"
+      },
+      "inputColumn": "user_event_struct",
+      "operation": 13,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    }
+  ],
+  "keyColumns": [
+    "user_id"
+  ],
+  "metaData": {
+    "columnHashes": {
+      "add_to_cart_event_average_14d": "e2f564bea15054d7be2275095f7ecc2f",
+      "add_to_cart_event_average_1d": "e2f564bea15054d7be2275095f7ecc2f",
+      "add_to_cart_event_average_30d": "e2f564bea15054d7be2275095f7ecc2f",
+      "add_to_cart_event_average_7d": "e2f564bea15054d7be2275095f7ecc2f",
+      "add_to_cart_event_sum_14d": "e2f564bea15054d7be2275095f7ecc2f",
+      "add_to_cart_event_sum_1d": "e2f564bea15054d7be2275095f7ecc2f",
+      "add_to_cart_event_sum_30d": "e2f564bea15054d7be2275095f7ecc2f",
+      "add_to_cart_event_sum_7d": "e2f564bea15054d7be2275095f7ecc2f",
+      "click_event_average_14d": "a1a1b6112c1c414da7aabec456f7c387",
+      "click_event_average_1d": "a1a1b6112c1c414da7aabec456f7c387",
+      "click_event_average_30d": "a1a1b6112c1c414da7aabec456f7c387",
+      "click_event_average_7d": "a1a1b6112c1c414da7aabec456f7c387",
+      "click_event_sum_14d": "a1a1b6112c1c414da7aabec456f7c387",
+      "click_event_sum_1d": "a1a1b6112c1c414da7aabec456f7c387",
+      "click_event_sum_30d": "a1a1b6112c1c414da7aabec456f7c387",
+      "click_event_sum_7d": "a1a1b6112c1c414da7aabec456f7c387",
+      "favorite_event_average_14d": "4c647a9fee0c872575089a5e2ae84d62",
+      "favorite_event_average_1d": "4c647a9fee0c872575089a5e2ae84d62",
+      "favorite_event_average_30d": "4c647a9fee0c872575089a5e2ae84d62",
+      "favorite_event_average_7d": "4c647a9fee0c872575089a5e2ae84d62",
+      "favorite_event_sum_14d": "4c647a9fee0c872575089a5e2ae84d62",
+      "favorite_event_sum_1d": "4c647a9fee0c872575089a5e2ae84d62",
+      "favorite_event_sum_30d": "4c647a9fee0c872575089a5e2ae84d62",
+      "favorite_event_sum_7d": "4c647a9fee0c872575089a5e2ae84d62",
+      "is_desktop_sum_14d": "d04ee65e38ed0d4846b6384cec536722",
+      "is_desktop_sum_1d": "d04ee65e38ed0d4846b6384cec536722",
+      "is_desktop_sum_30d": "d04ee65e38ed0d4846b6384cec536722",
+      "is_desktop_sum_7d": "d04ee65e38ed0d4846b6384cec536722",
+      "is_mobile_sum_14d": "4ee127814f1b1ed412ae2d3b2fdfe9dc",
+      "is_mobile_sum_1d": "4ee127814f1b1ed412ae2d3b2fdfe9dc",
+      "is_mobile_sum_30d": "4ee127814f1b1ed412ae2d3b2fdfe9dc",
+      "is_mobile_sum_7d": "4ee127814f1b1ed412ae2d3b2fdfe9dc",
+      "is_tablet_sum_14d": "2d67c65fb85c83534324da088da8ade6",
+      "is_tablet_sum_1d": "2d67c65fb85c83534324da088da8ade6",
+      "is_tablet_sum_30d": "2d67c65fb85c83534324da088da8ade6",
+      "is_tablet_sum_7d": "2d67c65fb85c83534324da088da8ade6",
+      "purchase_event_average_14d": "32ed062033999096f35f30a700005c65",
+      "purchase_event_average_1d": "32ed062033999096f35f30a700005c65",
+      "purchase_event_average_30d": "32ed062033999096f35f30a700005c65",
+      "purchase_event_average_7d": "32ed062033999096f35f30a700005c65",
+      "purchase_event_sum_14d": "32ed062033999096f35f30a700005c65",
+      "purchase_event_sum_1d": "32ed062033999096f35f30a700005c65",
+      "purchase_event_sum_30d": "32ed062033999096f35f30a700005c65",
+      "purchase_event_sum_7d": "32ed062033999096f35f30a700005c65",
+      "user_event_struct_last128_14d": "b33f8face5b74b386ae203f338e8ebde",
+      "user_event_struct_last128_1d": "b33f8face5b74b386ae203f338e8ebde",
+      "user_event_struct_last128_30d": "b33f8face5b74b386ae203f338e8ebde",
+      "user_event_struct_last128_7d": "b33f8face5b74b386ae203f338e8ebde",
+      "user_id": "e4042ff932e74c0d141afe3e2c44969d",
+      "view_event_average_14d": "dba8c5b21cc19fe07ceea1891fcfd226",
+      "view_event_average_1d": "dba8c5b21cc19fe07ceea1891fcfd226",
+      "view_event_average_30d": "dba8c5b21cc19fe07ceea1891fcfd226",
+      "view_event_average_7d": "dba8c5b21cc19fe07ceea1891fcfd226",
+      "view_event_sum_14d": "dba8c5b21cc19fe07ceea1891fcfd226",
+      "view_event_sum_1d": "dba8c5b21cc19fe07ceea1891fcfd226",
+      "view_event_sum_30d": "dba8c5b21cc19fe07ceea1891fcfd226",
+      "view_event_sum_7d": "dba8c5b21cc19fe07ceea1891fcfd226"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_azure_exports_user_activities__0_with_offset_0\", \"spec\": \"data.azure_exports_user_activities__0/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.chronon.partition.format": "yyyy-MM-dd",
+          "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_azure.AzureFormatProvider",
+          "spark.chronon.table_write.format": "iceberg",
+          "spark.default.parallelism": "10",
+          "spark.driver.cores": "1",
+          "spark.driver.memory": "4g",
+          "spark.driver.memoryOverhead": "1g",
+          "spark.executor.cores": "1",
+          "spark.executor.memory": "512m",
+          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkCatalog",
+          "spark.sql.catalog.spark_catalog.credential": "{OC_CREDENTIAL}",
+          "spark.sql.catalog.spark_catalog.header.X-Iceberg-Access-Delegation": "vended-credentials",
+          "spark.sql.catalog.spark_catalog.scope": "PRINCIPAL_ROLE:engine",
+          "spark.sql.catalog.spark_catalog.type": "rest",
+          "spark.sql.catalog.spark_catalog.uri": "https://vejlulx-azure-oc.snowflakecomputing.com/polaris/api/catalog",
+          "spark.sql.catalog.spark_catalog.warehouse": "demo-v2",
+          "spark.sql.shuffle.partitions": "10",
+          "taskmanager.memory.process.size": "4G"
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net",
+          "AUTH_SCOPE": "api://dev-zipline-auth",
+          "CHRONON_ONLINE_ARGS": " -Ztasks=1 -Zbootstrap=zipline-demo-events.servicebus.windows.net:9093",
+          "CLOUD_PROVIDER": "azure",
+          "CUSTOMER_ID": "dev",
+          "EVAL_URL": "https://dev-azure.zipline.ai/services/eval",
+          "FLINK_JARS_URI": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/spark-3.5.3/libs/",
+          "FLINK_SASL_JAAS_CONFIG_VAULT_URI": "https://eventhub-sasl-jaas.vault.azure.net/secrets/sasl-jass-config",
+          "FLINK_STATE_URI": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net/flink-state",
+          "FRONTEND_URL": "https://dev-azure.zipline.ai",
+          "HUB_URL": "https://dev-orch-azure.zipline.ai",
+          "OC_CREDENTIAL_VAULT_URI": "https://dev-zipline-secrets.vault.azure.net/secrets/oc-catalog-credential",
+          "SNOWFLAKE_JDBC_URL": "jdbc:snowflake://VEJLULX-AZURE.snowflakecomputing.com/?user=demo_batch_service&db=Demo&schema=public&warehouse=demo_wh",
+          "SNOWFLAKE_PRIVATE_KEY_VAULT_URI": "https://demo-service-writer-pkey.vault.azure.net/secrets/snowflake-private-key",
+          "SPARK_CLUSTER_NAME": "http://dev-zipline-kyuubi.westus.cloudapp.azure.com:10099",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "abfss://dev-zipline-warehouse@ziplineai2.dfs.core.windows.net"
+        }
+      },
+      "historicalBackfill": 0,
+      "stepDays": 30
+    },
+    "name": "azure.user_activities.v1__1",
+    "online": 0,
+    "outputNamespace": "data",
+    "sourceFile": "group_bys/azure/user_activities.py",
+    "team": "azure",
+    "version": "1"
+  },
+  "sources": [
+    {
+      "events": {
+        "query": {
+          "selects": {
+            "add_to_cart_event": "IF(event_type = 'add_to_cart', 1, 0)",
+            "click_event": "IF(event_type = 'click', 1, 0)",
+            "favorite_event": "IF(event_type = 'favorite', 1, 0)",
+            "is_desktop": "IF(device_type = 'desktop', 1, 0)",
+            "is_mobile": "IF(device_type = 'mobile', 1, 0)",
+            "is_tablet": "IF(device_type = 'tablet', 1, 0)",
+            "listing_id": "listing_id",
+            "purchase_event": "IF(event_type = 'purchase', 1, 0)",
+            "user_event_struct": "STRUCT(event_type, listing_id, unix_millis(TIMESTAMP(event_time_ms)) as timestamp)",
+            "user_id": "user_id",
+            "view_event": "IF(event_type = 'view', 1, 0)"
+          },
+          "timeColumn": "unix_millis(TIMESTAMP(event_time_ms))"
+        },
+        "table": "data.azure_exports_user_activities__0",
+        "topic": "kafka://user-activities/serde=apicurio_registry/registry_host=apicurio-registry-apicurio-registry.zipline-system.svc.cluster.local/registry_port=8080/artifact_id=user-activities-js/security.protocol=SASL_SSL/sasl.mechanism=PLAIN"
+      }
+    }
+  ]
+}

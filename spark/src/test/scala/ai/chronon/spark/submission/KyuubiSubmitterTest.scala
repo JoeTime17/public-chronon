@@ -42,6 +42,7 @@ class KyuubiSubmitterTest extends AnyFlatSpec with MockitoSugar {
       ),
       Map.empty,
       List.empty,
+      Map.empty,
       Map.empty
     )
 

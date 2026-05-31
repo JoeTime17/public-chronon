@@ -4,6 +4,7 @@ import ai.chronon.api._
 import ai.chronon.api.planner.NodeRunner
 import ai.chronon.online._
 import ai.chronon.planner.{Node, NodeContent}
+import ai.chronon.spark.submission.NodeConfReader
 import org.rogach.scallop.ScallopConf
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -253,7 +254,7 @@ object ModelNodeRunner {
 
   def runFromArgs(confPath: String, endDs: String, onlineClass: String, props: Map[String, String]): Try[Unit] = {
     Try {
-      val node = ThriftJsonCodec.fromJsonFile[Node](confPath, check = false)
+      val node = NodeConfReader.read(confPath)
       val metadata = node.metaData
 
       val api = instantiateApi(onlineClass, props)

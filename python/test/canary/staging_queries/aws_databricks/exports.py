@@ -11,7 +11,7 @@ dim_listings = StagingQuery(
     output_namespace="workspace_iceberg.poc",
     engine_type=EngineType.SPARK,
     dependencies=[
-        TableDependency(table="workspace.poc.dim_listings", partition_column="ds", offset=0)
+        TableDependency(table="workspace.poc.dim_listings", partition_column="ds", start_offset=0, end_offset=0)
     ],
     version=0,
 )
@@ -27,7 +27,7 @@ dim_listings_non_partitioned = StagingQuery(
     output_namespace="workspace_iceberg.poc",
     engine_type=EngineType.SPARK,
     dependencies=[
-        TableDependency(table="workspace.poc.dim_listings_nop", partition_column="updated_at_ts", time_partitioned=True, offset=0)
+        TableDependency(table="workspace.poc.dim_listings_nop", partition_column="updated_at_ts", time_partitioned=True, start_offset=0, end_offset=0)
     ],
     version=0,
 )

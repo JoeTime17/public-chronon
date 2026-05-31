@@ -17,7 +17,7 @@
 package ai.chronon.online.test
 
 import ai.chronon.api._
-import ai.chronon.online.CatalystUtil
+import ai.chronon.online.{CatalystUtil, PooledCatalystUtil}
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -679,5 +679,22 @@ class CatalystUtilTest extends AnyFlatSpec with CatalystUtilTestSparkSQLStructs 
     assertTrue(res.get("id") == "unique_key")
     assertTrue(res.get("created") == 1000L)
     assertTrue(res.get("score") == 0.5)
+  }
+
+  it should "include setups in pooled catalyst util cache keys" in {
+    val selects = Seq("value" -> "(SELECT value FROM pooled_setup_value)")
+    val first = new PooledCatalystUtil(
+      selects,
+      CommonScalarsStruct,
+      setups = Seq("CREATE OR REPLACE TEMPORARY VIEW pooled_setup_value AS SELECT 'first' AS value")
+    )
+    val second = new PooledCatalystUtil(
+      selects,
+      CommonScalarsStruct,
+      setups = Seq("CREATE OR REPLACE TEMPORARY VIEW pooled_setup_value AS SELECT 'second' AS value")
+    )
+
+    first.performSql(CommonScalarsRow).head("value") shouldBe "first"
+    second.performSql(CommonScalarsRow).head("value") shouldBe "second"
   }
 }

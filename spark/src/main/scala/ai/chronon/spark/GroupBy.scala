@@ -549,35 +549,27 @@ object GroupBy {
         val joinSource = source.getJoinSource
         val joinConf = joinSource.join
 
-        // materialize the table with the right end date. QueryRange.end could be shifted for temporal events
-        val beforeDs = tableUtils.partitionSpec.before(queryRange.end)
-        val isPreShifted = {
-          groupByConf.dataModel == DataModel.EVENTS && groupByConf.inferredAccuracy == Accuracy.TEMPORAL
-        }
-        val endDate = if (isPreShifted) beforeDs else queryRange.end
-
-        val join = new Join(joinConf, endDate, tableUtils, showDf = showDf)
-
-        if (computeDependency) {
-
-          val df = join.computeJoin()
-
-          if (showDf) {
-            logger.info(
-              s"printing output data from groupby::join_source: ${groupByConf.metaData.name}::${joinConf.metaData.name}")
-            df.prettyPrint()
+        val joinOutputTable =
+          if (computeDependency) {
+            JoinUtils.materializeJoin(joinConf, Option(queryRange.start), queryRange.end, tableUtils, showDf)
+          } else {
+            joinConf.finalOutputTable
           }
+
+        if (computeDependency && showDf) {
+          val df = tableUtils.scanDf(query = null, table = joinOutputTable, range = None)
+          logger.info(
+            s"printing output data from groupby::join_source: ${groupByConf.metaData.name}::${joinConf.metaData.name}")
+          df.prettyPrint()
         }
 
-        val joinOutputTable = joinConf.metaData.outputTable
         val topic = joinConf.left.topic
-        val newSource = joinConf.left.deepCopy()
+        val newSource = joinSource.toDirectSource(joinOutputTable)
 
         if (newSource.isSetEvents) {
 
           val events = newSource.getEvents
           events.setQuery(joinSource.query)
-          events.setTable(joinOutputTable)
           // set invalid topic to make sure inferAccuracy works as expected
           events.setTopic(topic + Constants.TopicInvalidSuffix)
 
@@ -585,7 +577,6 @@ object GroupBy {
 
           val entities = newSource.getEntities
           entities.setQuery(joinSource.query)
-          entities.setSnapshotTable(joinOutputTable)
           // TODO: PITC backfill of temporal entity tables require mutations to be set & enriched
           // Do note that mutations can only be backfilled if the aggregations are all deletable
           // It is very unlikely that we will ever need to PITC backfill

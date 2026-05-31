@@ -105,10 +105,23 @@ def _apply_renames(content: str, renames: dict[str, str]) -> str:
     Uses a negative lookbehind for '.' so that attribute access like
     ``exports.user_activities`` is left alone while import-level names
     (``import user_activities``, ``user_activities.v1``) are renamed.
+
+    Lines of the form ``from X.Y.Z import name`` (3+ dotted components
+    in the from-path) are skipped: the imported ``name`` is an attribute
+    of module ``Z``, not a sibling module, so it must not be renamed
+    even if it happens to collide with a known stem.
     """
-    for old, new in sorted(renames.items(), key=lambda kv: len(kv[0]), reverse=True):
-        content = re.sub(rf"(?<!\.)\b{re.escape(old)}\b", new, content)
-    return content
+    sorted_renames = sorted(renames.items(), key=lambda kv: len(kv[0]), reverse=True)
+    out_lines = []
+    for line in content.splitlines(keepends=True):
+        m = re.match(r"^\s*from\s+([\w.]+)\s+import\s+", line)
+        if m and m.group(1).count(".") >= 2:
+            out_lines.append(line)
+            continue
+        for old, new in sorted_renames:
+            line = re.sub(rf"(?<!\.)\b{re.escape(old)}\b", new, line)
+        out_lines.append(line)
+    return "".join(out_lines)
 
 
 def _rewrite_file(path: str, stem_renames: dict[str, str], dest: str = None) -> bool:

@@ -1,6 +1,6 @@
 {
   "metaData": {
-    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_aws_training_set_v1_test__0_with_offset_1\", \"spec\": \"data.aws_training_set_v1_test__0/ds={{ macros.ds_add(ds, 1) }}\"}]}",
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_data_aws_training_set_v1_test__0_with_offset_1\", \"spec\": \"data.aws_training_set_v1_test__0/ds={{ macros.ds_add(ds, -1) }}\"}]}",
     "executionInfo": {
       "clusterConf": {
         "common": {
@@ -61,6 +61,8 @@
           "CLOUD_PROVIDER": "aws",
           "CUSTOMER_ID": "canary",
           "ENABLE_KINESIS": "true",
+          "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+          "FETCHER_URL": "http://localhost:9000",
           "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
           "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
           "FRONTEND_URL": "https://canary-aws.zipline.ai",
@@ -77,6 +79,8 @@
             "CLOUD_PROVIDER": "aws",
             "CUSTOMER_ID": "canary",
             "ENABLE_KINESIS": "true",
+            "EVAL_URL": "https://canary-eval-aws.zipline.ai",
+            "FETCHER_URL": "http://localhost:9000",
             "FLINK_JARS_URI": "s3://zipline-artifacts-canary/spark-3.5.3/libs/",
             "FLINK_STATE_URI": "s3://zipline-warehouse-canary/flink-state",
             "FRONTEND_URL": "https://canary-aws.zipline.ai",

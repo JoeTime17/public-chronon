@@ -1,0 +1,574 @@
+{
+  "aggregations": [
+    {
+      "argMap": {},
+      "inputColumn": "view_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "click_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "purchase_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "favorite_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "add_to_cart_event",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "view_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "click_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "purchase_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "favorite_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "add_to_cart_event",
+      "operation": 8,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "is_mobile",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "is_desktop",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {},
+      "inputColumn": "is_tablet",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    },
+    {
+      "argMap": {
+        "k": "128"
+      },
+      "inputColumn": "user_event_struct",
+      "operation": 13,
+      "windows": [
+        {
+          "length": 1,
+          "timeUnit": 1
+        },
+        {
+          "length": 7,
+          "timeUnit": 1
+        },
+        {
+          "length": 14,
+          "timeUnit": 1
+        },
+        {
+          "length": 30,
+          "timeUnit": 1
+        }
+      ]
+    }
+  ],
+  "keyColumns": [
+    "user_id"
+  ],
+  "metaData": {
+    "columnHashes": {
+      "add_to_cart_event_average_14d": "721cedd948fa111b342a27442173c100",
+      "add_to_cart_event_average_1d": "721cedd948fa111b342a27442173c100",
+      "add_to_cart_event_average_30d": "721cedd948fa111b342a27442173c100",
+      "add_to_cart_event_average_7d": "721cedd948fa111b342a27442173c100",
+      "add_to_cart_event_sum_14d": "721cedd948fa111b342a27442173c100",
+      "add_to_cart_event_sum_1d": "721cedd948fa111b342a27442173c100",
+      "add_to_cart_event_sum_30d": "721cedd948fa111b342a27442173c100",
+      "add_to_cart_event_sum_7d": "721cedd948fa111b342a27442173c100",
+      "click_event_average_14d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+      "click_event_average_1d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+      "click_event_average_30d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+      "click_event_average_7d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+      "click_event_sum_14d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+      "click_event_sum_1d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+      "click_event_sum_30d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+      "click_event_sum_7d": "ea6d27949c09cfc8b23f5b20f445dcd5",
+      "favorite_event_average_14d": "8c5dbe13014ce5c05064cd89fede7998",
+      "favorite_event_average_1d": "8c5dbe13014ce5c05064cd89fede7998",
+      "favorite_event_average_30d": "8c5dbe13014ce5c05064cd89fede7998",
+      "favorite_event_average_7d": "8c5dbe13014ce5c05064cd89fede7998",
+      "favorite_event_sum_14d": "8c5dbe13014ce5c05064cd89fede7998",
+      "favorite_event_sum_1d": "8c5dbe13014ce5c05064cd89fede7998",
+      "favorite_event_sum_30d": "8c5dbe13014ce5c05064cd89fede7998",
+      "favorite_event_sum_7d": "8c5dbe13014ce5c05064cd89fede7998",
+      "is_desktop_sum_14d": "cd279c4eecf6966bba76ebcf642e07c1",
+      "is_desktop_sum_1d": "cd279c4eecf6966bba76ebcf642e07c1",
+      "is_desktop_sum_30d": "cd279c4eecf6966bba76ebcf642e07c1",
+      "is_desktop_sum_7d": "cd279c4eecf6966bba76ebcf642e07c1",
+      "is_mobile_sum_14d": "4aad5a5a5bad4a8029ba05cc6b299b8c",
+      "is_mobile_sum_1d": "4aad5a5a5bad4a8029ba05cc6b299b8c",
+      "is_mobile_sum_30d": "4aad5a5a5bad4a8029ba05cc6b299b8c",
+      "is_mobile_sum_7d": "4aad5a5a5bad4a8029ba05cc6b299b8c",
+      "is_tablet_sum_14d": "e45ad389d51304af80f003ab465b215f",
+      "is_tablet_sum_1d": "e45ad389d51304af80f003ab465b215f",
+      "is_tablet_sum_30d": "e45ad389d51304af80f003ab465b215f",
+      "is_tablet_sum_7d": "e45ad389d51304af80f003ab465b215f",
+      "purchase_event_average_14d": "af3161f10b0f6c6fbfd48885ac5943c9",
+      "purchase_event_average_1d": "af3161f10b0f6c6fbfd48885ac5943c9",
+      "purchase_event_average_30d": "af3161f10b0f6c6fbfd48885ac5943c9",
+      "purchase_event_average_7d": "af3161f10b0f6c6fbfd48885ac5943c9",
+      "purchase_event_sum_14d": "af3161f10b0f6c6fbfd48885ac5943c9",
+      "purchase_event_sum_1d": "af3161f10b0f6c6fbfd48885ac5943c9",
+      "purchase_event_sum_30d": "af3161f10b0f6c6fbfd48885ac5943c9",
+      "purchase_event_sum_7d": "af3161f10b0f6c6fbfd48885ac5943c9",
+      "user_event_struct_last128_14d": "47d3f70709072f97d2b414d5403026ce",
+      "user_event_struct_last128_1d": "47d3f70709072f97d2b414d5403026ce",
+      "user_event_struct_last128_30d": "47d3f70709072f97d2b414d5403026ce",
+      "user_event_struct_last128_7d": "47d3f70709072f97d2b414d5403026ce",
+      "user_id": "1cefa43bec1f992629ef61e61e07bd76",
+      "view_event_average_14d": "62a8793addff23c7d8079961a8a07320",
+      "view_event_average_1d": "62a8793addff23c7d8079961a8a07320",
+      "view_event_average_30d": "62a8793addff23c7d8079961a8a07320",
+      "view_event_average_7d": "62a8793addff23c7d8079961a8a07320",
+      "view_event_sum_14d": "62a8793addff23c7d8079961a8a07320",
+      "view_event_sum_1d": "62a8793addff23c7d8079961a8a07320",
+      "view_event_sum_30d": "62a8793addff23c7d8079961a8a07320",
+      "view_event_sum_7d": "62a8793addff23c7d8079961a8a07320"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_quickstart_quickstart_exports_user_activities__0_with_offset_0\", \"spec\": \"quickstart.quickstart_exports_user_activities__0/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.default.parallelism": "10",
+          "spark.hadoop.fs.s3a.access.key": "minioadmin",
+          "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+          "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+          "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+          "spark.hadoop.fs.s3a.path.style.access": "true",
+          "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+          "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+          "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+          "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+          "spark.sql.catalog.iceberg.type": "jdbc",
+          "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+          "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+          "spark.sql.defaultCatalog": "iceberg",
+          "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+          "spark.sql.shuffle.partitions": "10"
+        },
+        "modeConfigs": {
+          "backfill": {
+            "spark.chronon.coalesce.factor": "10",
+            "spark.chronon.partition.column": "ds",
+            "spark.default.parallelism": "10",
+            "spark.driver.memory": "512m",
+            "spark.executor.cores": "1",
+            "spark.executor.instances": "1",
+            "spark.executor.memory": "1g",
+            "spark.hadoop.fs.s3a.access.key": "minioadmin",
+            "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+            "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+            "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "spark.hadoop.fs.s3a.path.style.access": "true",
+            "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+            "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+            "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+            "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+            "spark.sql.catalog.iceberg.type": "jdbc",
+            "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+            "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+            "spark.sql.defaultCatalog": "iceberg",
+            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            "spark.sql.shuffle.partitions": "10"
+          },
+          "upload": {
+            "spark.chronon.coalesce.factor": "10",
+            "spark.chronon.partition.column": "ds",
+            "spark.default.parallelism": "10",
+            "spark.driver.memory": "512m",
+            "spark.executor.memory": "512m",
+            "spark.hadoop.fs.s3a.access.key": "minioadmin",
+            "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+            "spark.hadoop.fs.s3a.endpoint": "http://minio.chronon.svc.cluster.local:9000",
+            "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "spark.hadoop.fs.s3a.path.style.access": "true",
+            "spark.hadoop.fs.s3a.secret.key": "minioadmin",
+            "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
+            "spark.sql.catalog.iceberg.jdbc.password": "chronon",
+            "spark.sql.catalog.iceberg.jdbc.user": "chronon",
+            "spark.sql.catalog.iceberg.type": "jdbc",
+            "spark.sql.catalog.iceberg.uri": "jdbc:postgresql://postgres.chronon.svc.cluster.local:5432/iceberg_catalog",
+            "spark.sql.catalog.iceberg.warehouse": "s3a://warehouse/",
+            "spark.sql.defaultCatalog": "iceberg",
+            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+            "spark.sql.shuffle.partitions": "10"
+          }
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "s3a://warehouse",
+          "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+          "CUSTOMER_ID": "dev",
+          "EVAL_URL": "http://localhost:3904",
+          "FLINK_STATE_URI": "s3a://warehouse",
+          "FRONTEND_URL": "http://localhost:3000",
+          "HUB_URL": "http://localhost:3903",
+          "K8S_NAMESPACE": "chronon",
+          "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+          "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+          "SPARK_EVENT_LOG_ENABLED": "true",
+          "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+          "SPARK_IMAGE": "chronon-spark-k8s:latest",
+          "SPARK_SERVICE_ACCOUNT": "spark",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "s3a://warehouse"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          },
+          "streaming": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          },
+          "upload": {
+            "ARTIFACT_PREFIX": "s3a://warehouse",
+            "CHRONON_ONLINE_ARGS": "-Ztasks=1",
+            "CUSTOMER_ID": "dev",
+            "EVAL_URL": "http://localhost:3904",
+            "FLINK_STATE_URI": "s3a://warehouse",
+            "FRONTEND_URL": "http://localhost:3000",
+            "HUB_URL": "http://localhost:3903",
+            "K8S_NAMESPACE": "chronon",
+            "ONLINE_CLASS": "ai.chronon.integrations.cloud_k8s.LocalRedisApiImpl",
+            "SPARK_EVENT_LOG_DIR": "s3a://chronon-spark-logs/event-logs",
+            "SPARK_EVENT_LOG_ENABLED": "true",
+            "SPARK_HISTORY_SERVER_URL": "http://spark-history-server:18080",
+            "SPARK_IMAGE": "chronon-spark-k8s:latest",
+            "SPARK_SERVICE_ACCOUNT": "spark",
+            "VERSION": "latest",
+            "WAREHOUSE_PREFIX": "s3a://warehouse"
+          }
+        }
+      },
+      "historicalBackfill": 0,
+      "onlineSchedule": "@daily",
+      "stepDays": 4
+    },
+    "name": "quickstart.user_activities.v1__1",
+    "online": 1,
+    "outputNamespace": "quickstart",
+    "sourceFile": "group_bys/quickstart/user_activities.py",
+    "team": "quickstart",
+    "version": "1"
+  },
+  "sources": [
+    {
+      "events": {
+        "query": {
+          "selects": {
+            "add_to_cart_event": "IF(event_type = 'add_to_cart', 1, 0)",
+            "click_event": "IF(event_type = 'click', 1, 0)",
+            "favorite_event": "IF(event_type = 'favorite', 1, 0)",
+            "is_desktop": "IF(device_type = 'desktop', 1, 0)",
+            "is_mobile": "IF(device_type = 'mobile', 1, 0)",
+            "is_tablet": "IF(device_type = 'tablet', 1, 0)",
+            "listing_id": "listing_id",
+            "purchase_event": "IF(event_type = 'purchase', 1, 0)",
+            "user_event_struct": "struct(event_type, listing_id, event_time_ms as timestamp)",
+            "user_id": "user_id",
+            "view_event": "IF(event_type = 'view', 1, 0)"
+          },
+          "timeColumn": "event_time_ms"
+        },
+        "table": "quickstart.quickstart_exports_user_activities__0",
+        "topic": "user_activities_stream"
+      }
+    }
+  ]
+}

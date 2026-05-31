@@ -59,9 +59,9 @@ object CatalystUtil {
     spark
   }
 
-  case class PoolKey(expressions: Seq[(String, String)], inputSchema: StructType)
+  case class PoolKey(expressions: Seq[(String, String)], inputSchema: StructType, setups: Seq[String])
   val poolMap: PoolMap[PoolKey, CatalystUtil] = new PoolMap[PoolKey, CatalystUtil](pi =>
-    new CatalystUtil(pi.inputSchema, pi.expressions))
+    new CatalystUtil(pi.inputSchema, pi.expressions, setups = pi.setups))
 }
 
 class PoolMap[Key, Value](createFunc: Key => Value, maxSize: Int = 100, initialSize: Int = 2) {
@@ -97,9 +97,9 @@ class PoolMap[Key, Value](createFunc: Key => Value, maxSize: Int = 100, initialS
   }
 }
 
-class PooledCatalystUtil(expressions: Seq[(String, String)], inputSchema: StructType) {
-  private val poolKey = PoolKey(expressions, inputSchema)
-  private val cuPool = poolMap.getPool(PoolKey(expressions, inputSchema))
+class PooledCatalystUtil(expressions: Seq[(String, String)], inputSchema: StructType, setups: Seq[String] = Seq.empty) {
+  private val poolKey = PoolKey(expressions, inputSchema, setups)
+  private val cuPool = poolMap.getPool(poolKey)
   def performSql(values: Map[String, Any]): Seq[Map[String, Any]] =
     poolMap.performWithValue(poolKey, cuPool) { _.performSql(values) }
   def outputChrononSchema: Array[(String, DataType)] =

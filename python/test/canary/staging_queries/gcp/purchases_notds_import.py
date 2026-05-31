@@ -7,7 +7,7 @@ v1 = StagingQuery(
     output_namespace="data",
     conf=ConfigProperties(common={"spark.chronon.partition.column": "notds"}),
     dependencies=[
-        TableDependency(table="data.purchases_notds", partition_column="notds", offset=0)
+        TableDependency(table="data.purchases_notds", partition_column="notds", start_offset=0, end_offset=0)
     ],
     version=0,
 )

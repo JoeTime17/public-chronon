@@ -41,7 +41,7 @@ def submit_backfill(runner, chronon_root, hub_url, conf, start_ds, end_ds):
         [
             "hub", "backfill",
             conf,
-            f"--repo={chronon_root}",
+            f"--chronon-root={chronon_root}",
             f"--hub-url={hub_url}",
             f"--start-ds={start_ds}",
             f"--end-ds={end_ds}",
@@ -60,7 +60,7 @@ def submit_run_adhoc(runner, chronon_root, hub_url, conf, end_ds):
         [
             "hub", "run-adhoc",
             conf,
-            f"--repo={chronon_root}",
+            f"--chronon-root={chronon_root}",
             f"--hub-url={hub_url}",
             f"--end-ds={end_ds}",
             "--format=json",
@@ -78,7 +78,7 @@ def cancel_workflow(runner, chronon_root, hub_url, workflow_id, cloud):
         [
             "hub", "cancel",
             workflow_id,
-            f"--repo={chronon_root}",
+            f"--chronon-root={chronon_root}",
             f"--hub-url={hub_url}",
             f"--cloud={cloud}",
             "--format=json",
@@ -95,7 +95,7 @@ def cancel_workflow(runner, chronon_root, hub_url, workflow_id, cloud):
 
 def submit_run(runner, chronon_root, conf, version, mode="backfill", start_ds=None, end_ds=None, extra_args=None):
     """Invoke ``zipline run`` and assert success."""
-    args = ["run", conf, f"--repo={chronon_root}", f"--version={version}", f"--mode={mode}"]
+    args = ["run", conf, f"--chronon-root={chronon_root}", f"--version={version}", f"--mode={mode}"]
     if start_ds:
         args.append(f"--start-ds={start_ds}")
     if end_ds:
@@ -118,7 +118,7 @@ def submit_run_subprocess(chronon_root, conf, version, mode="backfill",
     avoid hanging on GCP SDK daemon thread cleanup.
     """
     cmd = [sys.executable, _WRAPPER_SCRIPT,
-           "run", conf, f"--repo={chronon_root}", f"--version={version}", f"--mode={mode}"]
+           "run", conf, f"--chronon-root={chronon_root}", f"--version={version}", f"--mode={mode}"]
     if start_ds:
         cmd.append(f"--start-ds={start_ds}")
     if end_ds:
@@ -179,6 +179,23 @@ def submit_fetch(runner, chronon_root, conf, version, keys, name):
 # ---------------------------------------------------------------------------
 
 
+def submit_eval(runner, chronon_root, hub_url, eval_url, conf, test_data_path=None):
+    """Submit an eval job and assert success."""
+    args = [
+        "hub", "eval",
+        conf,
+        f"--chronon-root={chronon_root}",
+        f"--hub-url={hub_url}",
+        f"--eval-url={eval_url}",
+        "--format=json",
+    ]
+    if test_data_path:
+        args += ["--test-data-path", test_data_path]
+    result = runner.invoke(zipline, args, catch_exceptions=False)
+    assert result.exit_code == 0, f"eval failed:\n{result.output}"
+    return result
+
+
 def submit_schedule(runner, chronon_root, hub_url, conf):
     """Deploy a recurring schedule for a conf."""
     result = runner.invoke(
@@ -186,7 +203,7 @@ def submit_schedule(runner, chronon_root, hub_url, conf):
         [
             "hub", "schedule",
             conf,
-            f"--repo={chronon_root}",
+            f"--chronon-root={chronon_root}",
             f"--hub-url={hub_url}",
             "--format=json",
         ],

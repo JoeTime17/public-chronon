@@ -2,12 +2,27 @@ package ai.chronon.online.test.stats
 
 import ai.chronon.api.ScalaJavaConversions._
 import ai.chronon.observability.DriftMetric
+import ai.chronon.online.stats.DriftMetrics.histogramLpDistances
 import ai.chronon.online.stats.DriftMetrics.histogramDistance
+import ai.chronon.online.stats.DriftMetrics.kllSketchDistances
 import ai.chronon.online.stats.DriftMetrics.percentileDistance
+import org.apache.datasketches.kll.KllFloatsSketch
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class DriftMetricsTest extends AnyFlatSpec with Matchers {
+
+  private def sketch(values: Seq[Float]): KllFloatsSketch = {
+    val result = KllFloatsSketch.newHeapInstance(200)
+    values.foreach(result.update)
+    result
+  }
+
+  private def histogram(values: (String, Int)*): java.util.Map[String, java.lang.Integer] = {
+    val result = new java.util.HashMap[String, java.lang.Integer]()
+    values.foreach { case (key, value) => result.put(key, value) }
+    result
+  }
 
   def buildPercentiles(mean: Double, variance: Double, breaks: Int = 20): Array[Double] = {
     val stdDev = math.sqrt(variance)
@@ -123,5 +138,73 @@ class DriftMetricsTest extends AnyFlatSpec with Matchers {
     // Hellinger assertions
     val (hellingerPercentile, _) = drifts(DriftMetric.HELLINGER)
     hellingerPercentile should be > 0.15
+  }
+
+  it should "compute zero Lp distances for identical KLL sketches" in {
+    val values = (1 to 200).map(_.toFloat)
+    val distances = kllSketchDistances(sketch(values), sketch(values))
+
+    distances.linf shouldBe 0.0
+    distances.l2 shouldBe 0.0
+    distances.l1 shouldBe 0.0
+  }
+
+  it should "increase Lp distances for shifted KLL sketches" in {
+    val reference = sketch((1 to 200).map(_.toFloat))
+    val comparison = sketch((101 to 300).map(_.toFloat))
+    val distances = kllSketchDistances(reference, comparison)
+
+    distances.linf should be > 0.4
+    distances.l2 should be > 0.1
+    distances.l1 should be > 0.8
+  }
+
+  it should "compute non-zero distances for separated point-mass sketches" in {
+    val reference = sketch(Seq.fill(100)(1.0f))
+    val comparison = sketch(Seq.fill(100)(2.0f))
+    val distances = kllSketchDistances(reference, comparison)
+
+    distances.linf shouldBe 1.0
+    distances.l2 shouldBe math.sqrt(2.0)
+    distances.l1 shouldBe 2.0
+  }
+
+  it should "compute Lp distances for histogram distributions" in {
+    val reference = histogram("a" -> 3, "b" -> 1)
+    val comparison = histogram("a" -> 1, "b" -> 3)
+    val distances = histogramLpDistances(reference, comparison)
+
+    distances.linf shouldBe 0.5
+    distances.l2 shouldBe math.sqrt(0.5)
+    distances.l1 shouldBe 1.0
+  }
+
+  it should "reject invalid histogram bin values" in {
+    val exception = the[IllegalArgumentException] thrownBy {
+      histogramLpDistances(histogram("a" -> 1), histogram("b" -> -1))
+    }
+
+    exception.getMessage should include("Invalid histogram bin")
+    exception.getMessage should include("key=b")
+    exception.getMessage should include("value=-1.0")
+  }
+
+  it should "ignore tiny low-mass bins when denoising KLL PMFs" in {
+    val reference = sketch((1 to 1000).map(_.toFloat))
+    val comparison = sketch((1 to 1000).map(_.toFloat) ++ Seq(1000000.0f))
+
+    val denoised = kllSketchDistances(reference, comparison, noiseFloor = 0.01)
+
+    denoised.linf should (be >= 0.0 and be <= 1.0)
+    denoised.l2 should (be >= 0.0 and be <= math.sqrt(2.0))
+    denoised.l1 should (be >= 0.0 and be <= 2.0)
+  }
+
+  it should "reject sketches with too few samples for robust distances" in {
+    val exception = the[IllegalArgumentException] thrownBy {
+      kllSketchDistances(sketch(Seq(1.0f)), sketch(Seq(2.0f)))
+    }
+
+    exception.getMessage should include("Not enough sketch data")
   }
 }

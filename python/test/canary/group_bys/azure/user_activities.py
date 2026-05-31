@@ -9,10 +9,21 @@ It tracks various user behaviors (views, clicks, purchases, favorites, add_to_ca
 with last_k, sum, and average aggregations over multiple time windows.
 """
 
+serde = "serde=apicurio_registry"
+registry_host = "registry_host=apicurio-registry-apicurio-registry.zipline-system.svc.cluster.local"
+registry_port = "registry_port=8080"
+artifact_id = "artifact_id=user-activities-js"
+schema_registry_kv = f"{serde}/{registry_host}/{registry_port}/{artifact_id}"
+
+security_protocol = "security.protocol=SASL_SSL"
+sasl_mechanism = "sasl.mechanism=PLAIN"
+# Note: Sasl jaas config contains secrets that are read by the Flink app after being injected via Key Vault
+kafka_sasl_kv = f"{security_protocol}/{sasl_mechanism}"
+
 source = EventSource(
-    # This will be the BigQuery table that receives the PubSub data
+    # This is the Iceberg table that receives the EventHub data
     table=exports.user_activities.table,
-    topic="pubsub://user-activities-v2/project=canary-443022/subscription=user-activities-v2-sub/serde=pubsub_schema/schemaId=user-activities",
+    topic=f"kafka://user-activities/{schema_registry_kv}/{kafka_sasl_kv}",
     query=Query(
             selects=selects(
                 user_id="user_id",
@@ -70,13 +81,8 @@ aggregations.extend([
 v1 = GroupBy(
     sources=[source],
     keys=["user_id"],  # Aggregate by user
-    online=True,
+    online=False,
     version=1,
     aggregations=aggregations,
     step_days=30,
-    env_vars=EnvironmentVariables(
-        common={
-            "CHRONON_ONLINE_ARGS": "-Ztasks=1",
-        }
-    ),
 )

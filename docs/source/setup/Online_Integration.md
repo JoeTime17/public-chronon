@@ -13,6 +13,8 @@ This integration gives Chronon the ability to:
 2. Perform streaming updates to those features
 3. Fetch features via the `Fetcher` API
 
+For the HTTP service surface, see the [Fetcher API](./Fetcher_API.md) reference.
+
 ## Example
 
 If you'd to start with an example, please refer to the [MongoDB Implementation in the Quickstart Guide](https://github.com/zipline-ai/chronon/tree/main/quickstart/mongo-online-impl/src/main/scala/ai/chronon/quickstart/online). This provides a complete working example of how to integrate Chronon with MongoDB. 

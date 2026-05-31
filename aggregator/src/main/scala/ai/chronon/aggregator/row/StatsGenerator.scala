@@ -131,12 +131,13 @@ object StatsGenerator {
 
   /** Build enhanced metrics with cardinality awareness.
     * @param fields Schema fields as (name, dataType) pairs
-    * @param cardinalityMap Map of column names to their approximate unique counts
-    * @param cardinalityThreshold Threshold to distinguish low vs high cardinality (default 100)
+    * @param cardinalityMap Map of column names to their cardinality ratio (distinct / total_rows).
+    *                       Normalizing by row count keeps classification stable across step sizes.
+    * @param cardinalityThreshold Ratio threshold: columns with ratio <= threshold are "low cardinality" (default 0.01 = 1%)
     */
   def buildEnhancedMetrics(fields: Seq[(String, api.DataType)],
-                           cardinalityMap: Map[String, Long],
-                           cardinalityThreshold: Int = 20): Seq[MetricTransform] = {
+                           cardinalityMap: Map[String, Double],
+                           cardinalityThreshold: Double = 0.01): Seq[MetricTransform] = {
     val metrics = fields
       .flatMap { case (name, dataType) =>
         if (ignoreColumns.contains(name)) {
@@ -146,8 +147,10 @@ object StatsGenerator {
           dataType match {
             case _: api.ListType | _: api.MapType | _: api.StructType =>
               Seq.empty
+            case api.DateType | api.TimestampType =>
+              anyTransforms(name)
             case _ =>
-              val cardinality = cardinalityMap.getOrElse(name, 0L)
+              val cardinality = cardinalityMap.getOrElse(name, 0.0)
               val isLowCardinality = cardinality <= cardinalityThreshold
               val isNumeric = api.DataType.isNumeric(dataType) && dataType != api.ByteType
 

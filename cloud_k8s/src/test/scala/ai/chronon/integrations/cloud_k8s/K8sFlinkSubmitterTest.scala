@@ -3,11 +3,12 @@ package ai.chronon.integrations.cloud_k8s
 import ai.chronon.api.JobStatusType
 import ai.chronon.spark.submission.JobSubmitterConstants.MaxRetainedCheckpoints
 import K8sFlinkSubmitter.{DeploymentPendingTimeout, InitContainerSpec}
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.scalatest.flatspec.AnyFlatSpec
 
 import java.time.Instant
 import java.util.Collections
+import scala.jdk.CollectionConverters._
 
 class K8sFlinkSubmitterTest extends AnyFlatSpec {
 
@@ -23,13 +24,15 @@ class K8sFlinkSubmitterTest extends AnyFlatSpec {
     )
 
   private def submitterWithExtra(extraConfig: Map[String, String] = Map.empty,
-                                  extraJars: Array[String] = Array.empty): K8sFlinkSubmitter =
+                                  extraJars: Array[String] = Array.empty,
+                                  podLabels: Map[String, String] = Map.empty): K8sFlinkSubmitter =
     new K8sFlinkSubmitter(
       flinkImage = "test-image:latest",
       buildInitContainerSpec = noopInitContainerSpec,
       extraFlinkConfig = extraConfig,
       extraJarNames = extraJars,
-      defaultJarsBasePath = "gs://test-bucket/libs/"
+      defaultJarsBasePath = "gs://test-bucket/libs/",
+      podTemplateLabels = podLabels
     )
 
   private def config(jobProperties: Map[String, String] = Map.empty,
@@ -80,6 +83,15 @@ class K8sFlinkSubmitterTest extends AnyFlatSpec {
   it should "allow jobProperties to override base defaults" in {
     val cfg = config(Map("state.checkpoints.num-retained" -> "5"))
     assertEquals("5", cfg("state.checkpoints.num-retained"))
+  }
+
+  it should "pass through all jobProperties keys into the Flink configuration" in {
+    val cfg = config(Map(
+      "custom.flink.key" -> "custom-value",
+      "state.checkpoints.num-retained" -> "7"
+    ))
+    assertEquals("custom-value", cfg("custom.flink.key"))
+    assertEquals("7", cfg("state.checkpoints.num-retained"))
   }
 
   it should "allow jobProperties to override JM memory" in {
@@ -210,6 +222,111 @@ class K8sFlinkSubmitterTest extends AnyFlatSpec {
 
   it should "return PENDING when no creationTimestamp is available" in {
     assertEquals(JobStatusType.PENDING, resolveStatus(s, "DEPLOYED", "READY", None))
+  }
+
+  // --- buildComponentSpec: podTemplateLabels ---
+
+  private def podMeta(submitter: K8sFlinkSubmitter): java.util.Map[String, Object] = {
+    val componentSpec = submitter.buildComponentSpec(
+      memory = "4G",
+      cpu = 1.0,
+      replicas = Some(1),
+      Collections.emptyList(),
+      Collections.emptyList(),
+      Collections.emptyList(),
+      Collections.emptyList()
+    )
+    componentSpec.get("podTemplate")
+      .asInstanceOf[java.util.Map[String, Object]]
+      .get("metadata")
+      .asInstanceOf[java.util.Map[String, Object]]
+  }
+
+  "buildComponentSpec" should "not include labels in podTemplate metadata when podTemplateLabels is empty" in {
+    val meta = podMeta(submitterWithExtra())
+    assertNull(meta.get("labels"))
+  }
+
+  it should "include labels in podTemplate metadata when podTemplateLabels is set" in {
+    val meta = podMeta(submitterWithExtra(podLabels = Map("azure.workload.identity/use" -> "true")))
+    val labels = meta.get("labels").asInstanceOf[java.util.Map[String, String]]
+    assertEquals("true", labels.get("azure.workload.identity/use"))
+  }
+
+  it should "include all provided podTemplateLabels" in {
+    val meta = podMeta(submitterWithExtra(podLabels = Map("foo" -> "bar", "baz" -> "qux")))
+    val labels = meta.get("labels").asInstanceOf[java.util.Map[String, String]]
+    assertEquals("bar", labels.get("foo"))
+    assertEquals("qux", labels.get("baz"))
+  }
+
+  it should "always include prometheus annotations regardless of podTemplateLabels" in {
+    val meta = podMeta(submitterWithExtra(podLabels = Map("some-label" -> "val")))
+    val annotations = meta.get("annotations").asInstanceOf[java.util.Map[String, String]]
+    assertEquals("true", annotations.get("prometheus.io/scrape"))
+  }
+
+  // --- flinkEnvVars injection into JM/TM containers ---
+
+  private def containerEnvVars(submitter: K8sFlinkSubmitter,
+                                envVars: java.util.List[java.util.Map[String, String]]
+                               ): java.util.List[java.util.Map[String, String]] = {
+    val componentSpec = submitter.buildComponentSpec(
+      memory = "4G",
+      cpu = 1.0,
+      replicas = Some(1),
+      Collections.emptyList(),
+      envVars,
+      Collections.emptyList(),
+      Collections.emptyList()
+    )
+    val podSpec = componentSpec.get("podTemplate")
+      .asInstanceOf[java.util.Map[String, Object]]
+      .get("spec")
+      .asInstanceOf[java.util.Map[String, Object]]
+    val containers = podSpec.get("containers")
+      .asInstanceOf[java.util.List[java.util.Map[String, Object]]]
+    containers.get(0).get("env")
+      .asInstanceOf[java.util.List[java.util.Map[String, String]]]
+  }
+
+  it should "inject flinkEnvVars as env vars on JM and TM containers with FLINK_ prefix stripped" in {
+    val submitter = submitterWithExtra()
+    // buildComponentSpec receives already-processed env var maps (FLINK_ prefix already stripped by submit()).
+    // Here we test that buildComponentSpec faithfully passes them through to the container spec.
+    val podEnvVars: java.util.List[java.util.Map[String, String]] =
+      List("SASL_JAAS_CFG" -> "sasl-value", "BOOTSTRAP_SERVERS" -> "kafka:9092").map {
+        case (key, value) =>
+          val m = new java.util.HashMap[String, String]()
+          m.put("name", key)
+          m.put("value", value)
+          m: java.util.Map[String, String]
+      }.asJava
+
+    val envs = containerEnvVars(submitter, podEnvVars)
+
+    val envMap = envs.asScala.map(e => e.get("name") -> e.get("value")).toMap
+    assertEquals("sasl-value", envMap("SASL_JAAS_CFG"))
+    assertEquals("kafka:9092", envMap("BOOTSTRAP_SERVERS"))
+  }
+
+  it should "preserve existing container env vars (e.g. FLINK_CLASSPATH) alongside injected pod env vars" in {
+    val submitter = submitterWithExtra()
+    val classpathVar = new java.util.HashMap[String, String]()
+    classpathVar.put("name", "FLINK_CLASSPATH")
+    classpathVar.put("value", "/opt/flink/usrlib/*")
+    val saslVar = new java.util.HashMap[String, String]()
+    saslVar.put("name", "SASL_JAAS_CFG")
+    saslVar.put("value", "secret-value")
+    val allVars = new java.util.ArrayList[java.util.Map[String, String]]()
+    allVars.add(classpathVar)
+    allVars.add(saslVar)
+
+    val envs = containerEnvVars(submitter, allVars)
+
+    val envMap = envs.asScala.map(e => e.get("name") -> e.get("value")).toMap
+    assertEquals("/opt/flink/usrlib/*", envMap("FLINK_CLASSPATH"))
+    assertEquals("secret-value", envMap("SASL_JAAS_CFG"))
   }
 
   // --- createFlinkIngress ---

@@ -60,6 +60,12 @@ object SparkSessionBuilder {
     val chrononLogger = builder.newLogger("ai.chronon", Level.INFO)
     builder.add(chrononLogger)
 
+    // Spark 3.5.3 logs swallowed StorageStatus RPC serialization failures at
+    // ERROR from Inbox.safelyCall. The job is unaffected; suppress the noisy
+    // logger until we move to a Spark version with SPARK-49749.
+    val inboxLogger = builder.newLogger("org.apache.spark.rpc.netty.Inbox", Level.OFF)
+    builder.add(inboxLogger)
+
     // Build and apply configuration
     val config = builder.build()
     val context = LoggerContext.getContext(false)

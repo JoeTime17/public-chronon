@@ -1,5 +1,6 @@
 package ai.chronon.spark.catalog
 
+import ai.chronon.api.PartitionSpec
 import ai.chronon.spark.utils.SparkTestBase
 import org.scalatest.matchers.should.Matchers
 
@@ -135,6 +136,104 @@ class IcebergTest extends SparkTestBase with Matchers {
 
     val parts = Iceberg.primaryPartitions(tableName, "ds", "")
     parts shouldBe List("2024-03-01")
+  }
+
+  it should "derive virtual partitions from Iceberg file stats for a clustered timestamp column" in {
+    val tableName = "default.iceberg_time_stats_test"
+    spark.sql(s"DROP TABLE IF EXISTS $tableName")
+
+    spark.sql(s"""
+      CREATE TABLE $tableName (
+        id INT,
+        created_at TIMESTAMP
+      ) USING iceberg
+      TBLPROPERTIES (
+        'write.metadata.metrics.default' = 'full',
+        'write.metadata.metrics.column.created_at' = 'full'
+      )
+    """)
+    spark.sql(s"ALTER TABLE $tableName WRITE ORDERED BY created_at")
+
+    spark.sql(s"""
+      INSERT INTO $tableName VALUES
+      (1, TIMESTAMP '2024-04-01 12:00:00'),
+      (2, TIMESTAMP '2024-04-03 12:00:00')
+    """)
+
+    Iceberg.statsDateRange(tableName, "created_at", PartitionSpec.daily) shouldBe
+      Some(StatsDateRange(start = "2024-04-01", end = "2024-04-03"))
+    Iceberg.virtualPartitions(tableName, "created_at", PartitionSpec.daily) shouldBe
+      List("2024-04-01", "2024-04-02", "2024-04-03")
+    Iceberg.firstAvailablePartition(tableName, "created_at", PartitionSpec.daily) shouldBe Some("2024-04-01")
+    Iceberg.lastAvailablePartition(tableName, "created_at", PartitionSpec.daily) shouldBe Some("2024-04-02")
+  }
+
+  it should "return the inclusive last partition from Iceberg file stats for a single-day timestamp range" in {
+    val range = StatsDateRange(start = "2024-04-01", end = "2024-04-01")
+
+    range.virtualPartitions(PartitionSpec.daily) shouldBe List("2024-04-01")
+    range.firstAvailablePartition shouldBe "2024-04-01"
+    range.lastAvailablePartition shouldBe "2024-04-01"
+  }
+
+  it should "prefer actual partition metadata over Iceberg file stats" in {
+    val tableName = "default.iceberg_partition_metadata_test"
+    spark.sql(s"DROP TABLE IF EXISTS $tableName")
+
+    try {
+      spark.sql(s"""
+        CREATE TABLE $tableName (
+          id INT,
+          created_at TIMESTAMP,
+          ds STRING
+        ) USING iceberg
+        PARTITIONED BY (ds)
+        TBLPROPERTIES (
+          'write.metadata.metrics.default' = 'full',
+          'write.metadata.metrics.column.ds' = 'full'
+        )
+      """)
+
+      spark.sql(s"""
+        INSERT INTO $tableName VALUES
+        (1, TIMESTAMP '2024-06-01 12:00:00', '2024-06-01'),
+        (2, TIMESTAMP '2024-06-03 12:00:00', '2024-06-03')
+      """)
+
+      Iceberg.virtualPartitions(tableName, "ds", PartitionSpec.daily) should contain theSameElementsAs
+        List("2024-06-01", "2024-06-03")
+      Iceberg.firstAvailablePartition(tableName, "ds", PartitionSpec.daily) shouldBe Some("2024-06-01")
+      Iceberg.lastAvailablePartition(tableName, "ds", PartitionSpec.daily) shouldBe Some("2024-06-03")
+    } finally {
+      spark.sql(s"DROP TABLE IF EXISTS $tableName")
+    }
+  }
+
+  it should "fall back to scanning when Iceberg file stats do not cover the timestamp column" in {
+    val tableName = "default.iceberg_time_missing_stats_test"
+    spark.sql(s"DROP TABLE IF EXISTS $tableName")
+
+    spark.sql(s"""
+      CREATE TABLE $tableName (
+        id INT,
+        created_at TIMESTAMP
+      ) USING iceberg
+      TBLPROPERTIES (
+        'write.metadata.metrics.default' = 'none'
+      )
+    """)
+
+    spark.sql(s"""
+      INSERT INTO $tableName VALUES
+      (1, TIMESTAMP '2024-05-01 12:00:00'),
+      (2, TIMESTAMP '2024-05-03 12:00:00')
+    """)
+
+    Iceberg.statsDateRange(tableName, "created_at", PartitionSpec.daily) shouldBe None
+    Iceberg.virtualPartitions(tableName, "created_at", PartitionSpec.daily) shouldBe
+      List("2024-05-01", "2024-05-02", "2024-05-03")
+    Iceberg.firstAvailablePartition(tableName, "created_at", PartitionSpec.daily) shouldBe Some("2024-05-01")
+    Iceberg.lastAvailablePartition(tableName, "created_at", PartitionSpec.daily) shouldBe Some("2024-05-02")
   }
 
   "insertPartitions on unpartitioned Iceberg table" should "overwrite only the subrange without duplicates" in {

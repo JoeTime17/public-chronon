@@ -13,8 +13,11 @@ import scala.jdk.CollectionConverters._
   * that are injected into the cloud-agnostic [[K8sFlinkSubmitter]].
   */
 object EksFlinkSubmitter {
-  // EMR on EKS Flink image
-  val FlinkImage = "public.ecr.aws/emr-on-eks/flink/emr-7.12.0-flink:latest"
+  // EMR on EKS Flink image — pinned by digest so AWS pushing a new `:latest` doesn't
+  // change /opt/flink/lib/ between job restarts (which surfaces as
+  // IllegalStateException: "The library registration references a different set of library BLOBs").
+  val FlinkImage =
+    "public.ecr.aws/emr-on-eks/flink/emr-7.12.0-flink@sha256:13efc2b96c4b2385553bf5423dd2f5ba3467cef2711cafa78502a1d64b4eafe6"
 
   // Default path for the libs we need for Spark expression eval in Flink
   val DefaultS3FlinkJarsBasePath = "s3://zipline-spark-libs/spark-3.5.3/libs/"
@@ -57,7 +60,7 @@ object EksFlinkSubmitter {
 
     val initContainer = new java.util.HashMap[String, Object]()
     initContainer.put("name", "download-jars")
-    initContainer.put("image", "amazon/aws-cli:latest")
+    initContainer.put("image", "amazon/aws-cli:2.34.45")
     val commands = new java.util.ArrayList[String]()
     commands.add("sh"); commands.add("-c"); commands.add(downloadCommands)
     initContainer.put("command", commands)

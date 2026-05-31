@@ -22,6 +22,11 @@ from datetime import datetime
 
 import click
 
+from ai.chronon.cli.options import (
+    CHRONON_REPO_PATH_ENVVAR,
+    CHRONON_ROOT_ENVVAR,
+    repo_root_option,
+)
 from ai.chronon.repo.aws import (
     ZIPLINE_AWS_JAR_DEFAULT,
     ZIPLINE_AWS_ONLINE_CLASS_DEFAULT,
@@ -58,7 +63,9 @@ from ai.chronon.repo.utils import get_environ_arg, resolve_conf, set_runtime_env
 # TODO: @davidhan - we should move these to all be in the defaults of the choice args
 def set_defaults(ctx):
     """Set default values based on environment."""
-    chronon_repo_path = os.environ.get("CHRONON_REPO_PATH", ".")
+    chronon_repo_path = os.environ.get(CHRONON_ROOT_ENVVAR) or os.environ.get(
+        CHRONON_REPO_PATH_ENVVAR, "."
+    )
     today = datetime.today().strftime("%Y-%m-%d")
 
     obj = ctx.obj if ctx.obj is not None else dict()
@@ -100,13 +107,30 @@ def validate_flink_state(ctx, param, value):
     return value
 
 
+# Keep in sync with Spark's `Utils.fetchFile` (used by `spark-submit --jars`):
+# adding a scheme it can't fetch surfaces as a driver classpath failure, not
+# a CLI error.
+ADDITIONAL_JARS_ALLOWED_SCHEMES = (
+    "gs://",
+    "s3://",
+    "http://",
+    "https://",
+    "file:",
+    "local:",
+)
+
+
 def validate_additional_jars(ctx, param, value):
-    if value:
-        jars = value.split(",")
-        for jar in jars:
-            if not jar.startswith(("gs://", "s3://")):
-                raise click.BadParameter(f"Additional jars must start with gs://, s3://: {jar}")
-    return value
+    if not value:
+        return value
+    jars = [j.strip() for j in value.split(",")]
+    for jar in jars:
+        if not jar.startswith(ADDITIONAL_JARS_ALLOWED_SCHEMES):
+            raise click.BadParameter(
+                f"Additional jars must start with one of "
+                f"{list(ADDITIONAL_JARS_ALLOWED_SCHEMES)}: {jar}"
+            )
+    return ",".join(jars)
 
 
 @click.command(
@@ -143,7 +167,10 @@ def validate_additional_jars(ctx, param, value):
     help="break down the backfill range into this number of tasks in parallel. "
     "Please use it along with --start-ds and --end-ds and only in manual mode",
 )
-@click.option("-r", "--repo", help="Path to chronon repo", default=".", show_default=True)
+@repo_root_option(
+    help="Path to chronon repo",
+    envvars=(CHRONON_ROOT_ENVVAR, CHRONON_REPO_PATH_ENVVAR),
+)
 @click.option(
     "--online-jar",
     help="Jar containing Online KvStore & Deserializer Impl. "
@@ -210,8 +237,20 @@ def validate_additional_jars(ctx, param, value):
 )
 @click.option(
     "--additional-jars",
-    help="Comma separated list of additional jar URIs to be included in the Flink job classpath (e.g. gs://bucket/jar1.jar,gs://bucket/jar2.jar).",
+    help=(
+        "Comma separated list of additional jar URIs to be included in the "
+        "Spark/Flink job classpath. Accepts gs://, s3://, http(s)://, file: "
+        "and local: schemes "
+        "(e.g. gs://bucket/jar1.jar,https://artifactory.example.com/path/jar2.jar)."
+    ),
     callback=validate_additional_jars,
+)
+@click.option(
+    "--flink-deployment-mode",
+    type=click.Choice(["default", "application"]),
+    default="default",
+    show_default=True,
+    help="Flink deployment mode",
 )
 @click.option(
     "--validate",
@@ -285,6 +324,7 @@ def main(
     warehouse_bucket,
     no_cloud_logging,
     additional_jars,
+    flink_deployment_mode,
     debug,
     uploader,
 ):

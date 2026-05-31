@@ -43,6 +43,7 @@ class AwsRunner(Runner):
         )
         jar_path = f"{service_jar_path}:{aws_jar_path}" if args["mode"] == "fetch" else aws_jar_path
         self.version = args.get("version", "latest")
+        self._args = args
 
         super().__init__(args, os.path.expanduser(jar_path))
 
@@ -186,6 +187,88 @@ class AwsRunner(Runner):
         else:
             raise ValueError(f"Invalid job type: {job_type}")
 
+    def run_eks_flink_streaming(self):
+        args = self._args.get("args")
+        if "check-if-job-is-running" in args:
+            raise ValueError("check-if-job-is-running is not yet supported for AWS streaming.")
+        if self.latest_savepoint:
+            raise ValueError("--latest-savepoint is not yet supported for AWS streaming.")
+        if self.version_check:
+            raise ValueError("--version-check is not yet supported for AWS streaming.")
+
+        artifacts_bucket_prefix = os.environ.get(
+            "ARTIFACT_PREFIX", f"s3://zipline-artifacts-{get_customer_id()}"
+        )
+        jar_uri = f"{artifacts_bucket_prefix}/release/{self.version}/jars/{ZIPLINE_AWS_JAR_DEFAULT}"
+        flink_jar_uri = f"{artifacts_bucket_prefix}/release/{self.version}/jars/{ZIPLINE_AWS_FLINK_JAR_DEFAULT}"
+
+        eks_service_account = os.environ.get("FLINK_EKS_SERVICE_ACCOUNT")
+        eks_namespace = os.environ.get("FLINK_EKS_NAMESPACE", "zipline-chronon-flink")
+        eks_node_selector = os.environ.get("FLINK_EKS_NODE_SELECTOR")
+        aws_region = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+
+        job_id = self.conf_metadata_name.replace(".", "_")
+
+        user_args = {
+            "--groupby-name": self.conf_metadata_name,
+            "--online-class": ZIPLINE_AWS_ONLINE_CLASS_DEFAULT,
+            "--local-conf-path": self.local_abs_conf_path,
+            "--original-mode": self.mode,
+            "--conf-type": self.conf_type,
+            "--jar-uri": jar_uri,
+            "--main-class": "ai.chronon.flink.FlinkJob",
+            "--job-type": "flink",
+            "--job-id": job_id,
+            "--streaming-checkpoint-path": self.streaming_checkpoint_path,
+            "--streaming-manifest-path": self.streaming_manifest_path,
+            "--flink-main-jar-uri": flink_jar_uri,
+            "--eks-service-account": eks_service_account,
+            "--eks-namespace": eks_namespace,
+            "-ZAWS_REGION": aws_region,
+            "-ZAWS_DEFAULT_REGION": aws_region,
+            "-ZDYNAMO_API_CALL_ATTEMPT_TIMEOUT": os.environ.get("DYNAMO_API_CALL_ATTEMPT_TIMEOUT", "PT5S"),
+            "-ZDYNAMO_API_CALL_TIMEOUT": os.environ.get("DYNAMO_API_CALL_TIMEOUT", "PT30S"),
+            "-ZDYNAMO_CONNECTION_TIMEOUT": os.environ.get("DYNAMO_CONNECTION_TIMEOUT", "PT5S"),
+        }
+
+        if "check-if-job-is-running" in args:
+            user_args["--streaming-mode"] = "check-if-job-is-running"
+        elif "deploy" in args:
+            user_args["--streaming-mode"] = "deploy"
+
+        flag_args = {}
+
+        if self.latest_savepoint:
+            flag_args["--latest-savepoint"] = self.latest_savepoint
+        elif self.custom_savepoint:
+            user_args["--custom-savepoint"] = self.custom_savepoint
+        else:
+            flag_args["--no-savepoint"] = True
+
+        if self.additional_jars:
+            user_args["--additional-jars"] = self.additional_jars
+
+        if self.flink_jars_uri:
+            user_args["--flink-jars-uri"] = self.flink_jars_uri
+
+        kinesis_jar_uri = os.environ.get("FLINK_KINESIS_JAR_URI")
+        if not kinesis_jar_uri and os.environ.get("ENABLE_KINESIS", "false").lower() == "true":
+            kinesis_jar_uri = f"{artifacts_bucket_prefix}/release/{self.version}/jars/connectors_kinesis_deploy.jar"
+        if kinesis_jar_uri:
+            user_args["--flink-kinesis-jar-uri"] = kinesis_jar_uri
+
+        if eks_node_selector:
+            user_args["--eks-node-selector"] = eks_node_selector
+
+        user_args_str = " ".join(f"{key}={value}" for key, value in user_args.items() if value)
+        if self.online_args:
+            user_args_str += " " + self.online_args
+
+        flag_args_str = " ".join(key for key, value in flag_args.items() if value)
+        all_args = " ".join(filter(None, [user_args_str, flag_args_str]))
+
+        return f"java -cp {self.jar_path} {EMR_ENTRY} {all_args}"
+
     def run(self):
         command_list = []
         if self.mode == "info":
@@ -205,7 +288,9 @@ class AwsRunner(Runner):
                 )
             )
         elif self.mode in ["streaming", "streaming-client"]:
-            raise ValueError("Streaming is not supported for AWS yet.")
+            command = self.run_eks_flink_streaming()
+            check_output(command, streaming=True)
+            return
         else:
             local_files_to_upload_to_aws = []
             if self.conf:

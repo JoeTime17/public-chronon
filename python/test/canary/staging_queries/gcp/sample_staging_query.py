@@ -16,7 +16,7 @@ def get_staging_query(category_name):
         output_namespace="data",
         table_properties={"sample_config_json": """{"sample_key": "sample value"}"""},
         dependencies=[
-            TableDependency(table=training_set.v1_test.table, partition_column="ds", offset=1)
+            TableDependency(table=training_set.v1_test.table, partition_column="ds", start_offset=1, end_offset=1)
         ],
         version=0,
         step_days=30,
@@ -43,12 +43,12 @@ terminal = StagingQuery(
     table_properties={"sample_config_json": """{"sample_key": "sample value"}"""},
     output_namespace="data",
     dependencies=[
-        TableDependency(table=cart.table, partition_column="ds", offset=1),
-        TableDependency(table=user.table, partition_column="ds", offset=1),
-        TableDependency(table=item.table, partition_column="ds", offset=1),
-        TableDependency(table=order.table, partition_column="ds", offset=1),
-        TableDependency(table=payment.table, partition_column="ds", offset=1),
-        TableDependency(table=shipping.table, partition_column="ds", offset=1),
+        TableDependency(table=cart.table, partition_column="ds", start_offset=1, end_offset=1),
+        TableDependency(table=user.table, partition_column="ds", start_offset=1, end_offset=1),
+        TableDependency(table=item.table, partition_column="ds", start_offset=1, end_offset=1),
+        TableDependency(table=order.table, partition_column="ds", start_offset=1, end_offset=1),
+        TableDependency(table=payment.table, partition_column="ds", start_offset=1, end_offset=1),
+        TableDependency(table=shipping.table, partition_column="ds", start_offset=1, end_offset=1),
     ],
     version=0,
     step_days=30,
@@ -65,7 +65,7 @@ WHERE ds BETWEEN {{{{ start_date }}}} AND {{{{ end_date }}}}
     table_properties={"sample_config_json": """{"sample_key": "sample value"}"""},
     output_namespace="data",
     dependencies=[
-        TableDependency(table=training_set.v1_test.table, partition_column="ds", offset=0),
+        TableDependency(table=training_set.v1_test.table, partition_column="ds", start_offset=0, end_offset=0),
     ],
     version=0,
     step_days=30,
@@ -83,7 +83,7 @@ v1_hub = StagingQuery(
     output_namespace="data",
     table_properties={"sample_config_json": """{"sample_key": "sample value"}"""},
     dependencies=[
-        TableDependency(table=training_set.v1_hub.table, partition_column="ds", offset=1)
+        TableDependency(table=training_set.v1_hub.table, partition_column="ds", start_offset=1, end_offset=1)
     ],
     version=0,
     step_days=30,
@@ -101,7 +101,7 @@ v1_bigquery_import = StagingQuery(
     engine_type=EngineType.BIGQUERY,
     output_namespace="data",
     dependencies=[
-        TableDependency(table=training_set.v1_hub.table, partition_column="ds", offset=0)
+        TableDependency(table=training_set.v1_hub.table, partition_column="ds", start_offset=0, end_offset=0)
     ],
     version=0,
     step_days=30,

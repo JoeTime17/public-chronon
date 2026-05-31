@@ -10,10 +10,12 @@ google-cloud-storage==2.19.0
 google-cloud-bigquery-storage
 azure-identity
 azure-storage-blob
-GitPython
 google-api-core==2.27.0
 # Query validations
 sqlglot
 # Schedule validation
 croniter
 urllib3==2.6.3
+# Databricks SQL warehouse client (used by `zipline compare-tables` to fetch
+# the metrics summary after job completion)
+databricks-sql-connector

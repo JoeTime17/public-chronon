@@ -1,0 +1,85 @@
+{
+  "engineType": 0,
+  "metaData": {
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_workspace_poc_dim_listings_with_offset_0\", \"spec\": \"workspace.poc.dim_listings/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "clusterConf": {
+        "common": {
+          "emr.config": "{\"releaseLabel\": \"emr-7.12.0\", \"instanceType\": \"m5.xlarge\", \"instanceCount\": 3, \"autoTerminationPolicy\": {\"idleTimeout\": 7200}, \"subnetName\": \"zipline-canary-subnet-main\", \"securityGroupName\": \"zipline-canary-sg\"}"
+        }
+      },
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.chronon.partition.format": "yyyy-MM-dd",
+          "spark.chronon.table_write.format": "iceberg",
+          "spark.default.parallelism": "10",
+          "spark.driver.cores": "1",
+          "spark.driver.memory": "1g",
+          "spark.executor.cores": "1",
+          "spark.executor.memory": "1g",
+          "spark.sql.catalog.spark_catalog": "org.apache.spark.sql.delta.catalog.DeltaCatalog",
+          "spark.sql.catalog.workspace": "io.unitycatalog.spark.UCSingleCatalog",
+          "spark.sql.catalog.workspace.auth.oauth.clientId": "{DATABRICKS_CLIENT_ID}",
+          "spark.sql.catalog.workspace.auth.oauth.clientSecret": "{DATABRICKS_CLIENT_SECRET}",
+          "spark.sql.catalog.workspace.auth.oauth.uri": "https://dbc-050d6f00-dcb3.cloud.databricks.com/oidc/v1/token",
+          "spark.sql.catalog.workspace.auth.type": "oauth",
+          "spark.sql.catalog.workspace.renewCredential.enabled": "false",
+          "spark.sql.catalog.workspace.uri": "https://dbc-050d6f00-dcb3.cloud.databricks.com",
+          "spark.sql.catalog.workspace_iceberg": "org.apache.iceberg.spark.SparkCatalog",
+          "spark.sql.catalog.workspace_iceberg.credential": "{DATABRICKS_CREDENTIAL}",
+          "spark.sql.catalog.workspace_iceberg.oauth2-server-uri": "https://dbc-050d6f00-dcb3.cloud.databricks.com/oidc/v1/token",
+          "spark.sql.catalog.workspace_iceberg.scope": "all-apis",
+          "spark.sql.catalog.workspace_iceberg.type": "rest",
+          "spark.sql.catalog.workspace_iceberg.uri": "https://dbc-050d6f00-dcb3.cloud.databricks.com/api/2.1/unity-catalog/iceberg-rest",
+          "spark.sql.catalog.workspace_iceberg.warehouse": "workspace",
+          "spark.sql.extensions": "io.delta.sql.DeltaSparkSessionExtension,ai.chronon.spark.extensions.ChrononDeltaFixExtension,org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+          "spark.sql.shuffle.partitions": "10",
+          "spark.sql.warehouse.dir": "s3://zipline-warehouse-dev/data/uc-poc/warehouse/"
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "s3://zipline-artifacts-canary",
+          "AWS_REGION": "us-west-2",
+          "CLOUD_PROVIDER": "aws",
+          "CUSTOMER_ID": "dev",
+          "DATABRICKS_EXTRA": "DATABRICKS_EXTRA_1",
+          "FRONTEND_URL": "http://localhost:3000",
+          "HUB_URL": "http://localhost:3903",
+          "SPARK_CLUSTER_NAME": "zipline-emr-canary",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "s3://zipline-warehouse-dev"
+        }
+      },
+      "offlineSchedule": "@daily"
+    },
+    "name": "aws_databricks.exports.dim_listings__0",
+    "outputNamespace": "workspace_iceberg.poc",
+    "sourceFile": "staging_queries/aws_databricks/exports.py",
+    "team": "aws_databricks",
+    "version": "0"
+  },
+  "query": "\n    SELECT\n        *\n    FROM workspace.poc.dim_listings\n    WHERE\n    ds BETWEEN {{ start_date }} AND {{ end_date }}\n    ",
+  "tableDependencies": [
+    {
+      "endOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "startOffset": {
+        "length": 0,
+        "timeUnit": 1
+      },
+      "tableInfo": {
+        "partitionColumn": "ds",
+        "partitionInterval": {
+          "length": 1,
+          "timeUnit": 1
+        },
+        "table": "workspace.poc.dim_listings"
+      }
+    }
+  ]
+}

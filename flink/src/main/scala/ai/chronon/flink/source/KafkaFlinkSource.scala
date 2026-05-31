@@ -12,14 +12,22 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy
 
 class KafkaFlinkSource[T](props: Map[String, String],
                           deserializationSchema: DeserializationSchema[T],
-                          topicInfo: TopicInfo)
+                          topicInfo: TopicInfo,
+                          getEnv: String => Option[String] = key => Option(System.getenv(key)))
     extends FlinkSource[T] {
   import KafkaFlinkSource._
+
+  // Resolve Kafka params once: if security.protocol contains SASL and sasl.jaas.config is not
+  // already set, fall back to the SASL_JAAS_CONFIG env var (injected as a pod env var via the
+  // FLINK_SASL_JAAS_CONFIG_VAULT_URI convention in node config).
+  val resolvedParams: Map[String, String] =
+    resolveSaslJaasConfig(topicInfo.params, getEnv)
+
   val bootstrap: String = {
     // we first check props for the bootstrap server and fallback to topicInfo if not found
     FlinkUtils
       .getProperty(KafkaBootstrap, props, topicInfo)
-      .orElse(getBootstrapFromHostPort(topicInfo.params.get("host"), topicInfo.params.get("port")))
+      .orElse(getBootstrapFromHostPort(resolvedParams.get("host"), resolvedParams.get("port")))
       .getOrElse(throw new IllegalArgumentException("No bootstrap servers provided"))
   }
 
@@ -27,13 +35,13 @@ class KafkaFlinkSource[T](props: Map[String, String],
   val scaleFactor = 0.25
 
   implicit lazy val parallelism: Int = {
-    math.ceil(TopicChecker.getPartitions(topicInfo.name, bootstrap, topicInfo.params) * scaleFactor).toInt
+    math.ceil(TopicChecker.getPartitions(topicInfo.name, bootstrap, resolvedParams) * scaleFactor).toInt
   }
 
   override def getDataStream(topic: String, groupByName: String)(env: StreamExecutionEnvironment,
                                                                  parallelism: Int): SingleOutputStreamOperator[T] = {
     // confirm the topic exists
-    TopicChecker.topicShouldExist(topicInfo.name, bootstrap, topicInfo.params)
+    TopicChecker.topicShouldExist(topicInfo.name, bootstrap, resolvedParams)
 
     val startingOffsets = FlinkUtils.getProperty("start_offset", props, topicInfo) match {
       case Some(timestampStr) =>
@@ -57,7 +65,7 @@ class KafkaFlinkSource[T](props: Map[String, String],
       .setStartingOffsets(startingOffsets)
       .setValueOnlyDeserializer(deserializationSchema)
       .setBootstrapServers(bootstrap)
-      .setProperties(TopicChecker.mapToJavaProperties(topicInfo.params))
+      .setProperties(TopicChecker.mapToJavaProperties(resolvedParams))
       .build()
 
     env
@@ -68,9 +76,28 @@ class KafkaFlinkSource[T](props: Map[String, String],
 
 object KafkaFlinkSource {
   val KafkaBootstrap = "bootstrap"
+  val SecurityProtocol = "security.protocol"
+  val SaslJaasConfig = "sasl.jaas.config"
+  val SaslJaasConfigEnvVar = "SASL_JAAS_CONFIG"
 
   def getBootstrapFromHostPort(maybeHost: Option[String], maybePort: Option[String]): Option[String] = {
     maybeHost
       .map(host => host + maybePort.map(":" + _).getOrElse(""))
+  }
+
+  /** If security.protocol contains SASL and sasl.jaas.config is not already set,
+    * attempts to populate it from the SASL_JAAS_CONFIG environment variable
+    * (injected as a pod env var via the FLINK_SASL_JAAS_CONFIG_VAULT_URI node config convention).
+    */
+  def resolveSaslJaasConfig(params: Map[String, String], getEnv: String => Option[String]): Map[String, String] = {
+    val isSasl = params.get(SecurityProtocol).exists(_.toUpperCase.contains("SASL"))
+    if (isSasl && !params.get(SaslJaasConfig).exists(_.trim.nonEmpty)) {
+      getEnv(SaslJaasConfigEnvVar) match {
+        case Some(jaasConfig) => params + (SaslJaasConfig -> jaasConfig)
+        case None             => params
+      }
+    } else {
+      params
+    }
   }
 }

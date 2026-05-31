@@ -2,11 +2,9 @@ package ai.chronon.spark.join
 
 import ai.chronon.aggregator.windowing.FiveMinuteResolution
 import ai.chronon.api._
-import ai.chronon.spark.join.{AggregationInfo, CGenericRow, SawtoothUdf}
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.{Row => SparkRow}
 import org.scalatest.matchers.should.Matchers
-
 
 class SawtoothUdfSpec extends BaseJoinTest with Matchers {
 
@@ -254,22 +252,15 @@ class SawtoothUdfSpec extends BaseJoinTest with Matchers {
         .asInstanceOf[Double] == 0.0))) shouldBe true
   }
 
-  it should "include events with the same timestamp as the query (temporal window right boundary)" in {
-    // This test validates the fix for the temporal window boundary bug
-    // When a left query and right event have the exact same timestamp,
-    // the event should be INCLUDED in the aggregation window [T-window, T]
-
+  it should "exclude events with the same timestamp as the query for JoinSource group bys" in {
     val baseTs = 1600000000000L
 
-    // Create left rows - a query at baseTs
     val leftRows = Seq(SparkRow(1, "query1", baseTs))
-
-    // Create right rows - an event at EXACTLY the same timestamp
     val rightRows = Seq(
-      SparkRow(1, "item1", 100.0, baseTs)  // Same timestamp as query
+      SparkRow(1, "item0", 80.0, baseTs - 1),
+      SparkRow(1, "item1", 100.0, baseTs)
     )
 
-    // Define schemas
     val leftSchema = org.apache.spark.sql.types.StructType(Seq(
       org.apache.spark.sql.types.StructField("user_id", org.apache.spark.sql.types.IntegerType),
       org.apache.spark.sql.types.StructField("query", org.apache.spark.sql.types.StringType),
@@ -283,7 +274,6 @@ class SawtoothUdfSpec extends BaseJoinTest with Matchers {
       org.apache.spark.sql.types.StructField(Constants.TimeColumn, org.apache.spark.sql.types.LongType)
     ))
 
-    // Define aggregations
     val aggregations = Seq(
       Builders.Aggregation(
         operation = Operation.COUNT,
@@ -297,16 +287,26 @@ class SawtoothUdfSpec extends BaseJoinTest with Matchers {
       )
     )
 
-    // Create GroupBy definition
+    val parentGroupBy = Builders.GroupBy(
+      sources = Seq(Builders.Source.events(Builders.Query(), table = "dummy_right")),
+      keyColumns = Seq("user_id"),
+      aggregations = aggregations,
+      metaData = Builders.MetaData(name = "parent_gb", namespace = "test"),
+      accuracy = Accuracy.TEMPORAL
+    )
+    val parentJoin: ai.chronon.api.Join = Builders.Join(
+      metaData = Builders.MetaData(name = "parent_join", namespace = "test"),
+      left = Builders.Source.events(Builders.Query(), table = "dummy_left"),
+      joinParts = Seq(Builders.JoinPart(groupBy = parentGroupBy))
+    )
     val groupBy = Builders.GroupBy(
-      sources = Seq(),
+      sources = Seq(Builders.Source.joinSource(parentJoin, Builders.Query())),
       keyColumns = Seq("user_id"),
       aggregations = aggregations,
       metaData = null,
       accuracy = null
     )
 
-    // Create the aggregators
     val minQueryTs = baseTs - 24 * 3600 * 1000
     val aggregators = AggregationInfo.from(
       groupBy = groupBy,
@@ -316,25 +316,19 @@ class SawtoothUdfSpec extends BaseJoinTest with Matchers {
       resolution = FiveMinuteResolution
     )
 
-    // Call the sawtoothAggregate function
     val result = SawtoothUdf.sawtoothAggregate(aggregators)(leftRows, rightRows).toArray
 
-    // Verify the results
     result.size shouldBe 1
 
     val queryResult = result(0)
     queryResult.isInstanceOf[CGenericRow] shouldBe true
 
-    // Verify query fields
     queryResult.get(0) shouldBe 1
     queryResult.get(1) shouldBe "query1"
     queryResult.get(2) shouldBe baseTs
 
-    // CRITICAL: The event at the same timestamp should be INCLUDED
-    // count should be 1 (not 0 or null)
     queryResult.get(3).asInstanceOf[Long] shouldBe 1L
-
-    // sum should be 100.0 (not 0 or null)
-    queryResult.get(4).asInstanceOf[Double] shouldBe 100.0 +- 0.001
+    queryResult.get(4).asInstanceOf[Double] shouldBe 80.0 +- 0.001
   }
+
 }

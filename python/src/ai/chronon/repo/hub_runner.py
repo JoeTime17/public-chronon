@@ -10,6 +10,7 @@ from typing import Optional
 import click
 import requests
 
+from ai.chronon.cli import options as cli_options
 from ai.chronon.cli.formatter import (
     Format,
     format_print,
@@ -17,6 +18,7 @@ from ai.chronon.cli.formatter import (
 )
 from ai.chronon.cli.git_utils import get_current_branch
 from ai.chronon.cli.theme import (
+    console,
     print_error,
     print_info,
     print_key_value,
@@ -30,10 +32,25 @@ from ai.chronon.repo.auth import get_user_email
 from ai.chronon.repo.constants import VALID_CLOUDS, RunMode
 from ai.chronon.repo.utils import print_possible_confs, upload_to_blob_store
 from ai.chronon.repo.zipline_hub import ZiplineHub
-from gen_thrift.api.ttypes import DataKind
+from gen_thrift.api.ttypes import DataKind, Environment
 from gen_thrift.planner.ttypes import Mode
 
 logger = logging.getLogger(__name__)
+
+
+def _env_string_to_enum(env_str: str) -> int:
+    """Convert environment string to enum value.
+
+    The local compile system supports arbitrary `teams.<env>.py` files, but the
+    hub wire protocol still only understands the Thrift `Environment` enum
+    (PROD/CANARY). Adding a new env that can round-trip through the hub means
+    extending `thrift/api.thrift:Environment` + the hub server + this map +
+    the `click.Choice` lists below in lockstep."""
+    env_map = {
+        'prod': Environment.PROD,
+        'canary': Environment.CANARY,
+    }
+    return env_map.get(env_str.lower(), Environment.PROD)
 
 
 def _validate_at_most_daily_schedule(schedule_expression: str) -> Optional[str]:
@@ -95,7 +112,43 @@ def _resolve_data_type_kinds(obj):
     return obj
 
 
-DEFAULT_TEAM_METADATA_CONF = "compiled/teams_metadata/default/default_team_metadata"
+def team_metadata_conf(team: str = "default", env: str = 'prod') -> str:
+    """Path to a team's compiled metadata thriftjson, scoped to the compile
+    output folder selected by `env`. Mirrors the per-env layout produced by
+    `zipline compile`: `prod` → `compiled/`, any other <env> → `compiled_<env>/`
+    (matching teams.<env>.py). Empty / falsy env defaults to prod."""
+    e = (env or "prod").lower()
+    folder = "compiled" if e == "prod" else f"compiled_{e}"
+    return f"{folder}/teams_metadata/{team}/{team}_team_metadata"
+
+
+def default_team_metadata_conf(env: str = 'prod') -> str:
+    return team_metadata_conf("default", env)
+
+
+def _env_from_conf_path(conf: str) -> str:
+    """Infer the compile env from a conf path. A path under `compiled/` targets
+    prod; a path under `compiled_<env>/` targets `<env>`. Lets conf-path-taking
+    commands stay env-aware without making the user pass an explicit `--env`
+    flag that has to agree with the path they typed."""
+    for part in os.path.normpath(conf).split(os.sep):
+        if part == "compiled":
+            return "prod"
+        if part.startswith("compiled_"):
+            return part[len("compiled_"):]
+    return "prod"
+
+
+def print_env_banner(env: str, format: Format = Format.TEXT) -> None:
+    """Loudly announce which compile environment a CLI command is targeting.
+    Suppressed in JSON mode so stdout stays machine-readable."""
+    if format == Format.JSON:
+        return
+    e = (env or "prod").lower()
+    if e == "prod":
+        console.rule("[bold magenta]🚀 RUNNING AGAINST PROD ENVIRONMENT[/]")
+    else:
+        console.rule(f"[bold cyan]🐤 RUNNING AGAINST {e.upper()} ENVIRONMENT[/]")
 
 
 @dataclass
@@ -124,84 +177,39 @@ def hub():
     pass
 
 
-def repo_option(func):
-    return click.option(
-        "-r",
-        "--repo",
-        help="Path to the Chronon repo root.",
-        default=".",
-        show_default=True,
-    )(func)
+repo_option = cli_options.repo_root_option()
+use_auth_option = cli_options.use_auth_option()
+hub_url_option = cli_options.hub_url_option()
+format_option = cli_options.format_option()
+force_option = cli_options.force_option()
+cloud_provider_option = cli_options.cloud_provider_option(VALID_CLOUDS)
+customer_id_option = cli_options.customer_id_option()
+env_option = cli_options.env_option()
 
 
-def use_auth_option(func):
-    return click.option(
-        "--use-auth/--no-use-auth",
-        help="Use authentication when connecting to Zipline Hub",
-        default=True,
-    )(func)
-
-
-def hub_url_option(func):
-    return click.option(
-        "--hub-url",
-        help="Zipline Hub address, e.g. http://localhost:3903",
-        default=None,
-    )(func)
-
-
-def format_option(func):
-    return click.option(
-        "-f",
-        "--format",
-        help="Output format.",
-        default=Format.TEXT,
-        type=click.Choice(Format, case_sensitive=False),
-        show_default=True,
-    )(func)
-
-
-def force_option(func):
-    return click.option(
-        "--force",
-        help="Force compile even if there are version changes to existing confs",
-        is_flag=True,
-    )(func)
-
-
-def cloud_provider_option(func):
-    return click.option(
-        "--cloud",
-        help="Cloud provider for the hub and related services",
-        type=click.Choice(VALID_CLOUDS, case_sensitive=False),
-        required=False,
-        default=None,
-    )(func)
-
-
-def customer_id_option(func):
-    return click.option(
-        "--customer-id",
-        help="Customer ID for authentication. Required for Azure.",
-        type=str,
-        required=False,
-        default=None,
-    )(func)
+_CONF_FOLDER_TO_HUB_TYPE = {
+    "joins": "joins",
+    "staging_queries": "stagingqueries",
+    "group_bys": "groupbys",
+    "models": "models",
+    "model_transforms": "modeltransforms",
+}
 
 
 def get_conf_type(conf):
-    if "compiled/joins" in conf:
-        return "joins"
-    elif "compiled/staging_queries" in conf:
-        return "stagingqueries"
-    elif "compiled/group_by" in conf:
-        return "groupbys"
-    elif "compiled/models" in conf:
-        return "models"
-    elif "compiled/model_transforms" in conf:
-        return "modeltransforms"
-    else:
-        raise ValueError(f"Unsupported conf type: {conf}")
+    """Infer the hub conf-type from a conf path under any env's output dir.
+    Mirrors `_env_from_conf_path` in walking path components so both
+    `compiled/joins/...` (prod) and `compiled_<env>/joins/...` (canary etc.)
+    resolve to the same hub conf-type."""
+    parts = os.path.normpath(conf).split(os.sep)
+    for i, part in enumerate(parts):
+        if part == "compiled" or part.startswith("compiled_"):
+            if i + 1 < len(parts):
+                folder = parts[i + 1]
+                if folder in _CONF_FOLDER_TO_HUB_TYPE:
+                    return _CONF_FOLDER_TO_HUB_TYPE[folder]
+            break
+    raise ValueError(f"Unsupported conf type: {conf}")
 
 
 #### Common click options
@@ -299,6 +307,16 @@ def end_ds_option(func):
     return wrapper
 
 
+def workflow_concurrency_option(func):
+    return click.option(
+        "--concurrency",
+        "workflow_concurrency",
+        type=click.IntRange(min=1),
+        default=None,
+        help="Max workflow steps Hub may allocate concurrently for this workflow.",
+    )(func)
+
+
 def _get_zipline_hub(
     hub_url: Optional[str],
     hub_conf: HubConfig,
@@ -332,11 +350,24 @@ def redeploy_streaming(repo, confs, hub_url=None, use_auth=True, format: Format 
         raise ValueError(
             f"All confs must target the same Hub, but found multiple hub_url values:\n{mismatches}"
         )
+
+    # All confs in a single redeploy must come from the same compile env
+    # (mixing envs in one call would hash against the wrong folder for some).
+    conf_envs = [_env_from_conf_path(c) for c in confs]
+    if len(set(conf_envs)) > 1:
+        mismatches = "\n".join(
+            f"  {conf}: {env}" for conf, env in zip(confs, conf_envs, strict=True)
+        )
+        raise ValueError(
+            f"All confs must come from the same compile environment, but found a mix:\n{mismatches}"
+        )
+    env = conf_envs[0] if conf_envs else "prod"
+
     hub_conf = hub_confs[0]
     zipline_hub = _get_zipline_hub(hub_url, hub_conf, use_auth, format)
 
     with status_spinner("Computing local conf hashes...", format=format):
-        conf_name_to_hash_dict = hub_uploader.build_local_repo_hashmap(root_dir=repo)
+        conf_name_to_hash_dict = hub_uploader.build_local_repo_hashmap(root_dir=repo, env=env)
     branch = get_current_branch()
     with status_spinner("Syncing confs with Hub...", format=format):
         hub_uploader.compute_and_upload_diffs(
@@ -370,13 +401,13 @@ def redeploy_streaming(repo, confs, hub_url=None, use_auth=True, format: Format 
 
 
 def submit_schedule_all(
-    repo, cloud, customer_id, hub_url=None, use_auth=True, format: Format = Format.TEXT
+    repo, cloud, customer_id, env='prod', hub_url=None, use_auth=True, format: Format = Format.TEXT
 ):
-    """Deploy schedules for all changed confs that have schedules defined."""
+    """Deploy schedules for all confs that have schedules defined."""
     zipline_hub = _get_zipline_hub(
         hub_url,
         get_hub_conf_from_metadata_conf(
-            DEFAULT_TEAM_METADATA_CONF,
+            default_team_metadata_conf(env),
             root_dir=repo,
             cloud_provider=cloud,
             customer_id=customer_id,
@@ -386,24 +417,41 @@ def submit_schedule_all(
     )
 
     with status_spinner("Computing local conf hashes...", format=format):
-        conf_name_to_obj_dict = hub_uploader.build_local_repo_hashmap(root_dir=repo)
+        conf_name_to_obj_dict = hub_uploader.build_local_repo_hashmap(root_dir=repo, env=env)
 
     branch = get_current_branch()
 
     with status_spinner("Syncing confs with Hub...", format=format):
-        diff_confs = hub_uploader.compute_and_upload_diffs(
+        # Upload any changed confs to Hub
+        hub_uploader.compute_and_upload_diffs(
             branch,
             zipline_hub=zipline_hub,
             local_repo_confs=conf_name_to_obj_dict,
             format=format,
         )
 
-    # Collect confs with schedules
+    # Collect confs with schedules (from ALL confs, not just changed ones)
     confs_with_schedules = []
     skipped_confs = []
+    env_filtered_confs = []
 
-    for name, conf in diff_confs.items():
+    # Convert env string to enum value for comparison
+    env_enum = _env_string_to_enum(env)
+
+    for name, conf in conf_name_to_obj_dict.items():
         try:
+            # Check if conf's environments field includes the specified env.
+            # Authoring leaves the field unset when the user doesn't specify
+            # `environments=` — treat missing / null / empty as prod-only so a
+            # legacy conf with no env tag still deploys under --env prod.
+            metadata_map = get_metadata_map(conf.localPath)
+            conf_environments = metadata_map.get("environments") or [Environment.PROD]
+
+            # Skip confs that don't match the specified environment
+            if env_enum not in conf_environments:
+                env_filtered_confs.append(name)
+                continue
+
             schedule_modes = get_schedule_modes(conf.localPath)
 
             # Skip confs without any schedules
@@ -432,11 +480,18 @@ def submit_schedule_all(
             skipped_confs.append(name)
 
     if not confs_with_schedules:
-        print_info(
-            f"No changed confs with schedules found. "
-            f"{len(skipped_confs)} conf(s) changed but have no schedules defined.",
-            format=format,
-        )
+        message_parts = [
+            f"No confs with schedules found among loaded confs for environment '{env}'."
+        ]
+        if env_filtered_confs:
+            message_parts.append(
+                f"{len(env_filtered_confs)} conf(s) filtered out due to environment mismatch."
+            )
+        if skipped_confs:
+            message_parts.append(
+                f"{len(skipped_confs)} loaded conf(s) have no schedules defined."
+            )
+        print_info(" ".join(message_parts), format=format)
         return
 
     # Deploy schedules via batch API
@@ -494,13 +549,21 @@ def submit_schedule_all(
                     f"  ✓ {conf_name}", ", ".join(schedule_info), format=format
                 )
 
-    if skipped_confs:
-        print_info(
-            f"\n{len(skipped_confs)} conf(s) skipped (no schedules defined): "
-            f"{', '.join(skipped_confs[:5])}"
-            f"{'...' if len(skipped_confs) > 5 else ''}",
-            format=format,
+    info_parts = []
+    if env_filtered_confs:
+        info_parts.append(
+            f"{len(env_filtered_confs)} conf(s) skipped (environment mismatch): "
+            f"{', '.join(env_filtered_confs[:5])}"
+            f"{'...' if len(env_filtered_confs) > 5 else ''}"
         )
+    if skipped_confs:
+        info_parts.append(
+            f"{len(skipped_confs)} conf(s) skipped (no schedules defined): "
+            f"{', '.join(skipped_confs[:5])}"
+            f"{'...' if len(skipped_confs) > 5 else ''}"
+        )
+    if info_parts:
+        print_info("\n" + "\n".join(info_parts), format=format)
 
 
 def submit_workflow(
@@ -512,12 +575,15 @@ def submit_workflow(
     hub_url=None,
     use_auth=True,
     format: Format = Format.TEXT,
+    workflow_concurrency=None,
 ):
     hub_conf = get_hub_conf(conf, root_dir=repo)
     zipline_hub = _get_zipline_hub(hub_url, hub_conf, use_auth, format)
 
     with status_spinner("Computing local conf hashes...", format=format):
-        conf_name_to_hash_dict = hub_uploader.build_local_repo_hashmap(root_dir=repo)
+        conf_name_to_hash_dict = hub_uploader.build_local_repo_hashmap(
+            root_dir=repo, env=_env_from_conf_path(conf)
+        )
     branch = get_current_branch()
 
     with status_spinner("Syncing confs with Hub...", format=format):
@@ -541,6 +607,7 @@ def submit_workflow(
             end=end_ds,
             conf_hash=conf_name_to_hash_dict[conf_name].hash,
             skip_long_running=False,
+            concurrency=workflow_concurrency,
         )
 
     workflow_id = response_json.get("workflowId", "N/A")
@@ -551,6 +618,8 @@ def submit_workflow(
     print_key_value("🆔 Workflow ID", workflow_id, format=format)
     print_key_value("📦 Conf", conf_name, format=format)
     print_key_value("⚙️  Mode", mode, format=format)
+    if workflow_concurrency is not None:
+        print_key_value("Concurrency", workflow_concurrency, format=format)
     print_wf_url(
         conf=conf,
         conf_name=conf_name,
@@ -568,7 +637,9 @@ def submit_schedule(
     zipline_hub = _get_zipline_hub(hub_url, hub_conf, use_auth, format)
 
     with status_spinner("Computing local conf hashes...", format=format):
-        conf_name_to_obj_dict = hub_uploader.build_local_repo_hashmap(root_dir=repo)
+        conf_name_to_obj_dict = hub_uploader.build_local_repo_hashmap(
+            root_dir=repo, env=_env_from_conf_path(conf)
+        )
     branch = get_current_branch()
 
     with status_spinner("Syncing confs with Hub...", format=format):
@@ -615,6 +686,7 @@ def submit_schedule(
 @common_options
 @start_ds_option
 @end_ds_option
+@workflow_concurrency_option
 @handle_conf_not_found(log_error=True, callback=print_possible_confs)
 @handle_compile
 @jsonify_exceptions_if_json_format
@@ -627,6 +699,7 @@ def backfill(
     force,
     start_ds,
     end_ds,
+    workflow_concurrency,
     assume_yes,
     skip_compile,
 ):
@@ -643,6 +716,7 @@ def backfill(
         hub_url=hub_url,
         use_auth=use_auth,
         format=format,
+        workflow_concurrency=workflow_concurrency,
     )
 
 
@@ -714,17 +788,21 @@ def schedule(
 @jsonify_exceptions_if_json_format
 @cloud_provider_option
 @customer_id_option
+@env_option
 @handle_dry_run_compile
 def schedule_all(
     repo,
     cloud,
     customer_id,
+    env,
     hub_url=None,
     use_auth=True,
     format: Format = Format.TEXT,
     compile_pending_changes=None,
 ):
     """Deploy recurring schedules for all changed confs that have schedules defined."""
+
+    print_env_banner(env, format=format)
 
     if compile_pending_changes:
         # Check if there are any changes
@@ -759,7 +837,7 @@ def schedule_all(
         print_success("No compilation changes detected.", format=format)
 
     submit_schedule_all(
-        repo, cloud, customer_id, hub_url=hub_url, use_auth=use_auth, format=format
+        repo, cloud, customer_id, env=env, hub_url=hub_url, use_auth=use_auth, format=format
     )
 
 
@@ -772,15 +850,17 @@ def schedule_all(
 @jsonify_exceptions_if_json_format
 @cloud_provider_option
 @customer_id_option
-def cancel(workflow_id, repo, hub_url, use_auth, format, cloud, customer_id):
+@env_option
+def cancel(workflow_id, repo, hub_url, use_auth, format, cloud, customer_id, env):
     """Cancel a running workflow.
 
     WORKFLOW_ID is the ID of the workflow to cancel.
     """
+    print_env_banner(env, format=format)
     zipline_hub = _get_zipline_hub(
         hub_url,
         get_hub_conf_from_metadata_conf(
-            DEFAULT_TEAM_METADATA_CONF,
+            default_team_metadata_conf(env),
             root_dir=repo,
             cloud_provider=cloud,
             customer_id=customer_id,
@@ -793,6 +873,85 @@ def cancel(workflow_id, repo, hub_url, use_auth, format, cloud, customer_id):
         print(json.dumps(response_json, indent=4))
         sys.exit(0)
     print_success(f"Workflow cancelled: {workflow_id}", format=format)
+
+
+@hub.command("clear-downstream")
+@conf_argument
+@repo_option
+@hub_url_option
+@use_auth_option
+@format_option
+@jsonify_exceptions_if_json_format
+@start_ds_option
+@end_ds_option
+@handle_conf_not_found(log_error=True, callback=print_possible_confs)
+def clear_downstream(conf, repo, hub_url, use_auth, format, start_ds, end_ds, assume_yes):
+    """Clear a conf's terminal node and all downstream nodes for a date range.
+
+    CONF is the path to the compiled conf (e.g. compiled/joins/team/my_join).
+    """
+    hub_conf = get_hub_conf(conf, root_dir=repo)
+    zipline_hub = _get_zipline_hub(hub_url, hub_conf, use_auth, format)
+
+    conf_name = utils.get_metadata_name_from_conf(repo, conf)
+    branch = get_current_branch()
+    user = get_user_email()
+
+    with status_spinner("Computing downstream node ranges...", format=format):
+        preview_json = zipline_hub.preview_clear_downstream(
+            conf_name=conf_name,
+            branch=branch,
+            user=user,
+            start=start_ds,
+            end=end_ds,
+        )
+
+    results = preview_json.get("results", [])
+    affected_confs = preview_json.get("affectedConfs", [])
+
+    print_key_value("Conf", conf_name, format=format)
+    start_str = start_ds.strftime("%Y-%m-%d") if hasattr(start_ds, "strftime") else str(start_ds)
+    end_str = end_ds.strftime("%Y-%m-%d") if hasattr(end_ds, "strftime") else str(end_ds)
+    print_key_value("Range", f"{start_str} to {end_str}", format=format)
+    print_key_value("Affected confs", len(affected_confs), format=format)
+    click.echo()
+    for conf_result in affected_confs:
+        mode = conf_result.get("mode", "backfill")
+        mode_label = "batch" if mode == "backfill" else "online"
+        print_key_value(
+            f"  {conf_result.get('confName', 'unknown')} ({mode_label})",
+            f"{conf_result.get('startPartition', '')} to {conf_result.get('endPartition', '')}",
+            format=format,
+        )
+    click.echo()
+
+    if not assume_yes:
+        if not click.confirm(click.style("Proceed with clearing these confs?", fg="yellow")):
+            click.echo("Aborted.")
+            sys.exit(0)
+
+    with status_spinner("Clearing downstream nodes...", format=format):
+        zipline_hub.apply_clear_downstream(
+            node_results=results,
+            user=user,
+            affected_confs=affected_confs,
+        )
+
+    print_success(f"Cleared {len(affected_confs)} confs", format=format)
+    click.echo()
+
+    backfill_confs = [c for c in affected_confs if c.get("mode", "backfill") == "backfill"]
+    deploy_confs = [c for c in affected_confs if c.get("mode") == "deploy"]
+
+    if backfill_confs:
+        click.echo("To recompute batch data, run backfill for each affected conf:")
+        for c in backfill_confs:
+            click.echo(f"  zipline hub backfill {c['confName']} --start-ds {c['startPartition']} --end-ds {c['endPartition']}")
+
+    if deploy_confs:
+        click.echo("To fix online data, run adhoc upload for each deploy conf:")
+        for c in deploy_confs:
+            click.echo(f"  zipline hub run-adhoc {c['confName']}")
 
 
 def load_json(file_path):
@@ -862,9 +1021,22 @@ def fetch(conf, repo, hub_url, use_auth, format, force, fetcher_url, schema, key
     else:
         endpoint = "/v1/fetch/{conf_type}".format(conf_type=conf_type[:-1])
     if schema:
-        if conf_type != "joins":
-            raise ValueError("Schema fetch is only supported for joins")
-        endpoint = f"/v1/join/{target}/schema"
+        if conf_type == "joins":
+            endpoint = f"/v1/join/{target}/schema"
+        elif conf_type == "groupbys":
+            endpoint = f"/v1/groupby/{target}/schema"
+        else:
+            raise ValueError("Schema fetch is only supported for joins and groupBys")
+    online_condition = "- The join needs to be online."
+    if conf_type == "groupbys":
+        online_condition = "- The GroupBy needs to be online."
+        if schema:
+            online_condition = (
+                "- The GroupBy must be online=True and uploaded online. "
+                "For offline table schema, use the Iceberg catalog schema via eval."
+            )
+    elif conf_type != "joins":
+        online_condition = "- The target needs to be available from the fetcher."
     headers = {"Content-Type": "application/json"}
     try:
         if schema:
@@ -885,7 +1057,7 @@ def fetch(conf, repo, hub_url, use_auth, format, force, fetcher_url, schema, key
         Request failed for url: {url}
         The conditions for a successful fetch are:
         - Metadata has been uploaded to the KV Store (run-adhoc command or schedule command)
-        - The join needs to be online.
+        {online_condition}
         Please verify the above conditions and try again.
         Error: {e}
         """
@@ -951,7 +1123,9 @@ def eval(
         format=format,
         auth_url=hub_conf.frontend_url,
     )
-    conf_name_to_hash_dict = hub_uploader.build_local_repo_hashmap(root_dir=repo)
+    conf_name_to_hash_dict = hub_uploader.build_local_repo_hashmap(
+        root_dir=repo, env=_env_from_conf_path(conf)
+    )
     branch = get_current_branch()
     if test_data_path:
         # Upload the test data skeleton to the bucket.
@@ -1025,14 +1199,16 @@ def eval(
     default="SPARK",
     show_default=True,
 )
+@env_option
 @jsonify_exceptions_if_json_format
 def eval_table(
-    table, repo, conf, team, hub_url, use_auth, format, eval_url, engine_type
+    table, repo, conf, team, hub_url, use_auth, format, eval_url, engine_type, env
 ):
     """Validate a table's schema.
 
     TABLE is the table name for schema evaluation (e.g. data.loggable_response).
     """
+    print_env_banner(env, format=format)
     # Use conf for executionInfo if provided (highest priority)
     conf_execution_info, team_execution_info, default_execution_info = None, None, None
     team = team or os.environ.get("TEAM")
@@ -1041,13 +1217,12 @@ def eval_table(
         conf_execution_info = get_metadata_map(file_path).get("executionInfo")
     # Otherwise use team metadata if specified
     elif team:
-        team_metadata_path = f"compiled/teams_metadata/{team}/{team}_team_metadata"
-        file_path = os.path.join(repo, team_metadata_path)
+        file_path = os.path.join(repo, team_metadata_conf(team, env))
         with open(file_path, "r") as f:
             team_execution_info = json.load(f).get("executionInfo")
     # Otherwise use default team metadata
     else:
-        file_path = os.path.join(repo, DEFAULT_TEAM_METADATA_CONF)
+        file_path = os.path.join(repo, default_team_metadata_conf(env))
         with open(file_path, "r") as f:
             default_execution_info = json.load(f).get("executionInfo")
     execution_info = (
@@ -1125,21 +1300,22 @@ def eval_table(
     default="SPARK",
     show_default=True,
 )
+@env_option
 @jsonify_exceptions_if_json_format
-def list_tables(schema_name, repo, team, hub_url, use_auth, format, eval_url, engine_type):
+def list_tables(schema_name, repo, team, hub_url, use_auth, format, eval_url, engine_type, env):
     """List tables in a schema.
 
     SCHEMA_NAME is the schema/database to list tables from (e.g. demo).
     """
+    print_env_banner(env, format=format)
     team_execution_info, default_execution_info = None, None
     team = team or os.environ.get("TEAM")
     if team:
-        team_metadata_path = f"compiled/teams_metadata/{team}/{team}_team_metadata"
-        file_path = os.path.join(repo, team_metadata_path)
+        file_path = os.path.join(repo, team_metadata_conf(team, env))
         with open(file_path, "r") as f:
             team_execution_info = json.load(f).get("executionInfo")
     else:
-        file_path = os.path.join(repo, DEFAULT_TEAM_METADATA_CONF)
+        file_path = os.path.join(repo, default_team_metadata_conf(env))
         with open(file_path, "r") as f:
             default_execution_info = json.load(f).get("executionInfo")
     execution_info = team_execution_info or default_execution_info

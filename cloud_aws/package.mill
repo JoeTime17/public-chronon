@@ -18,11 +18,26 @@ trait CloudAwsModule extends Cross.Module[String] with build.BaseModule {
 
   def moduleDeps = Seq(build.spark(crossValue), build.aggregator(crossValue), build.api(crossValue), build.online(crossValue), build.cloud_k8s(crossValue))
 
-  // Built from unitycatalog v0.4.0 source with Scala 2.12 / Spark 3.5.3
+  // Built from zipline-ai/unitycatalog@spark-3.5-scala-2.12 (Zipline rebuild
+  // commit on top of upstream UC HEAD). Spark connector now depends on the
+  // sibling client + hadoop modules (upstream split out credential providers
+  // into a separate hadoop subproject), so all three jars ship together.
+  // Local filenames keep the 0.4.0 suffix to match existing Chronon naming;
+  // the actual upstream version they were built against is 0.5.0-SNAPSHOT.
   def ucSparkJarFile = Task.Source(moduleDir / "unitycatalog-spark_2.12-0.4.0.jar")
+  def ucClientJarFile = Task.Source(moduleDir / "unitycatalog-client-0.4.0.jar")
+  def ucHadoopJarFile = Task.Source(moduleDir / "unitycatalog-hadoop-0.4.0.jar")
+
+  // Patched delta-spark, built from zipline-ai/delta@v3.3.2-spark-3.5.3 (upstream
+  // v3.3.2 + checkpoint stats_parsed and partial-stats AND-predicate backports).
+  // Same jar bundled into the EMR Serverless custom image (docker/emr-serverless/);
+  // shipping it here too puts Delta on the classpath for runtimes that submit the
+  // cloud_aws assembly directly (e.g. Crucible Spark-on-K8s), which have no custom
+  // image to carry it.
+  def deltaSparkJarFile = Task.Source(moduleDir / "delta-spark_2.12-3.3.2.jar")
 
   override def unmanagedClasspath = Task {
-    super.unmanagedClasspath() ++ Seq(ucSparkJarFile())
+    super.unmanagedClasspath() ++ Seq(ucSparkJarFile(), ucClientJarFile(), ucHadoopJarFile(), deltaSparkJarFile())
   }
 
   def mvnDeps = build.Constants.commonDeps ++ build.Constants.loggingApiDeps ++ build.Constants.utilityDeps  ++ Seq(
@@ -41,18 +56,27 @@ trait CloudAwsModule extends Cross.Module[String] with build.BaseModule {
     mvn"software.amazon.awssdk:sts:2.30.13",
     mvn"software.amazon.awssdk:secretsmanager:2.30.13",
     mvn"software.amazon.awssdk:identity-spi:2.30.13",
+    mvn"software.amazon.msk:aws-msk-iam-auth:2.3.5",
     mvn"org.apache.hadoop:hadoop-client-api:3.4.1",
     mvn"org.apache.iceberg::iceberg-spark-runtime-3.5:1.10.0",
-    mvn"io.unitycatalog:unitycatalog-client:0.4.0"
-      .exclude("com.fasterxml.jackson.core" -> "jackson-core")
-      .exclude("com.fasterxml.jackson.core" -> "jackson-databind")
-      .exclude("com.fasterxml.jackson.core" -> "jackson-annotations"),
+    // delta-storage is delta-spark's runtime LogStore layer — a separate,
+    // unpatched artifact. The bundled delta-spark jar (deltaSparkJarFile) is
+    // only the Spark module; without this it fails NoClassDefFoundError:
+    // io/delta/storage/LogStore. Version must match the bundled delta-spark.
+    mvn"io.delta:delta-storage:3.3.2",
+    // Transitive deps that the old `io.unitycatalog:unitycatalog-client:0.4.0`
+    // Maven artifact provided. We now bundle the client jar locally (see
+    // ucClientJarFile above), so these have to be declared explicitly.
+    mvn"com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${build.Constants.jacksonVersion}".forceVersion(),
+    mvn"org.openapitools:jackson-databind-nullable:0.2.6",
+    mvn"com.google.code.findbugs:jsr305:3.0.2",
+    mvn"jakarta.annotation:jakarta.annotation-api:3.0.0",
   ) ++ Seq(
     // Force-override vulnerable transitive deps from unitycatalog-spark / uber-jars
     mvn"org.eclipse.jetty:jetty-server:$jettyVersion",
     mvn"org.eclipse.jetty:jetty-http:$jettyVersion",
     mvn"com.nimbusds:nimbus-jose-jwt:$nimbusJoseJwtVersion",
-    mvn"org.apache.commons:commons-configuration2:2.10.1",
+    mvn"org.apache.commons:commons-configuration2:2.15.0",
     mvn"org.apache.commons:commons-compress:1.26.0",
     mvn"dnsjava:dnsjava:3.6.0",
     mvn"commons-beanutils:commons-beanutils:1.11.0",
@@ -61,7 +85,7 @@ trait CloudAwsModule extends Cross.Module[String] with build.BaseModule {
       .exclude("com.fasterxml.jackson.core" -> "jackson-core")
       .exclude("com.fasterxml.jackson.core" -> "jackson-databind")
       .exclude("com.fasterxml.jackson.core" -> "jackson-annotations"),
-    mvn"io.netty:netty-all:4.1.132.Final",
+    mvn"io.netty:netty-all:4.1.133.Final",
   ).map(_.forceVersion())
 
   override def assemblyRules = super.assemblyRules ++ Seq(

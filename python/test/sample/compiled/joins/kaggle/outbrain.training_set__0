@@ -1,0 +1,572 @@
+{
+  "joinParts": [
+    {
+      "groupBy": {
+        "accuracy": 1,
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 6,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "ad_id",
+          "document_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "ad_id": "0c5a95e4bc5bcaddb4a82162b7b795ca",
+            "clicked_average_3d": "bdaa80fe92f9210f5a2eacb54aecec67",
+            "clicked_count_3d": "bdaa80fe92f9210f5a2eacb54aecec67",
+            "clicked_sum_3d": "bdaa80fe92f9210f5a2eacb54aecec67",
+            "document_id": "5a4531d11a8fccbe2c52bfc7a4e1e65b"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.partition.column": "_DATE"
+              }
+            },
+            "env": {
+              "common": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "modeEnvironments": {
+                "backfill": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "streaming": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "upload": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                }
+              }
+            },
+            "historicalBackfill": 0
+          },
+          "name": "kaggle.outbrain.ad_doc__0",
+          "outputNamespace": "kaggle",
+          "team": "kaggle",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "ad_id": "ad_id",
+                  "clicked": "clicked",
+                  "document_id": "document_id"
+                },
+                "timeColumn": "ts"
+              },
+              "table": "default.kaggle_outbrain_base_table__0"
+            }
+          }
+        ]
+      },
+      "useLongNames": 1
+    },
+    {
+      "groupBy": {
+        "accuracy": 0,
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 6,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "ad_id",
+          "uuid"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "ad_id": "3a0c9fa922680991fc9257e01cca4501",
+            "clicked_average_3d": "fe10de33dc16a9939e63cd6e38861b97",
+            "clicked_count_3d": "fe10de33dc16a9939e63cd6e38861b97",
+            "clicked_sum_3d": "fe10de33dc16a9939e63cd6e38861b97",
+            "uuid": "38447eb1baac073053df5f534f35a38a"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.partition.column": "_DATE"
+              }
+            },
+            "env": {
+              "common": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "modeEnvironments": {
+                "backfill": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "streaming": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "upload": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                }
+              }
+            },
+            "historicalBackfill": 0
+          },
+          "name": "kaggle.outbrain.ad_uuid__0",
+          "outputNamespace": "kaggle",
+          "team": "kaggle",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "ad_id": "ad_id",
+                  "clicked": "clicked",
+                  "uuid": "uuid"
+                },
+                "timeColumn": "ts"
+              },
+              "table": "default.kaggle_outbrain_base_table__0"
+            }
+          }
+        ]
+      },
+      "useLongNames": 1
+    },
+    {
+      "groupBy": {
+        "accuracy": 0,
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 6,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "ad_id"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "ad_id": "af84d9eeb1cd9c88cde5b8550bcbb7dc",
+            "clicked_average_3d": "7e4dd4942778f969839961629a1b8249",
+            "clicked_count_3d": "7e4dd4942778f969839961629a1b8249",
+            "clicked_sum_3d": "7e4dd4942778f969839961629a1b8249"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.partition.column": "_DATE"
+              }
+            },
+            "env": {
+              "common": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "modeEnvironments": {
+                "backfill": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "streaming": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "upload": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                }
+              }
+            },
+            "historicalBackfill": 0
+          },
+          "name": "kaggle.clicks.ad_streaming__0",
+          "outputNamespace": "kaggle",
+          "team": "kaggle",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "ad_id": "ad_id",
+                  "clicked": "clicked"
+                },
+                "timeColumn": "ts"
+              },
+              "table": "default.kaggle_outbrain_base_table__0",
+              "topic": "some_topic"
+            }
+          }
+        ]
+      },
+      "useLongNames": 1
+    },
+    {
+      "groupBy": {
+        "accuracy": 1,
+        "aggregations": [
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 7,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 6,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          },
+          {
+            "argMap": {},
+            "inputColumn": "clicked",
+            "operation": 8,
+            "windows": [
+              {
+                "length": 3,
+                "timeUnit": 1
+              }
+            ]
+          }
+        ],
+        "keyColumns": [
+          "ad_id",
+          "platform",
+          "geo_location"
+        ],
+        "metaData": {
+          "columnHashes": {
+            "ad_id": "afe45feb4ef29fa8985bc6b75fc1df39",
+            "clicked_average_3d": "fb49f30a50d8897e593c52088b5214f7",
+            "clicked_count_3d": "fb49f30a50d8897e593c52088b5214f7",
+            "clicked_sum_3d": "fb49f30a50d8897e593c52088b5214f7",
+            "geo_location": "b3c030b6171ce6da347d7dc63e23be1f",
+            "platform": "45f3e6b61082c384992ad518903e9729"
+          },
+          "executionInfo": {
+            "conf": {
+              "common": {
+                "spark.chronon.partition.column": "_DATE"
+              }
+            },
+            "env": {
+              "common": {
+                "CUSTOMER_ID": "canary",
+                "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                "GCP_PROJECT_ID": "canary-443022",
+                "GCP_REGION": "us-central1",
+                "VERSION": "latest"
+              },
+              "modeEnvironments": {
+                "backfill": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "streaming": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                },
+                "upload": {
+                  "CUSTOMER_ID": "canary",
+                  "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+                  "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+                  "GCP_PROJECT_ID": "canary-443022",
+                  "GCP_REGION": "us-central1",
+                  "VERSION": "latest"
+                }
+              }
+            },
+            "historicalBackfill": 0
+          },
+          "name": "kaggle.outbrain.ad_platform__0",
+          "outputNamespace": "kaggle",
+          "team": "kaggle",
+          "version": "0"
+        },
+        "sources": [
+          {
+            "events": {
+              "query": {
+                "selects": {
+                  "ad_id": "ad_id",
+                  "clicked": "clicked",
+                  "geo_location": "geo_location",
+                  "platform": "platform"
+                },
+                "timeColumn": "ts"
+              },
+              "table": "default.kaggle_outbrain_base_table__0"
+            }
+          }
+        ]
+      },
+      "useLongNames": 1
+    }
+  ],
+  "left": {
+    "events": {
+      "query": {
+        "selects": {
+          "ad_id": "ad_id",
+          "clicked": "clicked",
+          "display_id": "display_id",
+          "document_id": "document_id",
+          "geo_location": "geo_location",
+          "platform": "platform",
+          "ts": "ts",
+          "uuid": "uuid"
+        },
+        "timeColumn": "ts"
+      },
+      "table": "default.kaggle_outbrain_base_table__0"
+    }
+  },
+  "metaData": {
+    "columnHashes": {
+      "ad_id": "bd42406abb563d87a3bd738868c9c783",
+      "clicked": "8431aab2e370a2c2505a688e7df07cb6",
+      "display_id": "e9bcd380e367bcac7019510f33050372",
+      "document_id": "999dbb1a4caf31c9e7abdb3c08373291",
+      "geo_location": "998110a107de05b7b1760746de124157",
+      "kaggle_clicks_ad_streaming__0_clicked_average_3d": "6c6243bfa21c8541948dbfdc518d34b9",
+      "kaggle_clicks_ad_streaming__0_clicked_count_3d": "6c6243bfa21c8541948dbfdc518d34b9",
+      "kaggle_clicks_ad_streaming__0_clicked_sum_3d": "6c6243bfa21c8541948dbfdc518d34b9",
+      "kaggle_outbrain_ad_doc__0_clicked_average_3d": "4d75f1635a5fd692db21e1f6ffc478f4",
+      "kaggle_outbrain_ad_doc__0_clicked_count_3d": "4d75f1635a5fd692db21e1f6ffc478f4",
+      "kaggle_outbrain_ad_doc__0_clicked_sum_3d": "4d75f1635a5fd692db21e1f6ffc478f4",
+      "kaggle_outbrain_ad_platform__0_clicked_average_3d": "8974661263c15dbc08171b0c648c1e8d",
+      "kaggle_outbrain_ad_platform__0_clicked_count_3d": "8974661263c15dbc08171b0c648c1e8d",
+      "kaggle_outbrain_ad_platform__0_clicked_sum_3d": "8974661263c15dbc08171b0c648c1e8d",
+      "kaggle_outbrain_ad_uuid__0_clicked_average_3d": "51439845904c85cc428fbb8ffcbfcf79",
+      "kaggle_outbrain_ad_uuid__0_clicked_count_3d": "51439845904c85cc428fbb8ffcbfcf79",
+      "kaggle_outbrain_ad_uuid__0_clicked_sum_3d": "51439845904c85cc428fbb8ffcbfcf79",
+      "platform": "db55bffa1b7067ad80dacdb2d6b74252",
+      "ts": "46c7d360455bf15177c9e717a0444230",
+      "uuid": "2413c2cb534d0f3358771dae3950989d"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_default_kaggle_outbrain_base_table__0_with_offset_0\", \"spec\": \"default.kaggle_outbrain_base_table__0/_DATE={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.partition.column": "_DATE"
+        }
+      },
+      "env": {
+        "common": {
+          "CUSTOMER_ID": "canary",
+          "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+          "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+          "GCP_PROJECT_ID": "canary-443022",
+          "GCP_REGION": "us-central1",
+          "VERSION": "latest"
+        },
+        "modeEnvironments": {
+          "backfill": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "streaming": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          },
+          "upload": {
+            "CUSTOMER_ID": "canary",
+            "GCP_BIGTABLE_INSTANCE_ID": "zipline-canary-instance",
+            "GCP_DATAPROC_CLUSTER_NAME": "canary-2",
+            "GCP_PROJECT_ID": "canary-443022",
+            "GCP_REGION": "us-central1",
+            "VERSION": "latest"
+          }
+        }
+      },
+      "offlineSchedule": "@daily"
+    },
+    "name": "kaggle.outbrain.training_set__0",
+    "online": 0,
+    "outputNamespace": "kaggle",
+    "production": 0,
+    "samplePercent": 100.0,
+    "sourceFile": "joins/kaggle/outbrain.py",
+    "team": "kaggle",
+    "version": "0"
+  },
+  "rowIds": [
+    "uuid"
+  ],
+  "useLongNames": 1
+}

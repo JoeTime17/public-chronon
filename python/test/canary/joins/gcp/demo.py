@@ -1,7 +1,8 @@
-from group_bys.gcp import dim_listings, dim_merchants, user_activities
-from staging_queries.gcp import exports
+from group_bys.gcp import dim_listings, dim_listings_with_mutations, dim_merchants, user_activities
+from staging_queries.gcp.exports import user_activities as exports_user_activities
 
-from ai.chronon.types import Derivation, EventSource, GroupBy, Join, JoinPart, Query, selects
+from ai.chronon.types import Derivation, EventSource, GroupBy, Join, JoinPart, Query, selects, Aggregation, Operation, \
+    Window, TimeUnit
 
 """
 This Join combines user activity events with:
@@ -17,7 +18,7 @@ Right parts:
 # Left side: Raw user activity events from PubSub export
 source = EventSource(
     # This will be the BigQuery table that receives the PubSub data
-    table=exports.user_activities.table,
+    table=exports_user_activities.table,
     query=Query(
         selects=selects(
             user_id="user_id",
@@ -51,6 +52,42 @@ v1 = Join(
     online=True,
     output_namespace="data",
     step_days=30,
+    enable_stats_compute=True,
+)
+
+
+# Join using dim_listings_with_mutations for temporal listing lookups
+mutation_test = Join(
+    left=source,
+    row_ids=["event_id"],
+    right_parts=[
+        JoinPart(
+            group_by=dim_listings_with_mutations.v2,
+        ),
+    ],
+    version=1,
+    online=False,
+    output_namespace="data",
+    step_days=30,
+    enable_stats_compute=True,
+)
+
+mutation_test_modular = Join(
+    left=source,
+    row_ids=["event_id"],
+    right_parts=[
+        JoinPart(
+            group_by=dim_listings_with_mutations.v2,
+        ),
+        JoinPart(
+            group_by=user_activities.v1,
+        ),
+    ],
+    version=2,
+    online=False,
+    output_namespace="data",
+    step_days=30,
+    modular_execution=True,
     enable_stats_compute=True,
 )
 
@@ -104,5 +141,15 @@ derivations_v1 = Join(
     output_namespace="data",
     step_days=30,
     offline_schedule="0 4 * * *",
-    online_schedule="0 3 * * *"
+    online_schedule="0 3 * * *",
+    environments=["prod", "canary"],
 )
+
+fake_groupby = GroupBy(
+    sources=[source],
+    keys=["user_id"],
+    online=True,
+    version=0,
+    aggregations=[
+    Aggregation(input_column="fake-col", operation=Operation.SUM, windows=[Window(length=7, time_unit=TimeUnit.DAYS)])
+])

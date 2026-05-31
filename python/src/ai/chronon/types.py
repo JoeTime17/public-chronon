@@ -6,6 +6,7 @@ import ai.chronon.group_by as group_by
 import ai.chronon.join as join
 import ai.chronon.model as model
 import ai.chronon.query as query
+import ai.chronon.scd2 as scd2  # noqa: F401
 import ai.chronon.source as source
 import ai.chronon.staging_query as staging_query
 import gen_thrift.api.ttypes as ttypes

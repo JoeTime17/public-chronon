@@ -20,6 +20,7 @@ import ai.chronon.api.Constants.{KvTablePrefixArg, MetadataDataset}
 import ai.chronon.api._
 import ai.chronon.online.KVStore._
 import ai.chronon.online.fetcher.Fetcher
+import ai.chronon.online.metrics.TTLCache
 import ai.chronon.online.serde._
 import org.apache.avro.util.Utf8
 import org.apache.spark.sql.SparkSession
@@ -265,7 +266,11 @@ abstract class Api(userConf: Map[String, String]) extends Serializable {
   // not sure if thread safe - TODO: double check
 
   // helper functions
-  def buildFetcher(debug: Boolean = false, callerName: String = null, disableErrorThrows: Boolean = false): Fetcher =
+  def buildFetcher(debug: Boolean = false,
+                   callerName: String = null,
+                   disableErrorThrows: Boolean = false,
+                   joinConfTtlMillis: Long = TTLCache.DefaultTtlMillis,
+                   joinCodecTtlMillis: Long = TTLCache.DefaultTtlMillis): Fetcher =
     new Fetcher(
       genKvStore,
       MetadataDataset,
@@ -276,21 +281,28 @@ abstract class Api(userConf: Map[String, String]) extends Serializable {
       timeoutMillis = timeoutMillis,
       callerName = callerName,
       flagStore = flagStore,
-      disableErrorThrows = disableErrorThrows
+      disableErrorThrows = disableErrorThrows,
+      joinConfTtlMillis = joinConfTtlMillis,
+      joinCodecTtlMillis = joinCodecTtlMillis
     )
 
-  final def buildJavaFetcher(callerName: String = null, disableErrorThrows: Boolean = false): JavaFetcher = {
-    new JavaFetcher(
+  final def buildJavaFetcher(callerName: String = null,
+                             disableErrorThrows: Boolean = false,
+                             joinConfTtlMillis: Long = TTLCache.DefaultTtlMillis,
+                             joinCodecTtlMillis: Long = TTLCache.DefaultTtlMillis): JavaFetcher = {
+    new JavaFetcher.Builder(
       genKvStore,
       MetadataDataset,
       timeoutMillis,
       responseConsumer,
-      externalRegistry,
-      generateModelPlatformProvider,
-      callerName,
-      flagStore,
-      disableErrorThrows
-    )
+      externalRegistry
+    ).modelPlatformProvider(generateModelPlatformProvider)
+      .callerName(callerName)
+      .flagStore(flagStore)
+      .disableErrorThrows(disableErrorThrows)
+      .joinConfTtlMillis(joinConfTtlMillis)
+      .joinCodecTtlMillis(joinCodecTtlMillis)
+      .build()
   }
 
   final def buildJavaFetcher(): JavaFetcher = buildJavaFetcher(null)

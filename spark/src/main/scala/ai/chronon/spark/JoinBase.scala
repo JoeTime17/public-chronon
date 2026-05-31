@@ -132,7 +132,6 @@ abstract class JoinBase(val joinConfCloned: api.Join,
 
   private def getUnfilledRange(overrideStartPartition: Option[String],
                                outputTable: String): (PartitionRange, Seq[PartitionRange]) = {
-
     val rangeToFill = JoinUtils.getRangeToFill(joinConfCloned.left,
                                                tableUtils,
                                                endPartition,
@@ -296,32 +295,32 @@ abstract class JoinBase(val joinConfCloned: api.Join,
       query.setSelects(null)
       query.setWheres(null)
     }
-
     // detect holes and chunks to fill
     // OverrideStartPartition is used to replace the start partition of the join config. This is useful when
     //  1 - User would like to test run with different start partition
     //  2 - User has entity table which is cumulative and only want to run backfill for the latest partition
-    val rangeToFill = JoinUtils.getRangeToFill(joinConfCloned.left,
+    val rangeToFill = JoinUtils.getRangeToFill(source,
                                                tableUtils,
                                                endPartition,
                                                overrideStartPartition,
                                                joinConfCloned.historicalBackfill)
+    val leftSource = source
 
     logger.info(s"Join range to fill $rangeToFill")
 
     // check if left source has any data covering the requested range
-    val leftSpec = joinConfCloned.left.query.partitionSpec(tableUtils.partitionSpec)
+    val leftSpec = leftSource.query.partitionSpec(tableUtils.partitionSpec)
     val leftLastPartition = tableUtils.lastAvailablePartition(
-      joinConfCloned.left.table,
+      leftSource.table,
       tablePartitionSpec = Option(leftSpec)
     )
     val leftFirstPartition = tableUtils.firstAvailablePartition(
-      joinConfCloned.left.table,
+      leftSource.table,
       partitionSpec = leftSpec
     )
 
     if (leftFirstPartition.isEmpty || leftLastPartition.isEmpty) {
-      logger.info(s"""No data present in join.left table ${joinConfCloned.left.table}
+      logger.info(s"""No data present in join.left table ${leftSource.table}
                    | for the requested range ${rangeToFill.start} - ${rangeToFill.end}. Exiting...""".stripMargin)
       return None
     }
@@ -330,9 +329,9 @@ abstract class JoinBase(val joinConfCloned: api.Join,
       .unfilledRanges(
         outputTable,
         rangeToFill,
-        Some(Seq(joinConfCloned.left.table)),
+        Some(Seq(leftSource.table)),
         skipFirstHole = skipFirstHole,
-        inputPartitionSpecs = Seq(joinConfCloned.left.query.partitionSpec(tableUtils.partitionSpec))
+        inputPartitionSpecs = Seq(leftSource.query.partitionSpec(tableUtils.partitionSpec))
       )
       .getOrElse(Seq.empty)
 

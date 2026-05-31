@@ -211,8 +211,12 @@ class IcebergPartitionStatsExtractor(spark: SparkSession) {
     loadIcebergTable(fullTableName).flatMap { table =>
       val tableSpec = Option(table.spec())
 
-      if (tableSpec.isEmpty || !tableSpec.get.isPartitioned) {
+      if (tableSpec.isEmpty) {
         return None
+      }
+
+      if (!tableSpec.get.isPartitioned) {
+        return IcebergClusteredStatsExtractor.extract(fullTableName, table, confName)
       }
 
       val currentSnapshot = Option(table.currentSnapshot())
@@ -352,7 +356,7 @@ class IcebergPartitionStatsExtractor(spark: SparkSession) {
     columnStatsMap.toMap
   }
 
-  private[iceberg] def convertBoundValue(bound: java.nio.ByteBuffer, fieldType: org.apache.iceberg.types.Type): Any = {
+  private[spark] def convertBoundValue(bound: java.nio.ByteBuffer, fieldType: org.apache.iceberg.types.Type): Any = {
     require(bound != null, "bound cannot be null")
     require(fieldType != null, "fieldType cannot be null")
     org.apache.iceberg.types.Conversions.fromByteBuffer(fieldType, bound)

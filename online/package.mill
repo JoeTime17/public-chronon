@@ -59,7 +59,8 @@ trait OnlineModule extends Cross.Module[String] with build.BaseModule {
     def scalaVersion = crossValue
     def moduleDeps = Seq(build.online(crossValue), build.api(crossValue).test)
     def mvnDeps = super.mvnDeps() ++ build.Constants.testDeps ++ Seq(
-      mvn"org.apache.spark::spark-hive:${build.Constants.sparkVersion}"
+      mvn"org.apache.spark::spark-hive:${build.Constants.sparkVersion}",
+      mvn"io.opentelemetry.proto:opentelemetry-proto:1.2.0-alpha"
     )
 
     def forkArgs = build.Constants.commonTestForkArgs ++ Seq(
