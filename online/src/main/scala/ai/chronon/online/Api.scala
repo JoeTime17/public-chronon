@@ -247,6 +247,10 @@ abstract class Api(userConf: Map[String, String]) extends Serializable {
 
   def generateModelPlatformProvider: ModelPlatformProvider = null
 
+  def resolveFlinkUrl(groupByName: String): Option[String] = None
+
+  def flinkAuthHeaders: Map[String, String] = Map.empty
+
   @transient lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
   /** logged responses should be made available to an offline log table in Hive

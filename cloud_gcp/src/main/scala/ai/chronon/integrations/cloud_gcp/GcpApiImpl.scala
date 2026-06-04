@@ -9,6 +9,8 @@ import com.google.cloud.bigquery.{BigQuery, BigQueryOptions}
 import com.google.cloud.bigtable.admin.v2.{BigtableTableAdminClient, BigtableTableAdminSettings}
 import com.google.cloud.bigtable.data.v2.stub.metrics.NoopMetricsProvider
 import com.google.cloud.bigtable.data.v2.{BigtableDataClient, BigtableDataSettings}
+import com.google.cloud.dataproc.v1.{ClusterControllerClient, ClusterControllerSettings, JobControllerClient, JobControllerSettings}
+import com.google.cloud.storage.StorageOptions
 
 import java.time.Duration
 import java.util
@@ -337,6 +339,43 @@ class GcpApiImpl(conf: Map[String, String]) extends Api(conf) {
         }
       }
     }
+  }
+
+  override def resolveFlinkUrl(groupByName: String): Option[String] = {
+    import GcpApiImpl._
+    val projectId = getOrElseThrow(GcpProjectId, conf)
+    val region = getOptional("GCP_REGION", conf)
+      .getOrElse(throw new IllegalArgumentException("GCP_REGION is required to resolve Flink URL"))
+
+    val endpoint = s"$region-dataproc.googleapis.com:443"
+    val jobControllerClient =
+      JobControllerClient.create(JobControllerSettings.newBuilder().setEndpoint(endpoint).build())
+    val clusterControllerClient =
+      ClusterControllerClient.create(ClusterControllerSettings.newBuilder().setEndpoint(endpoint).build())
+    val gcsStorageClient = StorageOptions.newBuilder().setProjectId(projectId).build().getService
+
+    try {
+      val submitter = new DataprocSubmitter(
+        jobControllerClient,
+        GCSClient(gcsStorageClient),
+        region,
+        projectId,
+        clusterControllerClient = Some(clusterControllerClient)
+      )
+      val jobIds = submitter.listRunningGroupByFlinkJobs(groupByName)
+      jobIds.headOption.flatMap(submitter.getFlinkUrl)
+    } finally {
+      jobControllerClient.close()
+      clusterControllerClient.close()
+    }
+  }
+
+  override def flinkAuthHeaders: Map[String, String] = {
+    import com.google.auth.oauth2.GoogleCredentials
+    val credentials = GoogleCredentials.getApplicationDefault()
+      .createScoped("https://www.googleapis.com/auth/cloud-platform")
+    credentials.refreshIfExpired()
+    Map("Authorization" -> s"Bearer ${credentials.getAccessToken.getTokenValue}")
   }
 
   override def logResponse(resp: LoggableResponse): Unit = responseConsumer.accept(resp)

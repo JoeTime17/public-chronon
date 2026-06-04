@@ -77,9 +77,11 @@ def _resolve_cloud_jars(cloud_provider, artifact_prefix, version):
               help="Remote artifact URI for zipline client artifacts.")
 @click.option("--version", envvar="VERSION",
               help="Chronon version to use.")
+@click.option("--flink-url", envvar="FLINK_REST_URL", default=None,
+              help="Flink Job Manager REST URL. Required for streaming mode.")
 @click.option("--enable-debug", is_flag=True, default=False,
               help="Enables verbose debug logging.")
-def status(conf, mode, repo, online_jar, online_class, artifact_prefix, version, enable_debug):
+def status(conf, mode, repo, online_jar, online_class, artifact_prefix, version, flink_url, enable_debug):
     """Show the status of a Zipline job.
 
     CONF is the path to the compiled GroupBy conf (e.g. compiled/group_bys/team/groupby_name).
@@ -128,6 +130,19 @@ def status(conf, mode, repo, online_jar, online_class, artifact_prefix, version,
         if online_jar:
             cmd.extend(["--online-jar", online_jar])
         cmd.extend(["--online-class", online_class])
+
+    if mode == "streaming":
+        if flink_url:
+            cmd.extend(["--flink-url", flink_url])
+        elif online_class:
+            if online_jar:
+                cmd.extend(["--online-jar", online_jar])
+            cmd.extend(["--online-class", online_class])
+        else:
+            raise click.UsageError(
+                "--flink-url (or FLINK_REST_URL) is required for streaming mode "
+                "when CLOUD_PROVIDER is not set"
+            )
 
     if enable_debug:
         cmd.append("--enable-debug")
