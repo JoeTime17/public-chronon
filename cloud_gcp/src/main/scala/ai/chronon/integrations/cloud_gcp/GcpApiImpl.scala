@@ -363,11 +363,100 @@ class GcpApiImpl(conf: Map[String, String]) extends Api(conf) {
         clusterControllerClient = Some(clusterControllerClient)
       )
       val jobIds = submitter.listRunningGroupByFlinkJobs(groupByName)
-      jobIds.headOption.flatMap(submitter.getFlinkUrl)
+      logger.info(s"Found ${jobIds.size} active Dataproc job(s) for $groupByName: ${jobIds.mkString(", ")}")
+      jobIds.headOption match {
+        case Some(jobId) =>
+          // Per-job mode: Dataproc tracks YARN apps on the job object
+          submitter.getFlinkUrl(jobId).orElse {
+            // Application mode (FlinkApplicationLauncher): Dataproc job has no
+            // yarnApplications, so query the YARN RM API to find the Flink app
+            logger.info(s"YARN app not on Dataproc job $jobId (application mode), querying YARN RM")
+            resolveFlinkUrlViaYarnRm(jobId, jobControllerClient, clusterControllerClient)
+          }
+        case None => None
+      }
     } finally {
       jobControllerClient.close()
       clusterControllerClient.close()
     }
+  }
+
+  // In application mode, FlinkApplicationLauncher submits a YARN application that Dataproc
+  // doesn't track in yarnApplicationsList. We query the YARN ResourceManager REST API
+  // (via the Component Gateway) to find the running Flink application on the cluster.
+  private def resolveFlinkUrlViaYarnRm(
+      dataprocJobId: String,
+      jobControllerClient: JobControllerClient,
+      clusterControllerClient: ClusterControllerClient
+  ): Option[String] = {
+    import GcpApiImpl._
+    import com.google.cloud.dataproc.v1.GetJobRequest
+
+    val projectId = getOrElseThrow(GcpProjectId, conf)
+    val region = getOptional("GCP_REGION", conf).get
+
+    val dataprocJob = jobControllerClient.getJob(
+      GetJobRequest.newBuilder().setProjectId(projectId).setRegion(region).setJobId(dataprocJobId).build()
+    )
+    val clusterId = dataprocJob.getPlacement.getClusterName
+    val cluster = clusterControllerClient.getCluster(projectId, region, clusterId)
+    val yarnRmUrl = Option(cluster.getConfig.getEndpointConfig.getHttpPortsMap.get("YARN ResourceManager"))
+      .map(_.stripSuffix("/"))
+
+    yarnRmUrl.flatMap { rmUrl =>
+      val baseUrl = rmUrl.stripSuffix("/yarn")
+      val credentials = com.google.auth.oauth2.GoogleCredentials.getApplicationDefault()
+        .createScoped("https://www.googleapis.com/auth/cloud-platform")
+      credentials.refreshIfExpired()
+      val token = credentials.getAccessToken.getTokenValue
+
+      val backend = sttp.client3.HttpClientSyncBackend()
+      try {
+        val response = sttp.client3.basicRequest
+          .get(sttp.model.Uri.unsafeParse(
+            s"$rmUrl/ws/v1/cluster/apps?states=RUNNING&applicationTypes=Apache Flink"))
+          .header("Authorization", s"Bearer $token")
+          .readTimeout(scala.concurrent.duration.Duration(30000, "ms"))
+          .send(backend)
+
+        response.body match {
+          case Right(body) =>
+            parseYarnFlinkAppId(body).map { appId =>
+              logger.info(s"Found YARN Flink application via RM API: $appId")
+              s"$baseUrl/gateway/default/yarn/proxy/$appId/"
+            }
+          case Left(err) =>
+            logger.warn(s"Failed to query YARN ResourceManager: $err")
+            None
+        }
+      } finally {
+        backend.close()
+      }
+    }
+  }
+
+  private def parseYarnFlinkAppId(yarnAppsJson: String): Option[String] = {
+    import scala.jdk.CollectionConverters._
+    val root = com.google.gson.JsonParser.parseString(yarnAppsJson).getAsJsonObject
+    val apps = root.getAsJsonObject("apps")
+    if (apps == null) return None
+    val appList = apps.getAsJsonArray("app")
+    if (appList == null || appList.size() == 0) return None
+
+    val flinkApps = appList.asScala
+      .map(_.getAsJsonObject)
+      .filter(app => app.get("applicationType").getAsString == "Apache Flink")
+      .toSeq
+
+    if (flinkApps.size > 1) {
+      logger.warn(s"Found ${flinkApps.size} running Flink apps on cluster, using most recent")
+    }
+
+    // Pick the most recently started Flink app
+    flinkApps
+      .sortBy(app => -app.get("startedTime").getAsLong)
+      .headOption
+      .map(_.get("id").getAsString)
   }
 
   override def flinkAuthHeaders: Map[String, String] = {
