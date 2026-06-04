@@ -191,7 +191,7 @@ See details on how to do that [here](../management_in_production/Online_Offline_
 
 ## Status
 
-The `zipline status` command checks the current state of a deployed `GroupBy` job — either the batch upload to the KV store or the streaming consumer lag.
+The `zipline status` command checks the current state of a deployed `GroupBy` job — either the batch upload to the KV store or the streaming pipeline health via the Flink REST API.
 
 ### Upload-to-KV Status
 
@@ -217,7 +217,7 @@ If the serving info cannot be fetched (e.g. batch upload hasn't run yet), the ou
 
 ### Streaming Status
 
-Checks the Kafka consumer lag for a streaming `GroupBy`:
+Queries the Flink REST API for streaming pipeline health — freshness metrics, checkpoint status, and the Flink job ID:
 
 ```bash
 zipline status compiled/group_bys/team/your_group_by.v1 \
@@ -229,12 +229,18 @@ zipline status compiled/group_bys/team/your_group_by.v1 \
 
 Sample output:
 ```json
-{"lag":42}
+{"metrics":{"event_created_to_sink_time":{"p99":2465.0,"p95":2438.0,"mean":1029.5}},"completedCheckpoints":97,"healthy":true,"flinkJobId":"7906e3f22801819c9d17c14d8c2a526d"}
 ```
 
-A lag of `0` means the streaming job is fully caught up. A lag of `-1` means the consumer group has no committed offsets (the streaming job likely hasn't started):
-```json
-{"lag":-1}
+The `event_created_to_sink_time` metric measures the end-to-end latency (in milliseconds) from when an event was created to when it was written to the KV store. The `healthy` flag is `true` when the completed checkpoint count is ≥ 3.
+
+When `CLOUD_PROVIDER=GCP`, the Flink Job Manager URL is auto-discovered via Dataproc APIs. This works for both per-job mode (YARN apps tracked on the Dataproc job) and application mode (resolved via the YARN ResourceManager REST API). You can also provide the URL explicitly with `--flink-url`:
+
+```bash
+zipline status compiled/group_bys/team/your_group_by.v1 \
+  --mode streaming \
+  --online-jar /path/to/online.jar \
+  --flink-url http://flink-jm:8081
 ```
 
 ### Options
@@ -247,9 +253,10 @@ A lag of `0` means the streaming job is fully caught up. A lag of `-1` means the
 | `--online-class` | Api implementation class. Required for `upload-to-kv` when `CLOUD_PROVIDER` is not set. Can also be set via `CHRONON_ONLINE_CLASS` env var. |
 | `--artifact-prefix` | Remote artifact URI for cloud jar downloads. |
 | `--version` | Chronon version for cloud jar downloads. |
+| `--flink-url` | Flink Job Manager REST URL. Auto-discovered on GCP; required for streaming mode in OSS environments without `--online-class`. Can also be set via `FLINK_REST_URL` env var. |
 | `--enable-debug` | Enables verbose debug logging. |
 
-When `CLOUD_PROVIDER` is set (e.g. `GCP`, `AWS`, `AZURE`), the required jars and online class are resolved automatically using `--artifact-prefix` and `--version`. In OSS environments without a cloud provider, you must supply `--online-jar` (and `--online-class` for `upload-to-kv`) explicitly.
+When `CLOUD_PROVIDER` is set (e.g. `GCP`, `AWS`, `AZURE`), the required jars, online class, and Flink URL are resolved automatically using `--artifact-prefix` and `--version`. In OSS environments without a cloud provider, you must supply `--online-jar` (and `--online-class` for `upload-to-kv`, `--flink-url` or `--online-class` for `streaming`) explicitly.
 
 ## Useful tips to work with Chronon
 
