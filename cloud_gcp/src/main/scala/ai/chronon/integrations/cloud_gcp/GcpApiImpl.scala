@@ -9,7 +9,12 @@ import com.google.cloud.bigquery.{BigQuery, BigQueryOptions}
 import com.google.cloud.bigtable.admin.v2.{BigtableTableAdminClient, BigtableTableAdminSettings}
 import com.google.cloud.bigtable.data.v2.stub.metrics.NoopMetricsProvider
 import com.google.cloud.bigtable.data.v2.{BigtableDataClient, BigtableDataSettings}
-import com.google.cloud.dataproc.v1.{ClusterControllerClient, ClusterControllerSettings, JobControllerClient, JobControllerSettings}
+import com.google.cloud.dataproc.v1.{
+  ClusterControllerClient,
+  ClusterControllerSettings,
+  JobControllerClient,
+  JobControllerSettings
+}
 import com.google.cloud.storage.StorageOptions
 
 import java.time.Duration
@@ -405,7 +410,8 @@ class GcpApiImpl(conf: Map[String, String]) extends Api(conf) {
 
     yarnRmUrl.flatMap { rmUrl =>
       val baseUrl = rmUrl.stripSuffix("/yarn")
-      val credentials = com.google.auth.oauth2.GoogleCredentials.getApplicationDefault()
+      val credentials = com.google.auth.oauth2.GoogleCredentials
+        .getApplicationDefault()
         .createScoped("https://www.googleapis.com/auth/cloud-platform")
       credentials.refreshIfExpired()
       val token = credentials.getAccessToken.getTokenValue
@@ -413,8 +419,7 @@ class GcpApiImpl(conf: Map[String, String]) extends Api(conf) {
       val backend = sttp.client3.HttpClientSyncBackend()
       try {
         val response = sttp.client3.basicRequest
-          .get(sttp.model.Uri.unsafeParse(
-            s"$rmUrl/ws/v1/cluster/apps?states=RUNNING&applicationTypes=Apache Flink"))
+          .get(sttp.model.Uri.unsafeParse(s"$rmUrl/ws/v1/cluster/apps?states=RUNNING&applicationTypes=Apache Flink"))
           .header("Authorization", s"Bearer $token")
           .readTimeout(scala.concurrent.duration.Duration(30000, "ms"))
           .send(backend)
@@ -461,7 +466,8 @@ class GcpApiImpl(conf: Map[String, String]) extends Api(conf) {
 
   override def flinkAuthHeaders: Map[String, String] = {
     import com.google.auth.oauth2.GoogleCredentials
-    val credentials = GoogleCredentials.getApplicationDefault()
+    val credentials = GoogleCredentials
+      .getApplicationDefault()
       .createScoped("https://www.googleapis.com/auth/cloud-platform")
     credentials.refreshIfExpired()
     Map("Authorization" -> s"Bearer ${credentials.getAccessToken.getTokenValue}")

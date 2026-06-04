@@ -262,9 +262,12 @@ object StatusMain {
         return Map.empty
     }
 
-    vertices.iterator.map { vertexId =>
-      findAndFetchFreshnessForVertex(backend, access, jobId, vertexId, groupByName)
-    }.collectFirst { case m if m.nonEmpty => m }.getOrElse(Map.empty)
+    vertices.iterator
+      .map { vertexId =>
+        findAndFetchFreshnessForVertex(backend, access, jobId, vertexId, groupByName)
+      }
+      .collectFirst { case m if m.nonEmpty => m }
+      .getOrElse(Map.empty)
   }
 
   private[online] def parseVertexIds(jobDetailJson: String): Seq[String] = {
