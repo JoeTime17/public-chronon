@@ -301,19 +301,28 @@ object StatusMain {
       logger.debug(s"Vertex $vertexId freshness metrics: ${freshnessMetrics.mkString(", ")}")
     }
 
+    // With parallelism > 1, each subtask has its own metric (e.g. 0.Sink__..._p99, 1.Sink__..._p99).
+    // Fetch all subtask values per suffix and aggregate: max for percentiles, average for mean.
     val results = FreshnessTargetSuffixes.flatMap { suffix =>
       val label = suffix.stripPrefix("_")
-      freshnessMetrics
-        .find(id => id.contains(normalizedName) && id.endsWith(suffix))
-        .flatMap { metricId =>
-          val valueResponse = flinkRequest(access)
-            .get(uri"${access.url}/jobs/$jobId/vertices/$vertexId/metrics?get=$metricId")
-            .send(backend)
-          valueResponse.body match {
-            case Right(b) => parseMetricValue(b).map(label -> _)
-            case Left(_)  => None
-          }
+      val matching = freshnessMetrics.filter(id => id.contains(normalizedName) && id.endsWith(suffix))
+      if (matching.isEmpty) None
+      else {
+        val metricParam = matching.mkString(",")
+        val valueResponse = flinkRequest(access)
+          .get(uri"${access.url}/jobs/$jobId/vertices/$vertexId/metrics?get=$metricParam")
+          .send(backend)
+        valueResponse.body match {
+          case Right(b) =>
+            val values = parseAllMetricValues(b)
+            if (values.isEmpty) None
+            else {
+              val aggregated = if (label == "mean") values.sum / values.size else values.max
+              Some(label -> aggregated)
+            }
+          case Left(_) => None
         }
+      }
     }
     results.toMap
   }
@@ -324,12 +333,17 @@ object StatusMain {
     else arr.asScala.map(_.getAsJsonObject.get("id").getAsString).toSeq
   }
 
-  private[online] def parseMetricValue(metricValueJson: String): Option[Double] = {
+  private[online] def parseAllMetricValues(metricValueJson: String): Seq[Double] = {
     val arr = JsonParser.parseString(metricValueJson).getAsJsonArray
-    if (arr == null || arr.size() == 0) return None
-    val obj = arr.get(0).getAsJsonObject
-    val value = obj.get("value")
-    if (value == null || value.isJsonNull) None
-    else Try(value.getAsString.toDouble).toOption
+    if (arr == null || arr.size() == 0) return Seq.empty
+    arr.asScala.flatMap { elem =>
+      val obj = elem.getAsJsonObject
+      val value = obj.get("value")
+      if (value == null || value.isJsonNull) None
+      else Try(value.getAsString.toDouble).toOption
+    }.toSeq
   }
+
+  private[online] def parseMetricValue(metricValueJson: String): Option[Double] =
+    parseAllMetricValues(metricValueJson).headOption
 }

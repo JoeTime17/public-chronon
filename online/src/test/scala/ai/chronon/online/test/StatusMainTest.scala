@@ -176,4 +176,14 @@ class StatusMainTest extends AnyFlatSpec with Matchers {
     val json = """[{"id":"some.metric","value":null}]"""
     StatusMain.parseMetricValue(json) shouldEqual None
   }
+
+  it should "parse all metric values from multiple subtasks" in {
+    val json = """[{"id":"0.Sink.metric_p99","value":"100.0"},{"id":"1.Sink.metric_p99","value":"200.0"}]"""
+    StatusMain.parseAllMetricValues(json) shouldEqual Seq(100.0, 200.0)
+  }
+
+  it should "skip null values in multi-subtask response" in {
+    val json = """[{"id":"0.Sink.metric_p99","value":"100.0"},{"id":"1.Sink.metric_p99","value":null}]"""
+    StatusMain.parseAllMetricValues(json) shouldEqual Seq(100.0)
+  }
 }
