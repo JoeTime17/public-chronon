@@ -40,6 +40,10 @@ trait BaseAggregator[Input, IR, Output] extends Serializable {
   def denormalize(ir: Any): IR = ir.asInstanceOf[IR]
 
   def isDeletable: Boolean = false
+
+  // Value to return when no non-null inputs were seen (IR is null).
+  // Override in count-like aggregators to return 0L instead of null.
+  def emptyOutputValue: Any = null
 }
 
 // sum, count, min, max, avg, approx_unique, topK, bottomK

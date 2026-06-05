@@ -72,7 +72,10 @@ class DirectColumnAggregator[Input, IR, Output](agg: BaseAggregator[Input, IR, O
     ir.update(columnIndices.output, deleted)
   }
 
-  override def finalize(ir: Any): Any = numberSanityCheck(guardedApply(agg.finalize, ir))
+  override def finalize(ir: Any): Any = {
+    if (ir == null) return agg.emptyOutputValue
+    numberSanityCheck(agg.finalize(ir.asInstanceOf[IR]))
+  }
   override def normalize(ir: Any): Any = guardedApply(agg.normalize, ir)
   override def denormalize(ir: Any): Any = if (ir == null) null else agg.denormalize(ir)
   override def clone(ir: Any): Any = guardedApply(agg.clone, ir)

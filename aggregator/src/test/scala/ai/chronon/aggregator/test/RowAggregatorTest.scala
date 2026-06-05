@@ -139,4 +139,86 @@ class RowAggregatorTest extends AnyFlatSpec {
       assertEquals(expected, actual)
     }
   }
+
+  it should "return 0 for COUNT, UNIQUE_COUNT, and APPROX_UNIQUE_COUNT on all-null inputs" in {
+    val schema = List(
+      "ts" -> LongType,
+      "views" -> IntType,
+      "title" -> StringType
+    )
+
+    val specs = Array(
+      Builders.AggregationPart(Operation.COUNT, "views"),
+      Builders.AggregationPart(Operation.UNIQUE_COUNT, "title"),
+      Builders.AggregationPart(Operation.APPROX_UNIQUE_COUNT, "title"),
+      Builders.AggregationPart(Operation.SUM, "views"),
+      Builders.AggregationPart(Operation.MAX, "title")
+    )
+
+    val rowAggregator = new RowAggregator(schema, specs)
+
+    // All-null inputs — only ts is non-null
+    val rows = List(
+      TestRow(1L, null, null),
+      TestRow(2L, null, null),
+      TestRow(3L, null, null)
+    )
+
+    val ir = rows.foldLeft(rowAggregator.init) { case (merged, input) =>
+      rowAggregator.update(merged, input)
+      merged
+    }
+    val finalized = rowAggregator.finalize(ir)
+
+    assertEquals("COUNT on all-null inputs should return 0", 0L, finalized(0))
+    assertEquals("UNIQUE_COUNT on all-null inputs should return 0", 0L, finalized(1))
+    assertEquals("APPROX_UNIQUE_COUNT on all-null inputs should return 0", 0L, finalized(2))
+    assertNull("SUM on all-null inputs should remain null", finalized(3))
+    assertNull("MAX on all-null inputs should remain null", finalized(4))
+  }
+
+  it should "return 0 for COUNT-family when no rows are seen (empty init)" in {
+    val schema = List(
+      "ts" -> LongType,
+      "views" -> IntType,
+      "title" -> StringType
+    )
+
+    val specs = Array(
+      Builders.AggregationPart(Operation.COUNT, "views"),
+      Builders.AggregationPart(Operation.UNIQUE_COUNT, "title"),
+      Builders.AggregationPart(Operation.APPROX_UNIQUE_COUNT, "title")
+    )
+
+    val rowAggregator = new RowAggregator(schema, specs)
+    val finalized = rowAggregator.finalize(rowAggregator.init)
+
+    assertEquals("COUNT on empty init should return 0", 0L, finalized(0))
+    assertEquals("UNIQUE_COUNT on empty init should return 0", 0L, finalized(1))
+    assertEquals("APPROX_UNIQUE_COUNT on empty init should return 0", 0L, finalized(2))
+  }
+
+  it should "return 0 for COUNT-family when merging two empty IRs" in {
+    val schema = List(
+      "ts" -> LongType,
+      "views" -> IntType,
+      "title" -> StringType
+    )
+
+    val specs = Array(
+      Builders.AggregationPart(Operation.COUNT, "views"),
+      Builders.AggregationPart(Operation.UNIQUE_COUNT, "title"),
+      Builders.AggregationPart(Operation.APPROX_UNIQUE_COUNT, "title")
+    )
+
+    val rowAggregator = new RowAggregator(schema, specs)
+    val ir1 = rowAggregator.init
+    val ir2 = rowAggregator.init
+    rowAggregator.merge(ir1, ir2)
+    val finalized = rowAggregator.finalize(ir1)
+
+    assertEquals("COUNT after merging two empty IRs should return 0", 0L, finalized(0))
+    assertEquals("UNIQUE_COUNT after merging two empty IRs should return 0", 0L, finalized(1))
+    assertEquals("APPROX_UNIQUE_COUNT after merging two empty IRs should return 0", 0L, finalized(2))
+  }
 }

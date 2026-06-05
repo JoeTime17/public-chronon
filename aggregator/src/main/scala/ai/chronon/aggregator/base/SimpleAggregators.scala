@@ -79,6 +79,8 @@ class Count extends SimpleAggregator[Any, Long, Long] {
   override def isDeletable: Boolean = true
 
   override def clone(ir: Long): Long = ir
+
+  override def emptyOutputValue: Any = 0L
 }
 
 class UniqueCount[T](inputType: DataType) extends SimpleAggregator[T, util.HashSet[T], Long] {
@@ -123,6 +125,8 @@ class UniqueCount[T](inputType: DataType) extends SimpleAggregator[T, util.HashS
     set.addAll(ir.asInstanceOf[util.ArrayList[T]])
     set
   }
+
+  override def emptyOutputValue: Any = 0L
 }
 
 class Average extends SimpleAggregator[Double, Array[Any], Double] {
@@ -540,6 +544,8 @@ class ApproxDistinctCount[Input: CpcFriendly](lgK: Int = 8) extends SimpleAggreg
 
   override def denormalize(normalized: Any): CpcSketch =
     CpcSketch.heapify(normalized.asInstanceOf[Array[Byte]])
+
+  override def emptyOutputValue: Any = 0L
 }
 
 class ApproxPercentiles(k: Int = 128, percentiles: Array[Double] = Array(0.5))
