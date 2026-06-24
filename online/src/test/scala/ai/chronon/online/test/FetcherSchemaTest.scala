@@ -83,11 +83,13 @@ class FetcherSchemaTest extends AnyFlatSpec with Matchers {
     failure.getMessage should include("online=True")
   }
 
-  it should "return a user-facing error for offline groupBys" in {
-    val kvStore = InMemoryKvStore.build(s"FetcherSchemaTest_offline_${System.nanoTime()}")
+  // A GroupBy that is only a join dependency is uploaded to <NAME>_BATCH (so the join can fetch it) but
+  // carries online=false in its own conf. The schema must still resolve - the batch serving info is the
+  // signal, not the conf's online flag - otherwise the endpoint 400s for GroupBys that are servable.
+  it should "fetch schema when the batch serving info exists but the conf is marked offline" in {
+    val kvStore = InMemoryKvStore.build(s"FetcherSchemaTest_offline_conf_${System.nanoTime()}")
     kvStore.create(Constants.MetadataDataset)
 
-    // online status is read from the batch serving info (which embeds the conf), not from CHRONON_METADATA.
     val servingInfo = GroupByDerivationsTest.makeTestGroupByServingInfoParsed().groupByServingInfo
     servingInfo.groupBy.metaData.setOnline(false)
     val groupByName = servingInfo.groupBy.metaData.name
@@ -97,10 +99,26 @@ class FetcherSchemaTest extends AnyFlatSpec with Matchers {
     putString(kvStore, Constants.GroupByServingInfoKey, ThriftJsonCodec.toJsonStr(servingInfo), batchDataset)
 
     val fetcher = new Fetcher(kvStore, Constants.MetadataDataset)
+    val response = fetcher.fetchGroupBySchema(groupByName).get
+
+    response.groupByName shouldBe groupByName
+    response.keySchema shouldBe servingInfo.keyAvroSchema
+    response.inputSchema shouldBe servingInfo.inputAvroSchema
+    response.selectedSchema shouldBe servingInfo.selectedAvroSchema
+  }
+
+  it should "fail schema fetch when the groupBy has no batch upload" in {
+    val kvStore = InMemoryKvStore.build(s"FetcherSchemaTest_no_upload_${System.nanoTime()}")
+    kvStore.create(Constants.MetadataDataset)
+
+    val servingInfo = GroupByDerivationsTest.makeTestGroupByServingInfoParsed().groupByServingInfo
+    val groupByName = servingInfo.groupBy.metaData.name
+    // create the batch dataset but never write the serving info - mirrors a GroupBy that was never uploaded
+    kvStore.create(new GroupByOps(servingInfo.groupBy).batchDataset)
+
+    val fetcher = new Fetcher(kvStore, Constants.MetadataDataset)
     val failure = fetcher.fetchGroupBySchema(groupByName).failed.get
 
-    failure shouldBe a[IllegalArgumentException]
-    failure.getMessage should include("Iceberg catalog schema via eval")
-    failure.getMessage should include("online=True")
+    failure.getMessage should include("group by serving info")
   }
 }

@@ -179,6 +179,54 @@ class TestHubRunner:
 
     @patch('requests.post')
     @patch('ai.chronon.repo.hub_runner.get_current_branch')
+    def test_backfill_rejects_end_ds_before_start_ds(
+        self,
+        mock_get_current_branch,
+        mock_post,
+        canary,
+        online_join_conf,
+    ):
+        mock_get_current_branch.return_value = "test-branch"
+
+        runner = CliRunner()
+        result = self._run_and_print(runner, hub, [
+            'backfill',
+            online_join_conf,
+            '--chronon-root', canary,
+            '--no-use-auth',
+            '--start-ds', '2024-02-15',
+            '--end-ds', '2024-01-15',
+        ])
+
+        assert result.exit_code != 0
+        assert "End date 2024-01-15 is before start date 2024-02-15" in result.output
+        mock_post.assert_not_called()
+
+    @patch('requests.post')
+    @patch('ai.chronon.repo.hub_runner.get_current_branch')
+    def test_backfill_allows_equal_start_and_end_ds(
+        self,
+        mock_get_current_branch,
+        mock_post,
+        canary,
+        online_join_conf,
+    ):
+        mock_get_current_branch.return_value = "test-branch"
+
+        runner = CliRunner()
+        result = self._run_and_print(runner, hub, [
+            'backfill',
+            online_join_conf,
+            '--chronon-root', canary,
+            '--no-use-auth',
+            '--start-ds', '2024-01-15',
+            '--end-ds', '2024-01-15',
+        ])
+
+        assert result.exit_code == 0
+
+    @patch('requests.post')
+    @patch('ai.chronon.repo.hub_runner.get_current_branch')
     def test_adhoc_end_to_end_post_request(
         self,
         mock_get_current_branch,

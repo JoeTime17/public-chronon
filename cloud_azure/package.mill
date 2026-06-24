@@ -137,6 +137,9 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
     // hadoop-client-runtime shades zookeeper but leaves stale 3.6.3 pom metadata.
     // Strip it since the code is shaded and we don't use ZooKeeper directly.
     Assembly.Rule.ExcludePattern("META-INF/maven/org\\.apache\\.zookeeper/.*"),
+    // hadoop-client-runtime shades jline but leaves stale 3.9.0 pom metadata
+    // (GHSA-2r2c-cx56-8933, GHSA-47qp-hqvx-6r3f). Strip since code is shaded.
+    Assembly.Rule.ExcludePattern("META-INF/maven/org\\.jline/.*"),
   )
 
   // Uber-jars (spark-core, hadoop-client-runtime, iceberg-spark-runtime) embed stale

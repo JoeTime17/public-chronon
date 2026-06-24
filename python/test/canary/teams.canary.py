@@ -182,15 +182,16 @@ from teams import aws_databricks, azure, quickstart, aws
 aws_databricks_env: EnvironmentVariables = aws_databricks.env
 aws_databricks_env.common['DATABRICKS_EXTRA'] = "DATABRICKS_EXTRA_1"
 
-# crucible-aws (in-cluster K8sSubmitter) is the consumer of compiled_canary/. Override
-# bucket prefixes + frontend URLs here so teams.py (PROD) can keep pointing at the
-# canary EMR Serverless deployment while crucible diverges. spark.sql.warehouse.dir
-# mirrors WAREHOUSE_PREFIX.
-aws_databricks_env.common['ARTIFACT_PREFIX'] = "s3://zipline-artifacts-aws"
-aws_databricks_env.common['WAREHOUSE_PREFIX'] = "s3://zipline-warehouse-aws"
+# Crucible (in-cluster K8sSubmitter) is the consumer of compiled_canary/. Override
+# bucket prefixes + URLs here so teams.py (PROD) can keep pointing at the canary
+# EMR Serverless deployment while crucible diverges. spark.sql.warehouse.dir
+# mirrors WAREHOUSE_PREFIX. HUB_URL uses shared-domain mode (single host with
+# /services/hub path) — the crucible cluster runs PR-77 consolidated domain wiring.
+aws_databricks_env.common['ARTIFACT_PREFIX'] = "s3://zipline-artifacts-crucible"
+aws_databricks_env.common['WAREHOUSE_PREFIX'] = "s3://zipline-warehouse-crucible"
 aws_databricks_env.common['FRONTEND_URL'] = "https://crucible-aws.zipline.ai"
-aws_databricks_env.common['HUB_URL'] = "https://crucible-orch-aws.zipline.ai"
-aws_databricks.conf.common['spark.sql.warehouse.dir'] = "s3://zipline-warehouse-aws/data/uc-poc/warehouse/"
+aws_databricks_env.common['HUB_URL'] = "https://crucible-aws.zipline.ai/services/hub"
+aws_databricks.conf.common['spark.sql.warehouse.dir'] = "s3://zipline-warehouse-crucible/data/uc-poc/warehouse/"
 # UC's vended-creds default works on the K8sSubmitter path; only EMR needs the opt-out.
 del aws_databricks.conf.common['spark.sql.catalog.workspace.renewCredential.enabled']
 

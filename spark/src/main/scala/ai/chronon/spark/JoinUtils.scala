@@ -39,6 +39,37 @@ import scala.jdk.CollectionConverters._
 object JoinUtils {
   @transient lazy val logger: Logger = LoggerFactory.getLogger(getClass)
 
+  val FinalDfExplainEnabled = "spark.chronon.join.final_df.explain.enabled"
+  val DisableDynamicPartitionPruningForFinalJoinWrites =
+    "spark.chronon.join.final_write.disable_dynamic_partition_pruning"
+  private val SparkDynamicPartitionPruningEnabled = "spark.sql.optimizer.dynamicPartitionPruning.enabled"
+
+  def explainFinalDfIfEnabled(finalDf: DataFrame)(implicit tableUtils: TableUtils): Unit = {
+    val sparkConf = tableUtils.sparkSession.conf
+    if (sparkConf.get(FinalDfExplainEnabled, "false").toBoolean) {
+      finalDf.explain()
+    }
+  }
+
+  def withFinalJoinWriteOptimizations[T](tableUtils: TableUtils)(f: => T): T = {
+    val sparkConf = tableUtils.sparkSession.conf
+    val disableDpp = sparkConf.get(DisableDynamicPartitionPruningForFinalJoinWrites, "true").toBoolean
+    if (!disableDpp) {
+      f
+    } else {
+      val previousDpp = sparkConf.getOption(SparkDynamicPartitionPruningEnabled)
+      sparkConf.set(SparkDynamicPartitionPruningEnabled, "false")
+      logger.info(s"Disabled $SparkDynamicPartitionPruningEnabled while planning the final Chronon join write.")
+      try f
+      finally {
+        previousDpp match {
+          case Some(value) => sparkConf.set(SparkDynamicPartitionPruningEnabled, value)
+          case None        => sparkConf.unset(SparkDynamicPartitionPruningEnabled)
+        }
+      }
+    }
+  }
+
   def materializeJoin(joinConf: api.Join,
                       endPartition: String,
                       tableUtils: TableUtils,

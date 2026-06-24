@@ -525,10 +525,10 @@ jobs:
         run: |
           set -eo pipefail
           METADATA="updated_date=$(date),commit=${{ github.sha }},branch=${{ github.ref_name }}"
-          # zipline-artifacts-aws is the crucible-aws (in-cluster K8sSubmitter) deployment's
+          # zipline-artifacts-crucible is the crucible (in-cluster K8sSubmitter) deployment's
           # artifact bucket; zipline-artifacts-canary serves the canary EMR Serverless
           # deployment. Both consume the same chronon jars.
-          for BUCKET in zipline-artifacts-canary zipline-artifacts-aws; do
+          for BUCKET in zipline-artifacts-canary zipline-artifacts-crucible; do
             aws s3 cp ${{ needs.build_and_push.outputs.wheel_name }} s3://$BUCKET/release/passing-candidate/wheels/ --metadata="$METADATA"
             aws s3 cp flink_assembly_deploy.jar s3://$BUCKET/release/passing-candidate/jars/flink_assembly_deploy.jar --metadata="$METADATA"
             aws s3 cp cloud_aws_lib_deploy.jar s3://$BUCKET/release/passing-candidate/jars/cloud_aws_lib_deploy.jar --metadata="$METADATA"
@@ -542,10 +542,10 @@ jobs:
         run: |
           set -eo pipefail
           METADATA="updated_date=$(date),commit=${{ github.sha }},branch=${{ github.ref_name }}"
-          # zipline-artifacts-aws is the crucible-aws (in-cluster K8sSubmitter) deployment's
+          # zipline-artifacts-crucible is the crucible (in-cluster K8sSubmitter) deployment's
           # artifact bucket; zipline-artifacts-canary serves the canary EMR Serverless
           # deployment. Both consume the same chronon jars.
-          for BUCKET in zipline-artifacts-canary zipline-artifacts-aws; do
+          for BUCKET in zipline-artifacts-canary zipline-artifacts-crucible; do
             aws s3 cp ${{ needs.build_and_push.outputs.wheel_name }} s3://$BUCKET/release/latest/wheels/ --metadata="$METADATA"
             aws s3 cp flink_assembly_deploy.jar s3://$BUCKET/release/latest/jars/flink_assembly_deploy.jar --metadata="$METADATA"
             aws s3 cp cloud_aws_lib_deploy.jar s3://$BUCKET/release/latest/jars/cloud_aws_lib_deploy.jar --metadata="$METADATA"

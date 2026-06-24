@@ -794,30 +794,22 @@ class Fetcher(val kvStore: KVStore,
 
     // GroupBy confs aren't uploaded to the metadata dataset (CHRONON_METADATA) - only the batch
     // GroupByServingInfo is, under <NAME>_BATCH - and it embeds the full conf (GroupByUpload.setGroupBy).
-    // So read the serving info directly and derive online status from the embedded conf, mirroring how
-    // join schema reads each join part's serving info instead of requiring a conf in CHRONON_METADATA.
+    // So read the serving info directly, mirroring how join/data fetching resolves each GroupBy's serving
+    // info instead of requiring a conf in CHRONON_METADATA.
+    //
+    // We deliberately do NOT gate on servingInfo.groupBy.metaData.online: a GroupBy that exists only as a
+    // join dependency is uploaded to <NAME>_BATCH (so the join can fetch it) yet commonly carries
+    // online=false in its own conf. Data/join fetching serve it regardless of that flag, so the schema must
+    // too - otherwise the schema endpoint 400s for GroupBys that are demonstrably servable. Presence of the
+    // serving info is the real signal; if it's absent, getGroupByServingInfo already surfaces a clear error.
     metadataStore
       .getGroupByServingInfo(groupByName)
-      .flatMap { servingInfo =>
-        if (!servingInfo.groupBy.metaData.online) {
-          // online status comes from the conf embedded in the TTL-cached serving info. Refresh (async) so a
-          // newer upload that flipped it online is picked up on a subsequent request rather than waiting out
-          // the full TTL - same pattern as buildJoinCodec's refresh-on-failure.
-          metadataStore.getGroupByServingInfo.refresh(groupByName)
-          Failure(
-            new IllegalArgumentException(
-              s"GroupBy $groupByName is not online. Fetcher schema is only available for online GroupBys. " +
-                "Use the Iceberg catalog schema via eval for the offline table schema, or enable online=True and upload the GroupBy."))
-        } else {
-          Success(
-            GroupBySchemaResponse(groupByName,
-                                  servingInfo.keyAvroSchema,
-                                  servingInfo.responseAvroSchema,
-                                  servingInfo.inputAvroSchema,
-                                  servingInfo.selectedAvroSchema))
-        }
-      }
-      .map { response =>
+      .map { servingInfo =>
+        val response = GroupBySchemaResponse(groupByName,
+                                             servingInfo.keyAvroSchema,
+                                             servingInfo.responseAvroSchema,
+                                             servingInfo.inputAvroSchema,
+                                             servingInfo.selectedAvroSchema)
         ctx.distribution(Metrics.Name.LatencyMillis, System.currentTimeMillis() - startTime)
         response
       }

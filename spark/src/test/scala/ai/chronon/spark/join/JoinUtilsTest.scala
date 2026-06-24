@@ -28,12 +28,14 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.Assert._
 
+import java.nio.file.Files
 import scala.collection.mutable
 import scala.util.Try
 
 class JoinUtilsTest extends BaseJoinTest {
 
   private implicit val partitionSpec: PartitionSpec = tableUtils.partitionSpec
+  private val sparkDppEnabled = "spark.sql.optimizer.dynamicPartitionPruning.enabled"
   override protected val namespace = "join_util"
   it should "udf set add" in {
     val data = Seq(
@@ -259,6 +261,60 @@ class JoinUtilsTest extends BaseJoinTest {
     val range = JoinUtils.getRangeToFill(leftSource, tableUtils, endPartition, Some(overrideStartPartition))
     assertEquals(range, PartitionRange(overrideStartPartition, endPartition))
   }
+
+  it should "disable dynamic partition pruning only inside final join write optimization scope" in {
+    spark.conf.set(sparkDppEnabled, "true")
+
+    var valueInsideScope: String = null
+    JoinUtils.withFinalJoinWriteOptimizations(tableUtils) {
+      valueInsideScope = spark.conf.get(sparkDppEnabled)
+    }
+
+    assertEquals("false", valueInsideScope)
+    assertEquals("true", spark.conf.get(sparkDppEnabled))
+  }
+
+  it should "keep repeated partitioned left joins linear while final join write optimizations are active" in {
+    val paths = Map("left" -> createPartitionedParquet("left")) ++
+      (1 to 5).map(i => s"right_$i" -> createPartitionedParquet(s"right-$i")).toMap
+
+    spark.conf.set(sparkDppEnabled, "true")
+    val baselineJoinCount = optimizedJoinCount(dppNestedJoin(parts = 5, paths))
+    val scopedJoinCount = JoinUtils.withFinalJoinWriteOptimizations(tableUtils) {
+      this.optimizedJoinCount(dppNestedJoin(parts = 5, paths))
+    }
+
+    assertTrue(s"Expected Spark DPP to expand the plan, but found only $baselineJoinCount joins.",
+               baselineJoinCount > 5)
+    assertEquals(5, scopedJoinCount)
+    assertEquals("true", spark.conf.get(sparkDppEnabled))
+  }
+
+  private def createPartitionedParquet(name: String): String = {
+    val path = Files.createTempDirectory(s"chronon-join-utils-dpp-$name").toString
+    spark
+      .range(2)
+      .selectExpr("cast(id as int) as id", "date_format(date_add(date '2026-06-16', cast(id as int)), 'yyyy-MM-dd') as ds")
+      .write
+      .mode("overwrite")
+      .partitionBy("ds")
+      .parquet(path)
+    path
+  }
+
+  private def dppNestedJoin(parts: Int, paths: Map[String, String]): DataFrame = {
+    val left = spark.read.parquet(paths("left")).where("ds in ('2026-06-16', '2026-06-17')").as("a")
+    (1 to parts).foldLeft(left) { case (partial, i) =>
+      partial.join(
+        spark.read.parquet(paths(s"right_$i")).as(s"b$i"),
+        col("a.ds") === col(s"b$i.ds"),
+        "left"
+      )
+    }
+  }
+
+  private def optimizedJoinCount(df: DataFrame): Int =
+    "\\bJoin\\b".r.findAllMatchIn(df.queryExecution.optimizedPlan.toString()).length
 
   import ai.chronon.api.{LongType, StringType, StructField, StructType}
 

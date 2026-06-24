@@ -227,7 +227,9 @@ class Join(joinConf: api.Join,
           Failure(e)
       }
     val df = processJoinedDf(joinedDfTry, leftDf, bootstrapInfo, bootstrapDf)
-    df.save(outputTable, tableProps, autoExpand = true)
+    JoinUtils.withFinalJoinWriteOptimizations(tableUtils) {
+      df.save(outputTable, tableProps, autoExpand = true)
+    }
   }
 
   override def computeRange(leftDf: DataFrame,
@@ -394,7 +396,7 @@ class Join(joinConf: api.Join,
     val finalDf = cleanUpContextualFields(applyDerivation(finalBaseDf, bootstrapInfo, leftDf.columns),
                                           bootstrapInfo,
                                           leftDf.columns)
-    finalDf.explain()
+    JoinUtils.explainFinalDfIfEnabled(finalDf)(tableUtils)
     finalDf
   }
 

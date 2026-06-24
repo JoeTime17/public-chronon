@@ -248,6 +248,23 @@ def start_ds_option(func):
     )(func)
 
 
+def validate_end_ds_after_start_ds(start_ds, end_ds):
+    """Abort if end_ds is earlier than start_ds.
+
+    A range with end before start is almost always a typo, and silently
+    accepting it produces a no-op backfill that wastes a workflow slot.
+    """
+    if start_ds is None or end_ds is None:
+        return
+    start_value = start_ds.date() if hasattr(start_ds, "date") else start_ds
+    end_value = end_ds.date() if hasattr(end_ds, "date") else end_ds
+    if end_value < start_value:
+        raise click.BadParameter(
+            f"End date {end_value} is before start date {start_value}. "
+            "End date must be greater than or equal to start date."
+        )
+
+
 def confirm_end_ds_not_future(end_ds, assume_yes: bool = False):
     """Abort with a confirm prompt if end_ds is today or later.
 
@@ -298,6 +315,10 @@ def end_ds_option(func):
     )
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        validate_end_ds_after_start_ds(
+            kwargs.get("start_ds"),
+            kwargs.get("end_ds"),
+        )
         confirm_end_ds_not_future(
             kwargs.get("end_ds"),
             assume_yes=kwargs.get("assume_yes", False),

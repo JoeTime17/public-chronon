@@ -24,7 +24,13 @@ import ai.chronon.online.metrics.Metrics
 import ai.chronon.planner.JoinBootstrapNode
 import ai.chronon.spark.catalog.TableUtils
 import ai.chronon.spark.Extensions._
-import ai.chronon.spark.JoinUtils.{coalescedJoin, leftDf, shouldRecomputeLeft, tablesToRecompute}
+import ai.chronon.spark.JoinUtils.{
+  coalescedJoin,
+  leftDf,
+  shouldRecomputeLeft,
+  tablesToRecompute,
+  withFinalJoinWriteOptimizations
+}
 import ai.chronon.spark.batch._
 import com.google.gson.Gson
 import ai.chronon.api.MetaData
@@ -241,7 +247,9 @@ abstract class JoinBase(val joinConfCloned: api.Join,
         val table = joinMetaData.outputTable
 
         tableUtils.dropTableOnSchemaChange(table, df)
-        df.save(table, semanticHash = semanticHash)
+        withFinalJoinWriteOptimizations(tableUtils) {
+          df.save(table, semanticHash = semanticHash)
+        }
 
         tableUtils.loadTable(table, range.whereClauses)
       }
@@ -383,7 +391,9 @@ abstract class JoinBase(val joinConfCloned: api.Join,
           logger.info(s"Skipping writing to the output table for range: ${range.toString()}  $progress")
         } else {
 
-          finalDf.get.save(outputTable, tableProps, autoExpand = true)
+          withFinalJoinWriteOptimizations(tableUtils) {
+            finalDf.get.save(outputTable, tableProps, autoExpand = true)
+          }
           val elapsedMins = (System.currentTimeMillis() - startMillis) / (60 * 1000)
           metrics.gauge(Metrics.Name.LatencyMinutes, elapsedMins)
           metrics.gauge(Metrics.Name.PartitionCount, range.partitions.length)
