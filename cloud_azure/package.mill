@@ -17,8 +17,9 @@ trait CloudAzureModule extends Cross.Module[String] with build.BaseModule {
   private val avroVersion = build.Constants.avroVersion
   private val nimbusJoseJwtVersion = "9.37.4"
   private val commonsConfiguration2Version = "2.15.0"
-  // Azure Cosmos SDK requires Jackson >= 2.17.2; use 2.18.6 to fix GHSA-72hv-8253-57qq.
-  private val jacksonVersion = "2.18.6"
+  // Track the repo-wide Jackson version (see build.mill) so this can't drift.
+  // Azure Cosmos SDK requires Jackson >= 2.17.2, which build.Constants satisfies.
+  private val jacksonVersion = build.Constants.jacksonVersion
 
   def excludeJackson(dep: mill.scalalib.Dep): mill.scalalib.Dep = {
     dep

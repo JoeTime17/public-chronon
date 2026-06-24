@@ -133,6 +133,8 @@ SSO_SAML_CERT="MIIDp..."
 SSO_SAML_CALLBACK_URL="{AUTH_URL}/api/auth/sso/saml2/sp/acs/{SSO_PROVIDER_ID}"
 ```
 
+The user's display name is built from the SAML `firstName` + `lastName` attributes (Okta's default profile attribute names). A custom SAML app sends no attributes by default, so add **Attribute Statements** for them (Name `firstName` → Value `user.firstName`, and likewise `lastName`). For an IdP that uses different attribute names, override with `IDP_FIRSTNAME_CLAIM` / `IDP_LASTNAME_CLAIM` (e.g. `givenName` / `surname`). If absent, the name falls back to the email. The name (and role) re-sync from the IdP on each login.
+
 ## Roles & Permissions
 
 Zipline uses role-based access control (RBAC) with three roles:
@@ -158,26 +160,40 @@ The first user to sign up is automatically promoted to `admin`. All subsequent u
 
 ### IdP Role Mapping
 
-When using SSO, roles can be assigned automatically based on IdP group memberships:
+When using SSO, roles can be assigned automatically from the IdP:
 
 | Variable | Required | Description |
 |---|---|---|
-| `IDP_ROLE_MAPPING` | No | Comma-separated mapping of IdP groups to Zipline roles |
-| `IDP_GROUP_CLAIM` | No | IdP attribute name containing the group list. Defaults to `groups` |
+| `IDP_ROLE_MAPPING` | No | Comma-separated mapping of IdP group/claim values to Zipline roles (strict allowlist). Omit for passthrough. |
+| `IDP_ROLE_CLAIM` | No | IdP attribute/claim name to read the role from. Defaults to `groups`. |
+| `IDP_GROUP_CLAIM` | No | Legacy alias of `IDP_ROLE_CLAIM` (kept for back-compat; `IDP_ROLE_CLAIM` takes precedence). |
 
-**Format:** `idp-group:zipline-role,idp-group2:zipline-role2`
+**Mapping mode** — `IDP_ROLE_MAPPING` format `idp-group:zipline-role,idp-group2:zipline-role2`:
 
 ```env
 IDP_ROLE_MAPPING="zipline-admins:admin,zipline-operators:operator"
-IDP_GROUP_CLAIM="groups"
+IDP_ROLE_CLAIM="groups"
 ```
 
-If a user belongs to multiple mapped groups, the highest-privilege role wins (`admin` > `operator` > `viewer`). Users whose groups don't match any mapping keep their existing role.
+**Passthrough mode** — omit `IDP_ROLE_MAPPING` and point `IDP_ROLE_CLAIM` at a claim that already carries the role; the value is used directly (no identity mapping needed):
+
+```env
+IDP_ROLE_CLAIM="role"
+```
+
+If a user belongs to multiple mapped groups, the highest-privilege role wins (`admin` > `operator` > `viewer`). Values that don't resolve to a role are ignored, and users with no matching role keep their existing one.
 
 **Configuring group claims in Okta:**
 
 - **OIDC**: App -> Sign On -> OpenID Connect ID Token -> Add `groups` claim with filter
 - **SAML**: App -> Sign On -> Group attribute statements -> Add Name `groups` with filter `Matches regex .*`
+
+`IDP_ROLE_CLAIM` (alias `IDP_GROUP_CLAIM`) is just the SAML/OIDC attribute name to read — it doesn't have to be a group list. Instead of sending every group, you can send a single value via a SAML **Attribute Statement** whose value is an Okta Expression:
+
+- Profile attribute: Name `role`, Value `user.profile.ziplineRole` (a custom attribute added in **Directory -> Profile Editor**), with `IDP_ROLE_CLAIM="role"` and no `IDP_ROLE_MAPPING` (passthrough).
+- Computed from groups: Name `groups`, Value `isMemberOfGroupName("Zipline Admins") ? "admin" : "viewer"`.
+
+> Okta Identity Engine references profile attributes as `user.profile.<var>` (the older Classic Engine used `user.<var>`), and the expression must emit one value per role — a comma-joined string is treated as a single literal.
 
 ## SCIM (User Provisioning)
 

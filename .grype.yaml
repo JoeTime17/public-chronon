@@ -23,6 +23,17 @@ ignore:
     package:
       name: "netty-transport-native-epoll"
 
+  # GHSA-5jmj-h7xm-6q6v (CVE-2026-54515): jackson-databind case-insensitive
+  # deserialization bypasses per-property @JsonIgnoreProperties. On the 2.18.x
+  # line this is fixed only in 2.18.9, which is NOT yet published on Maven
+  # Central (latest is 2.18.8); the 2.19.x line stays vulnerable until 2.21.5,
+  # also unpublished. We pin jackson-databind to 2.18.8 (see build.mill), which
+  # already patches the three sibling advisories CVE-2026-545{12,13,14}. Remove
+  # this ignore once jackson-databind 2.18.9 (or the 2.21.x train) ships.
+  - vulnerability: "GHSA-5jmj-h7xm-6q6v"
+    package:
+      name: "jackson-databind"
+
   # Curl CVE exceptions - required for fetcher container functionality
   # Used for Amazon Corretto key download, Google Cloud Profiler download, and healthcheck
   - package:
