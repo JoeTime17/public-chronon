@@ -18,7 +18,7 @@ package ai.chronon.spark
 
 import ai.chronon.aggregator.windowing._
 import ai.chronon.api
-import ai.chronon.api.Extensions.{GroupByOps, MetadataOps, SourceOps}
+import ai.chronon.api.Extensions.{GroupByOps, MetadataOps, SourceOps, TableInfoOps, WindowUtils}
 import ai.chronon.api.ScalaJavaConversions._
 import ai.chronon.api._
 import ai.chronon.online.Extensions.ChrononStructTypeOps
@@ -108,11 +108,13 @@ class TemporalNullCountAggregator(
   override def outputEncoder: Encoder[Map[String, Long]] = Encoders.kryo[Map[String, Long]]
 }
 
-class GroupByUpload(endPartition: String, groupBy: ai.chronon.spark.GroupBy) extends Serializable {
+class GroupByUpload(endPartition: String,
+                    groupBy: ai.chronon.spark.GroupBy,
+                    uploadPartitionSpec: PartitionSpec = PartitionSpec.daily)
+    extends Serializable {
   @transient lazy val logger: Logger = LoggerFactory.getLogger(getClass)
   implicit val sparkSession: SparkSession = groupBy.sparkSession
-  private val tableUtils: TableUtils = TableUtils(sparkSession)
-  implicit private val partitionSpec: PartitionSpec = tableUtils.partitionSpec
+  implicit private val partitionSpec: PartitionSpec = uploadPartitionSpec
 
   private val avroSchema = StructType(
     Seq(
@@ -214,7 +216,7 @@ class GroupByUpload(endPartition: String, groupBy: ai.chronon.spark.GroupBy) ext
   }
 
   def snapshotEvents(jsonPercent: Int = 1): (DataFrame, Map[String, Long]) = {
-    val aggregatedDf = groupBy.snapshotEvents(PartitionRange(endPartition, endPartition))
+    val aggregatedDf = groupBy.snapshotEvents(PartitionRange(endPartition, endPartition)(partitionSpec))
     val valueColumns = groupBy.postAggSchema.fieldNames.toSeq
     val nullCounts = computeNullCounts(aggregatedDf, valueColumns)
     val kvDf = toAvroDf(
@@ -230,7 +232,7 @@ class GroupByUpload(endPartition: String, groupBy: ai.chronon.spark.GroupBy) ext
 
   def temporalEvents(jsonPercent: Int = 1,
                      resolution: Resolution = FiveMinuteResolution): (DataFrame, Map[String, Long]) = {
-    val endTs = tableUtils.partitionSpec.epochMillis(endPartition)
+    val endTs = partitionSpec.epochMillis(endPartition)
     logger.info(s"TemporalEvents upload end ts: $endTs")
 
     val inputSchema = groupBy.inputDf.schema
@@ -317,21 +319,30 @@ object GroupByUpload {
 
   // TODO - remove this if spark streaming can't reach hive tables
   private def buildServingInfo(groupByConf: api.GroupBy,
-                               session: SparkSession,
+                               tableUtils: TableUtils,
                                endDs: String): GroupByServingInfoParsed = {
     val groupByServingInfo = new GroupByServingInfo()
-    val tableUtils: TableUtils = TableUtils(session)
+    // the upload spec: BatchNodeRunner/run construct tableUtils with the node's output spec
     implicit val partitionSpec: PartitionSpec = tableUtils.partitionSpec
-    val nextDay = tableUtils.partitionSpec.after(endDs)
+    val batchEndDate = partitionSpec.after(endDs)
 
     val groupBy = ai.chronon.spark.GroupBy
-      .from(groupByConf, PartitionRange(endDs, endDs), TableUtils(session), computeDependency = false)
+      .from(groupByConf, PartitionRange(endDs, endDs), tableUtils, computeDependency = false)
 
-    groupByServingInfo.setBatchEndDate(nextDay)
+    groupByServingInfo.setBatchEndDate(batchEndDate)
+    // authoritative watermark of this upload: streaming merges events at or after this boundary
+    groupByServingInfo.setBatchEndTs(partitionSpec.epochMillis(batchEndDate))
     groupByServingInfo.setGroupBy(groupByConf)
     groupByServingInfo.setKeyAvroSchema(groupBy.keySchema.toAvroSchema("Key").toString(true))
     groupByServingInfo.setSelectedAvroSchema(groupBy.preAggSchema.toAvroSchema("Value").toString(true))
-    groupByServingInfo.setDateFormat(tableUtils.partitionFormat)
+    groupByServingInfo.setDateFormat(partitionSpec.format)
+    // thrift contract: absent interval/offset means daily-at-midnight, so emit them for
+    // anything else regardless of what the global spec happens to be
+    if (!partitionSpec.isDaily) {
+      groupByServingInfo.setPartitionInterval(WindowUtils.fromMillis(partitionSpec.spanMillis))
+      if (partitionSpec.offsetMillis != 0)
+        groupByServingInfo.setPartitionOffset(WindowUtils.fromMillis(partitionSpec.offsetMillis))
+    }
 
     val inputSources = groupByConf.streamingSource.toSeq ++ groupByConf.sources.toScala
     if (inputSources.nonEmpty) {
@@ -407,19 +418,19 @@ object GroupByUpload {
                                     tableUtils,
                                     computeDependency = true,
                                     showDf = showDf)
-    lazy val groupByUpload = new GroupByUpload(endDs, groupBy)
+    lazy val groupByUpload = new GroupByUpload(endDs, groupBy, partitionSpec)
     // for temporal accuracy - we don't need to scan mutations for upload
     // when endDs = xxxx-01-02 the timestamp from airflow is more than (xxxx-01-03 00:00:00)
     // we wait for event partitions of (xxxx-01-02) which contain data until (xxxx-01-02 23:59:59.999)
     lazy val shiftedGroupBy =
       ai.chronon.spark.GroupBy.from(groupByConf,
-                                    PartitionRange(endDs, endDs).shift(1),
+                                    PartitionRange(endDs, endDs).shiftPartitions(1),
                                     tableUtils,
                                     computeDependency = true,
                                     showDf = showDf)
-    lazy val shiftedGroupByUpload = new GroupByUpload(batchEndDate, shiftedGroupBy)
+    lazy val shiftedGroupByUpload = new GroupByUpload(batchEndDate, shiftedGroupBy, partitionSpec)
     // for mutations I need the snapshot from the previous day, but a batch end date of ds +1
-    lazy val otherGroupByUpload = new GroupByUpload(batchEndDate, groupBy)
+    lazy val otherGroupByUpload = new GroupByUpload(batchEndDate, groupBy, partitionSpec)
 
     logger.info(s"""
                    |GroupBy upload for: ${groupByConf.metaData.team}.${groupByConf.metaData.name}
@@ -456,10 +467,10 @@ object GroupByUpload {
           jsonPercent: Int = 1): Unit = {
     import ai.chronon.spark.submission.SparkSessionBuilder
     val tableUtils: TableUtils =
-      tableUtilsOpt.getOrElse(
-        TableUtils(
-          SparkSessionBuilder
-            .build(s"groupBy_${groupByConf.metaData.name}_upload")))
+      tableUtilsOpt.getOrElse {
+        val sparkSession = SparkSessionBuilder.build(s"groupBy_${groupByConf.metaData.name}_upload")
+        RunnerUtils.tableUtilsForMetadata(sparkSession, groupByConf.metaData)
+      }
     val context = Metrics.Context(Metrics.Environment.GroupByUpload, groupByConf)
     val startTs = System.currentTimeMillis()
     val result = generateDf(groupByConf = groupByConf,
@@ -474,7 +485,7 @@ object GroupByUpload {
       kvDf.prettyPrint()
     }
 
-    val groupByServingInfo = buildServingInfo(groupByConf, session = tableUtils.sparkSession, endDs).groupByServingInfo
+    val groupByServingInfo = buildServingInfo(groupByConf, tableUtils, endDs).groupByServingInfo
 
     val metaRows = Seq(
       Row(
@@ -505,7 +516,10 @@ object GroupByUpload {
 
     if (uploadFormat == "ion") {
       val rootPath = sparkConf.getOption(IonPathConfig.UploadLocationKey)
-      val ionDf = uploadDf.withColumn(partitionCol, to_date(col(partitionCol)))
+      val ionPartitionCol =
+        if (tableUtils.partitionSpec.spanMillis == PartitionSpec.daily.spanMillis) to_date(col(partitionCol))
+        else to_timestamp(col(partitionCol), tableUtils.partitionSpec.format)
+      val ionDf = uploadDf.withColumn(partitionCol, ionPartitionCol)
       val result = IonWriter.write(
         ionDf,
         groupByConf.metaData.uploadTable,

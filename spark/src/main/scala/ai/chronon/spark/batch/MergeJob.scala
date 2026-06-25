@@ -22,7 +22,8 @@ import ai.chronon.spark.JoinUtils
 import ai.chronon.spark.catalog.TableUtils
 import com.google.gson.Gson
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.functions.{col, date_add, date_format, left, log, to_date}
+import org.apache.spark.sql.functions.{col, date_format, from_unixtime, left, log, unix_timestamp}
+import org.apache.spark.sql.types.LongType
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.time.Instant
@@ -85,7 +86,7 @@ class MergeJob(node: JoinMergeNode, metaData: MetaData, range: DateRange, joinPa
     archiveOutputTableIfRequired()
 
     // This job benefits from a step day of 1 to avoid needing to shuffle on writing output (single partition)
-    dateRange.steps(days = 1).foreach { dayStep =>
+    dateRange.stepsByDays(1).foreach { dayStep =>
       // Scan left input table once to get schema and potentially reuse
       val leftInputDf = tableUtils.scanDf(query = null, table = leftInputTable, range = Some(dayStep))
 
@@ -106,7 +107,7 @@ class MergeJob(node: JoinMergeNode, metaData: MetaData, range: DateRange, joinPa
 
         // Add back ts_ds column if this is an EVENTS source and the column is missing
         if (join.left.dataModel == DataModel.EVENTS && !selectedDf.columns.contains(Constants.TimePartitionColumn)) {
-          selectedDf.withTimeBasedColumn(Constants.TimePartitionColumn)
+          selectedDf.withTimeBasedColumn(Constants.TimePartitionColumn, spec = tableUtils.partitionSpec)
         } else {
           selectedDf
         }
@@ -161,7 +162,15 @@ class MergeJob(node: JoinMergeNode, metaData: MetaData, range: DateRange, joinPa
       val partTable = RelevantLeftForJoinPart.fullPartTableName(join, joinPart)
       val effectiveRange =
         if (join.left.dataModel == DataModel.EVENTS && joinPart.groupBy.inferredAccuracy == Accuracy.SNAPSHOT) {
-          dayStep.shift(-1)
+          val partSpec = JoinUtils.partSnapshotSpec(joinPart)
+          if (partSpec.hasSameGrid(tableUtils.partitionSpec)) {
+            // Same-grid snapshot parts keep the historical behavior: read one partition back.
+            JoinUtils.snapshotLookbackRange(dayStep, partSpec)
+          } else {
+            // Cross-grid snapshot part tables are partitioned like the join output and
+            // carry the RHS as-of boundary in `ts`.
+            dayStep
+          }
         } else {
           dayStep
         }
@@ -174,6 +183,10 @@ class MergeJob(node: JoinMergeNode, metaData: MetaData, range: DateRange, joinPa
 
   def joinWithLeft(leftDf: DataFrame, rightDf: DataFrame, joinPart: JoinPart): DataFrame = {
     val partLeftKeys = joinPart.rightToLeft.values.toArray
+    lazy val partSpec = JoinUtils.partSnapshotSpec(joinPart)
+    val leftEventsSnapshot =
+      join.left.dataModel == DataModel.EVENTS && joinPart.groupBy.inferredAccuracy == Accuracy.SNAPSHOT
+    val crossGridSnapshot = leftEventsSnapshot && !partSpec.hasSameGrid(tableUtils.partitionSpec)
 
     // compute join keys, besides the groupBy keys -  like ds, ts etc.,
     val additionalKeys: Seq[String] = {
@@ -200,28 +213,52 @@ class MergeJob(node: JoinMergeNode, metaData: MetaData, range: DateRange, joinPa
 
     val keyRenamedRightDf = prefixedRightDf.select(newColumns: _*)
 
-    // adjust join keys
-    val joinableRightDf = if (additionalKeys.contains(Constants.TimePartitionColumn)) {
-      // increment one day to align with left side ts_ds
-      // because one day was decremented from the partition range for snapshot accuracy
+    // adjust join keys: the snapshot pick is per row ON THE RHS GROUPBY'S DECLARED GRID - a row
+    // at time T reads the latest RHS snapshot whose time is <= T, independent of the
+    // join's own grid. Daily RHS under a daily join degenerates to the historical behavior.
+    val joinableRightDf = if (crossGridSnapshot) {
+      keyRenamedRightDf
+        .withColumn(Constants.TimePartitionColumn, col(Constants.TimeColumn).cast(LongType))
+        .drop(tableUtils.partitionColumn, Constants.TimeColumn)
+        .dropDuplicates(keys)
+    } else if (additionalKeys.contains(Constants.TimePartitionColumn)) {
+      // snapshot partition p holds the aggregate as of epoch(p) + one RHS partitionInterval;
+      // rename to
+      // the as-of boundary so it matches the left rows' RHS-grid floor
       keyRenamedRightDf
         .withColumn(
           Constants.TimePartitionColumn,
-          date_format(date_add(to_date(col(tableUtils.partitionColumn), tableUtils.partitionSpec.format), 1),
-                      tableUtils.partitionSpec.format)
+          date_format(
+            from_unixtime(
+              unix_timestamp(col(tableUtils.partitionColumn), partSpec.format) +
+                partSpec.spanMillis / 1000),
+            partSpec.format
+          )
         )
         .drop(tableUtils.partitionColumn)
     } else {
       keyRenamedRightDf
     }
 
+    // the left match key is per-joinPart (different parts may live on different RHS grids):
+    // re-stamp TimePartitionColumn = floor(left.ts, RHS grid) instead of trusting the shared
+    // join-grid column stamped by SourceJob
+    val joinableLeftDf = if (crossGridSnapshot) {
+      leftDf.withColumn(Constants.TimePartitionColumn,
+                        JoinUtils.snapshotGridFloorMillis(col(Constants.TimeColumn), partSpec))
+    } else if (additionalKeys.contains(Constants.TimePartitionColumn)) {
+      leftDf.withTimeBasedColumn(Constants.TimePartitionColumn, spec = partSpec)
+    } else {
+      leftDf
+    }
+
     logger.info(s"""
                    |Join keys for ${joinPart.groupBy.metaData.name}: ${keys.mkString(", ")}
                    |Left Schema:
-                   |${leftDf.schema.pretty}
+                   |${joinableLeftDf.schema.pretty}
                    |Right Schema:
                    |${joinableRightDf.schema.pretty}""".stripMargin)
-    val joinedDf = coalescedJoin(leftDf, joinableRightDf, keys)
+    val joinedDf = coalescedJoin(joinableLeftDf, joinableRightDf, keys)
     logger.info(s"""Final Schema:
                    |${joinedDf.schema.pretty}
                    |""".stripMargin)

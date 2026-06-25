@@ -107,10 +107,23 @@ This will show you the actual computed results with your sample data, helping yo
 ## Backfill
 
 ```sh
-zipline hub backfill compiled/{group_bys|staging_queries|joins}/{team}/{your_conf} --start-ds {YYYY-MM-dd} --end-ds {YYYY-MM-dd}
+zipline hub backfill compiled/{group_bys|staging_queries|joins}/{team}/{your_conf} --start-ds {YYYY-MM-DD} --end-ds {YYYY-MM-DD}
 ```
 
 This will give you a URL to track the progress of your backfill.
+
+`--start-ds` and `--end-ds` also accept sub-daily partitions. Daily inputs are
+sent to Hub as `YYYY-MM-DD`; sub-daily inputs are normalized to
+`YYYY-MM-DD-HH-mm`. These forms are equivalent:
+
+```sh
+--start-ds 2024-01-15-03 --end-ds 2024-01-15-06-30
+--start-ds "2024-01-15 03:00" --end-ds "2024-01-15T06:30"
+--start-ds "2024/01/15 03:00:00" --end-ds "2024-01-15-06:30"
+```
+
+Partition values must validate as real dates and times. Second precision is only
+accepted when seconds are `00`, because Chronon partitions are minute-aligned.
 
 You can also see your previously run jobs in the `home` page of the Zipline Hub UI.
 
@@ -136,4 +149,3 @@ This will run:
 1. Frontfill jobs into the output table (if the `offline_schedule` argument is set on your entity)
 2. Batch upload jobs for serving (if `online=True`)
 3. Streaming jobs (if a topic is configured for the `GroupBy` being scheduled)
-

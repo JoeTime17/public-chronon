@@ -5,6 +5,7 @@ import ai.chronon.api.ScalaJavaConversions._
 import ai.chronon.api.thrift.TBase
 import ai.chronon.api.{EngineType, ParametricMacro, PartitionRange, ThriftJsonCodec}
 import ai.chronon.spark.Extensions._
+import ai.chronon.spark.RunnerUtils
 import ai.chronon.spark.catalog.TableUtils
 import ai.chronon.spark.submission.SparkSessionBuilder
 import org.rogach.scallop.{ScallopConf, ScallopOption}
@@ -57,7 +58,7 @@ class StagingQuery(stagingQueryConf: api.StagingQuery, endPartition: String, tab
     val exceptions = mutable.Buffer.empty[String]
     rangeToRun.foreach { stagingQueryUnfilledRange =>
       try {
-        val stepRanges = stepDays.map(stagingQueryUnfilledRange.steps).getOrElse(Seq(stagingQueryUnfilledRange))
+        val stepRanges = stepDays.map(stagingQueryUnfilledRange.stepsByDays).getOrElse(Seq(stagingQueryUnfilledRange))
         logger.info(s"Staging query ranges to compute: ${stepRanges.map { _.toString }.pretty}")
         stepRanges.zipWithIndex.foreach { case (range, index) =>
           val progress = s"| [${index + 1}/${stepRanges.size}]"
@@ -140,11 +141,12 @@ object StagingQuery {
     val parsedArgs = new Args(args)
     parsedArgs.verify()
     val stagingQueryConf = parsedArgs.parseConf[api.StagingQuery]
+    val sparkSession =
+      SparkSessionBuilder.build(s"staging_query_${stagingQueryConf.metaData.name}", enforceKryoSerializer = false)
     val stagingQueryJob = new StagingQuery(
       stagingQueryConf,
       parsedArgs.endDate(),
-      TableUtils(
-        SparkSessionBuilder.build(s"staging_query_${stagingQueryConf.metaData.name}", enforceKryoSerializer = false))
+      RunnerUtils.tableUtilsForMetadata(sparkSession, stagingQueryConf.metaData)
     )
     stagingQueryJob.computeStagingQuery(parsedArgs.stepDays.toOption)
   }

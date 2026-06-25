@@ -171,9 +171,9 @@ class AnalyzerTest extends SparkTestBase with BeforeAndAfter {
 
     // Create two sources with consecutive partition ranges of 45 days each.
     // For events-events-SNAPSHOT with 90 day window, we need data from ds-91 to ds-1 days
-    val firstSourceStartPartition = tableUtils.partitionSpec.shift(leftMinDs, -91)
-    val firstSourceEndPartition = tableUtils.partitionSpec.shift(leftMinDs, -46)
-    val secondSourceStartPartition = tableUtils.partitionSpec.shift(firstSourceEndPartition, 1)
+    val firstSourceStartPartition = tableUtils.partitionSpec.shiftPartitions(leftMinDs, -91)
+    val firstSourceEndPartition = tableUtils.partitionSpec.shiftPartitions(leftMinDs, -46)
+    val secondSourceStartPartition = tableUtils.partitionSpec.shiftPartitions(firstSourceEndPartition, 1)
 
     val rightSchema = List(
       Column("item", api.StringType, 1000),

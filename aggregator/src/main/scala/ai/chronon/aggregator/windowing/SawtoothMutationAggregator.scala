@@ -66,7 +66,15 @@ class SawtoothMutationAggregator(aggregations: Seq[Aggregation],
   }
 
   def tailTs(batchEndTs: Long): Array[Option[Long]] =
-    windowMappings.map { mapping => Option(mapping.aggregationPart.window).map { batchEndTs - _.millis } }
+    windowMappings.zipWithIndex.map { case (mapping, i) =>
+      Option(mapping.aggregationPart.window).map { w =>
+        // align down to the hop grid: queries round their window start to hops, so a batch end
+        // that is not hop-aligned (sub-daily uploads, e.g. 04:00 with daily hops) must retain
+        // the full first hop or the earliest queries permanently undercount the tail.
+        // No-op for day-aligned batch ends, where batchEndTs - window is already on the grid.
+        TsUtils.round(batchEndTs - w.millis, hopSizes(tailHopIndices(i)))
+      }
+    }
 
   def init: BatchIr = BatchIr(Array.fill(windowedAggregator.length)(null), hopsAggregator.init())
 
@@ -89,7 +97,10 @@ class SawtoothMutationAggregator(aggregations: Seq[Aggregation],
 
     var i = 0
     while (i < windowedAggregator.length) {
-      if (batchEndTs > rowTs && batchTails(i).forall(rowTs > _)) { // relevant for the window
+      // tail inclusion is INCLUSIVE (>=) to match the offline sawtooth, which buckets hops
+      // with ts >= roundedTail: an event exactly at the hop-aligned tail instant must not
+      // undercount online vs offline
+      if (batchEndTs > rowTs && batchTails(i).forall(rowTs >= _)) { // relevant for the window
         if (batchTails(i).forall(rowTs >= _ + tailBufferMillis)) { // update collapsed part
           windowedAggregator.columnAggregators(i).update(batchIr.collapsed, row)
         } else { // update tailHops part
@@ -166,14 +177,27 @@ class SawtoothMutationAggregator(aggregations: Seq[Aggregation],
         val queryTail = TsUtils.round(queryTs - windowMillis, hopSizes(hopIndex))
         val hopIrs = batchIr.tailHops(hopIndex)
         val relevantHops = mutable.ArrayBuffer[Any](ir(i))
+        // hop-align the inclusion bound to match update()'s collapsed/hop split: with a
+        // non-hop-aligned batchEndTs the raw bound sits up to one hop above the rounded
+        // collapsed boundary, re-admitting a hop (written by a shorter sibling window) whose
+        // rows this window already holds in collapsed
+        val tailHopCutoff = TsUtils.round(batchEndTs - windowMillis, hopSizes(hopIndex)) + tailBufferMillis
         var idx: Int = 0
         while (idx < hopIrs.length) {
           val hopIr = hopIrs(idx)
           val hopStart = hopIr.last.asInstanceOf[Long]
-          if ((batchEndTs - windowMillis) + tailBufferMillis > hopStart && hopStart >= queryTail) {
+          if (tailHopCutoff > hopStart && hopStart >= queryTail) {
             relevantHops += hopIr(baseIrIndices(i))
           }
           idx += 1
+        }
+        // bulkMerge reduces into its first non-null element. When ir(i) is null (no streaming
+        // rows in the window yet) that element is a SHARED batch tail hop - cached across
+        // queries in the fetcher - so clone it or the fold corrupts every subsequent read.
+        if (ir(i) == null) {
+          val firstNonNull = relevantHops.indexWhere(_ != null)
+          if (firstNonNull >= 0)
+            relevantHops(firstNonNull) = windowedAggregator(i).clone(relevantHops(firstNonNull))
         }
         val merged = windowedAggregator(i).bulkMerge(relevantHops.iterator)
         ir.update(i, merged)

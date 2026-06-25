@@ -13,11 +13,12 @@
 #     limitations under the License.
 
 
-import gen_thrift.common.ttypes as common
 import pytest
-from gen_thrift.api import ttypes
 
-from ai.chronon import group_by, query
+import gen_thrift.common.ttypes as common
+from ai.chronon import group_by, query, source
+from ai.chronon.staging_query import StagingQuery
+from gen_thrift.api import ttypes
 
 
 @pytest.fixture
@@ -178,6 +179,85 @@ def test_validator_ok():
     )
 
 
+def subdaily_event_source(table):
+    """Source declaring a 3h grid - sub-daily groupBys need sources whose boundaries the
+    output grid sits on."""
+    return ttypes.EventSource(
+        table=table,
+        query=query.Query(
+            selects={"subject": "subject_sql", "event_id": "event_sql"},
+            time_column="ts",
+            partition_interval="3h",
+        ),
+    )
+
+
+def test_partition_interval_sets_output_table_info():
+    gb = group_by.GroupBy(
+        sources=subdaily_event_source("table"),
+        keys=["subject"],
+        aggregations=group_by.Aggregations(
+            cnt=ttypes.Aggregation(operation=ttypes.Operation.COUNT),
+        ),
+        version=0,
+        partition_interval="3h",
+    )
+
+    table_info = gb.metaData.executionInfo.outputTableInfo
+    assert table_info.partitionColumn == "ds"
+    assert table_info.partitionFormat == "yyyy-MM-dd-HH-mm"
+    assert table_info.partitionInterval.length == 3
+    assert table_info.partitionInterval.timeUnit == common.TimeUnit.HOURS
+
+
+def test_event_source_inherits_non_daily_grid_from_table_reference():
+    producer = StagingQuery(
+        query="SELECT 1 as subject, 1 as event_id, 0L as ts",
+        output_namespace="data",
+        offline_schedule="0 1-22/3 * * *",
+        partition_interval="3h",
+        partition_offset="1h",
+    )
+    producer.metaData.name = "team.producer__1"
+
+    src = source.EventSource(
+        table=producer.table,
+        query=query.Query(
+            selects={"subject": "subject_sql", "event_id": "event_sql"},
+            time_column="ts",
+        ),
+    )
+
+    assert src.events.table == "data.team_producer__1"
+    assert src.events.query.partitionColumn == "ds"
+    assert src.events.query.partitionFormat == "yyyy-MM-dd-HH-mm"
+    assert src.events.query.partitionInterval == common.Window(length=3, timeUnit=common.TimeUnit.HOURS)
+    assert src.events.query.partitionOffset == common.Window(length=1, timeUnit=common.TimeUnit.HOURS)
+
+
+def test_event_source_explicit_grid_wins_over_table_reference():
+    producer = StagingQuery(
+        query="SELECT 1 as subject, 1 as event_id, 0L as ts",
+        output_namespace="data",
+        offline_schedule="0 1-22/3 * * *",
+        partition_interval="3h",
+        partition_offset="1h",
+    )
+    producer.metaData.name = "team.producer__1"
+
+    src = source.EventSource(
+        table=producer.table,
+        query=query.Query(
+            selects={"subject": "subject_sql", "event_id": "event_sql"},
+            time_column="ts",
+            partition_interval="6h",
+        ),
+    )
+
+    assert src.events.query.partitionInterval == common.Window(length=6, timeUnit=common.TimeUnit.HOURS)
+    assert src.events.query.partitionOffset is None
+
+
 def test_generic_collector():
     aggregation = group_by.Aggregation(
         input_column="test", operation=group_by.Operation.APPROX_PERCENTILE([0.4, 0.2])
@@ -259,6 +339,132 @@ def test_snapshot_with_hour_aggregation():
             accuracy=group_by.Accuracy.SNAPSHOT,
             version=0,
         )
+
+
+def _subdaily_entity_source():
+    # source declares the same 3h grid as the groupBy so source-grid validation stays satisfied
+    return ttypes.EntitySource(
+        snapshotTable="entity_table1",
+        query=query.Query(
+            selects={"key1": "key1_sql", "event_id": "event_sql"},
+            time_column="ts",
+            partition_interval="3h",
+        ),
+    )
+
+
+def test_snapshot_subdaily_window_allowed_on_subdaily_grid():
+    # mirrors the scala parity fixture (SNAPSHOT accuracy, 6h window, 3h grid): snapshot
+    # accuracy on a sub-daily grid IS fine enough for windows that are multiples of the grid
+    gb = group_by.GroupBy(
+        sources=[_subdaily_entity_source()],
+        keys=["key1"],
+        aggregations=group_by.Aggregations(
+            random=ttypes.Aggregation(
+                inputColumn="event_id",
+                operation=ttypes.Operation.SUM,
+                windows=[
+                    common.Window(6, common.TimeUnit.HOURS),
+                    common.Window(1, common.TimeUnit.DAYS),
+                ],
+            ),
+        ),
+        accuracy=group_by.Accuracy.SNAPSHOT,
+        partition_interval="3h",
+        offline_schedule="0 */3 * * *",
+        version=0,
+    )
+    assert gb is not None
+
+
+def test_snapshot_window_must_be_multiple_of_grid():
+    # a 4h window on a 3h grid cannot be resolved by on-boundary snapshots
+    with pytest.raises(AssertionError, match="multiple"):
+        group_by.GroupBy(
+            sources=[_subdaily_entity_source()],
+            keys=["key1"],
+            aggregations=group_by.Aggregations(
+                random=ttypes.Aggregation(
+                    inputColumn="event_id",
+                    operation=ttypes.Operation.SUM,
+                    windows=[
+                        common.Window(4, common.TimeUnit.HOURS),
+                    ],
+                ),
+            ),
+            accuracy=group_by.Accuracy.SNAPSHOT,
+            partition_interval="3h",
+            offline_schedule="0 */3 * * *",
+            version=0,
+        )
+
+
+def test_subdaily_group_by_rejects_undeclared_sources():
+    # an undeclared source is implicitly daily: a sub-daily groupBy over it would land a day
+    # late, permanently - the coarse-source-under-fine-output trap, caught at authoring time
+    with pytest.raises(ValueError, match="partition_interval"):
+        group_by.GroupBy(
+            sources=[event_source("table")],
+            keys=["subject"],
+            aggregations=group_by.Aggregations(
+                random=ttypes.Aggregation(
+                    inputColumn="event_id", operation=ttypes.Operation.SUM
+                ),
+            ),
+            partition_interval="3h",
+            offline_schedule="0 */3 * * *",
+            version=0,
+        )
+
+
+def test_subdaily_group_by_allows_time_partitioned_source_without_interval():
+    src = ttypes.EventSource(
+        table="table",
+        query=query.Query(
+            selects={"subject": "subject_sql", "event_id": "event_sql"},
+            time_column="ts",
+            time_partitioned=True,
+        ),
+    )
+    gb = group_by.GroupBy(
+        sources=[src],
+        keys=["subject"],
+        aggregations=group_by.Aggregations(
+            random=ttypes.Aggregation(inputColumn="event_id", operation=ttypes.Operation.SUM),
+        ),
+        partition_interval="3h",
+        offline_schedule="0 */3 * * *",
+        version=0,
+    )
+    assert gb.sources[0].events.query.timePartitioned is True
+    assert gb.sources[0].events.query.partitionInterval is None
+
+
+def test_subdaily_group_by_allows_time_partitioned_source_with_interval():
+    src = ttypes.EventSource(
+        table="table",
+        query=query.Query(
+            selects={"subject": "subject_sql", "event_id": "event_sql"},
+            time_column="ts",
+            time_partitioned=True,
+            partition_interval="3h",
+            partition_offset="1h",
+        ),
+    )
+    gb = group_by.GroupBy(
+        sources=[src],
+        keys=["subject"],
+        aggregations=group_by.Aggregations(
+            random=ttypes.Aggregation(inputColumn="event_id", operation=ttypes.Operation.SUM),
+        ),
+        partition_interval="3h",
+        offline_schedule="0 */3 * * *",
+        version=0,
+    )
+    assert gb is not None
+    assert gb.sources[0].events.query.partitionOffset == common.Window(
+        length=1, timeUnit=common.TimeUnit.HOURS
+    )
 
 
 def test_additional_metadata():
@@ -360,7 +566,7 @@ def test_query_with_time_partitioned_flag():
         time_partitioned=True,
     )
 
-    assert query_obj.timePartitioned == True
+    assert query_obj.timePartitioned is True
     assert query_obj.partitionColumn == "created_at"
 
 
@@ -426,6 +632,24 @@ def test_online_schedule_validation():
     )
     assert gb.metaData.executionInfo.onlineSchedule == "@daily"
 
+    # offline @never disables only offline scheduling; online=True still gets the normal default.
+    gb = group_by.GroupBy(
+        sources=event_source("table"),
+        keys=["subject"],
+        aggregations=group_by.Aggregations(
+            count=group_by.Aggregation(
+                input_column="event_id",
+                operation=group_by.Operation.COUNT
+            ),
+        ),
+        version=1,
+        online=True,
+        offline_schedule="@never",
+        online_schedule=None,
+    )
+    assert gb.metaData.executionInfo.offlineSchedule == "@never"
+    assert gb.metaData.executionInfo.onlineSchedule == "@daily"
+
     # Test that online_schedule can be explicitly set when online=True
     gb = group_by.GroupBy(
         sources=event_source("table"),
@@ -441,6 +665,40 @@ def test_online_schedule_validation():
         online_schedule="0 2 * * *"  # Custom schedule
     )
     assert gb.metaData.executionInfo.onlineSchedule == "0 2 * * *"
+
+    # Existing daily workflows may use different cron offsets for offline and online jobs.
+    gb = group_by.GroupBy(
+        sources=event_source("table"),
+        keys=["subject"],
+        aggregations=group_by.Aggregations(
+            count=group_by.Aggregation(
+                input_column="event_id",
+                operation=group_by.Operation.COUNT
+            ),
+        ),
+        version=1,
+        online=True,
+        offline_schedule="0 4 * * *",
+        online_schedule="0 3 * * *",
+    )
+    assert gb.metaData.executionInfo.onlineSchedule == "0 3 * * *"
+
+    with pytest.raises(ValueError, match="sub-daily partition_interval"):
+        group_by.GroupBy(
+            sources=event_source("table"),
+            keys=["subject"],
+            aggregations=group_by.Aggregations(
+                count=group_by.Aggregation(
+                    input_column="event_id",
+                    operation=group_by.Operation.COUNT
+                ),
+            ),
+            version=1,
+            online=True,
+            offline_schedule="0 */3 * * *",
+            online_schedule="30 */3 * * *",
+            partition_interval="3h",
+        )
 
     # Test that @never disables online scheduling even when online=True
     gb = group_by.GroupBy(
@@ -473,3 +731,41 @@ def test_online_schedule_validation():
         online_schedule="@never"
     )
     assert gb.metaData.executionInfo.onlineSchedule is None
+
+
+def _online_group_by(sources=None, **kwargs):
+    return group_by.GroupBy(
+        sources=sources if sources is not None else event_source("table"),
+        keys=["subject"],
+        aggregations=group_by.Aggregations(
+            count=group_by.Aggregation(
+                input_column="event_id",
+                operation=group_by.Operation.COUNT
+            ),
+        ),
+        version=1,
+        online=True,
+        **kwargs,
+    )
+
+
+def test_online_schedule_keeps_daily_default_for_custom_daily_offline():
+    # A custom daily offline cron must NOT be inherited by online_schedule —
+    # that would churn semantic hashes for every existing conf.
+    gb = _online_group_by(offline_schedule="0 4 * * *")
+    assert gb.metaData.executionInfo.onlineSchedule == "@daily"
+
+
+def test_online_schedule_inherits_subdaily_offline():
+    gb = _online_group_by(sources=subdaily_event_source("table"), offline_schedule="0 */3 * * *")
+    assert gb.metaData.executionInfo.onlineSchedule == "0 */3 * * *"
+
+
+def test_online_schedule_mismatch_rejected_for_inferred_subdaily():
+    # The online-must-match-offline check fires even without an explicit
+    # partition_interval, when the sub-daily interval is inferred from the schedule.
+    with pytest.raises(ValueError, match="online_schedule must match offline_schedule"):
+        _online_group_by(
+            offline_schedule="0 */3 * * *",
+            online_schedule="30 */3 * * *",
+        )

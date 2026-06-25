@@ -256,6 +256,58 @@ class GroupByTest extends SparkTestBase {
   }
 
   // Test that the output of Group by with Step Days is the same as the output without Steps (full data range)
+  // E2E pin for the fine-source-under-coarse-downstream direction: a daily groupBy over a
+  // 3h-partitioned source must scan the full overlapping day (all 8 sub-partitions via
+  // intersectingRange expansion), not just the first sub-partition of each daily ds
+  it should "aggregate a full day from a sub-daily partitioned source under a daily groupBy" in {
+    val namespace = "test_subdaily_source_daily_gb"
+    createDatabase(namespace)
+    val sourceTable = s"$namespace.three_hour_events"
+
+    def ts(arg: String): Long = TsUtils.datetimeToTs(s"$arg:00")
+    spark
+      .createDataFrame(
+        Seq(
+          // values land in three different 3h partitions of 2023-08-14...
+          ("item1", 1L, ts("2023-08-14 00:30"), "2023-08-14-00-00"),
+          ("item1", 2L, ts("2023-08-14 05:30"), "2023-08-14-03-00"),
+          ("item1", 4L, ts("2023-08-14 23:30"), "2023-08-14-21-00"),
+          // ...and one in the previous day, outside the 1d window but inside unbounded
+          ("item1", 8L, ts("2023-08-13 22:00"), "2023-08-13-21-00")
+        ))
+      .toDF("item", "value", "ts", "ds")
+      .save(sourceTable)
+
+    val sourceQuery = Builders.Query(selects = Builders.Selects("ts", "item", "value"))
+    sourceQuery.setPartitionInterval(WindowUtils.fromMillis(3 * 60 * 60 * 1000L))
+    sourceQuery.setPartitionFormat("yyyy-MM-dd-HH-mm")
+    val source = Builders.Source.events(query = sourceQuery, table = sourceTable)
+
+    val name = "daily_over_three_hour"
+    val groupByConf = Builders.GroupBy(
+      sources = Seq(source),
+      keyColumns = Seq("item"),
+      aggregations = Seq(
+        Builders.Aggregation(operation = Operation.SUM,
+                             inputColumn = "value",
+                             windows = Seq(new Window(1, TimeUnit.DAYS), WindowUtils.Unbounded))),
+      metaData = Builders.MetaData(namespace = namespace, name = name)
+    )
+
+    GroupBy.computeBackfill(groupByConf,
+                            startPartition = "2023-08-14",
+                            endPartition = "2023-08-14",
+                            tableUtils = tableUtils)
+
+    val result = tableUtils
+      .sql(s"SELECT value_sum_1d, value_sum FROM $namespace.$name WHERE item = 'item1' AND ds = '2023-08-14'")
+      .collect()
+    assertEquals(1, result.length)
+    // the day's three sub-partitions all contribute; missing any would yield 1, 3, or 6
+    assertEquals(7L, result.head.getLong(0))
+    assertEquals(15L, result.head.getLong(1))
+  }
+
   it should "step days consistency" in {
     val (source, endPartition) = createTestSource()
 

@@ -17,6 +17,8 @@
 .eclipse
 **/.vscode/
 **/__pycache__/
+**/.venv/
+**/venv/
 **/.DS_Store
 api/python/ai/chronon/resources/gcp/compiled/
 api/python/test/sample/compiled/

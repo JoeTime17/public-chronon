@@ -7,7 +7,7 @@ from ai.chronon.repo.hub_runner import _validate_at_most_daily_schedule as valid
 
 
 class TestScheduleValidation:
-    """Test schedule validation for at-most-daily schedules."""
+    """Test schedule validation for at-most-daily and regular sub-daily schedules."""
 
     def test_valid_daily_schedules(self):
         """Test that valid daily schedules pass validation."""
@@ -30,21 +30,34 @@ class TestScheduleValidation:
             result = validate_at_most_daily_schedule(schedule)
             assert result is None, f"Expected valid schedule '{schedule}' to pass validation, but got error: {result}"
 
-    def test_invalid_schedules_too_frequent(self):
-        """Test that schedules running more than once per day are rejected."""
-        invalid_schedules = [
+    def test_valid_regular_subdaily_schedules(self):
+        """Test that regular sub-daily schedules pass validation."""
+        valid_schedules = [
             "0 */2 * * *",  # every 2 hours
             "*/15 * * * *",  # every 15 minutes
-            "0 9,14 * * *",  # twice daily at 9am and 2pm
             "0 * * * *",  # every hour
-            "0 0,12 * * *",  # twice daily at midnight and noon
-            "30 8-17 * * *",  # every hour from 8am to 5pm
+            "0 0,12 * * *",  # every 12 hours
+            "5/15 * * * *",  # every 15 minutes with cron offset
+            "20 */3 * * *",  # every 3 hours with processing offset
+            "0 1-22/3 * * *",  # every 3 hours on an offset partition grid
+        ]
+
+        for schedule in valid_schedules:
+            result = validate_at_most_daily_schedule(schedule)
+            assert result is None, f"Expected valid schedule '{schedule}' to pass validation, but got error: {result}"
+
+    def test_invalid_irregular_subdaily_schedules(self):
+        """Test that irregular sub-daily schedules are rejected."""
+        invalid_schedules = [
+            "0 */5 * * *",  # 5-hour cadence leaves a 4-hour interval at UTC day boundary
+            "0 9,14 * * *",  # two uneven daily fires
+            "30 8-17 * * *",  # hourly only within a daily window
         ]
 
         for schedule in invalid_schedules:
             result = validate_at_most_daily_schedule(schedule)
             assert result is not None, f"Expected invalid schedule '{schedule}' to fail validation, but it passed"
-            assert "times" in result.lower() or "frequent" in result.lower(), f"Error message should mention frequency: {result}"
+            assert "regular" in result.lower() or "constant" in result.lower(), f"Error message should mention regularity: {result}"
 
     def test_invalid_syntax(self):
         """Test that invalid cron syntax is rejected."""

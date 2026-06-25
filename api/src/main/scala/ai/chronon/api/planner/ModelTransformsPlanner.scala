@@ -1,9 +1,9 @@
 package ai.chronon.api.planner
 
-import ai.chronon.api.{ModelTransforms, PartitionSpec, TableDependency, TableInfo}
-import ai.chronon.api.Extensions.{JoinOps, MetadataOps, WindowUtils}
+import ai.chronon.api.{ModelTransforms, PartitionSpec, Source, TableDependency, TableInfo}
+import ai.chronon.api.Extensions.{MetadataOps, ModelTransformsOps, SourceOps, WindowUtils}
 import ai.chronon.api.ScalaJavaConversions.IterableOps
-import ai.chronon.api.planner.TableDependencies.{fromSource, fromTable}
+import ai.chronon.api.planner.TableDependencies.fromSource
 import ai.chronon.planner.{ConfPlan, ModelTransformsBackfillNode, ModelTransformsUploadNode, Node}
 import ai.chronon.planner
 
@@ -11,6 +11,31 @@ import scala.collection.JavaConverters._
 
 class ModelTransformsPlanner(modelTransforms: ModelTransforms)(implicit outputPartitionSpec: PartitionSpec)
     extends ConfPlanner[ModelTransforms](modelTransforms)(outputPartitionSpec) {
+
+  private val confOutputPartitionSpec: PartitionSpec =
+    modelTransforms.partitionSpec(outputPartitionSpec)
+
+  private def sources: Seq[Source] =
+    Option(modelTransforms.sources)
+      .map(_.toScala.toSeq)
+      .getOrElse(Seq.empty)
+
+  private def validatePartitionIntervals(): Unit = {
+    for {
+      source <- sources
+      query <- Option(source.query)
+    } {
+      PartitionSpecResolver.validateQueryGrid(
+        modelTransforms.metaData.name,
+        confOutputPartitionSpec,
+        query,
+        s"source ${source.rawTable}",
+        source.dataModel,
+        PartitionSpecResolver.sourceSpec(source, confOutputPartitionSpec)
+      )
+    }
+    PartitionSpecResolver.validateEmbeddedJoinSourceTrees(sources, confOutputPartitionSpec)
+  }
 
   private def eraseExecutionInfo: ModelTransforms = {
     val result = modelTransforms.deepCopy()
@@ -25,18 +50,7 @@ class ModelTransformsPlanner(modelTransforms: ModelTransforms)(implicit outputPa
   }
 
   def backfillNode: Node = {
-    val sourceDeps =
-      Option(modelTransforms.sources)
-        .map(_.toScala.toSeq)
-        .getOrElse(Seq.empty)
-        .flatMap { source =>
-          if (source.isSetJoinSource) {
-            val upstreamJoin = source.getJoinSource.getJoin
-            Some(fromTable(upstreamJoin.finalOutputTable, source.getJoinSource.query))
-          } else {
-            fromSource(source)
-          }
-        }
+    val sourceDeps = sources.flatMap(source => fromSource(source))
 
     // add model dependencies - we depend on the deployed model endpoint for models that are custom and trained by us
     val modelDeps = Option(modelTransforms.models)
@@ -68,7 +82,7 @@ class ModelTransformsPlanner(modelTransforms: ModelTransforms)(implicit outputPa
         modelTransforms.metaData.name + "__model_transforms_backfill",
         tableDeps,
         outputTableOverride = Some(modelTransforms.metaData.outputTable)
-      )
+      )(confOutputPartitionSpec)
 
     val node = new ModelTransformsBackfillNode().setModelTransforms(modelTransforms)
 
@@ -90,7 +104,7 @@ class ModelTransformsPlanner(modelTransforms: ModelTransforms)(implicit outputPa
         modelTransforms.metaData.name + "__model_transforms_upload",
         allDeps,
         Some(stepDays)
-      )
+      )(confOutputPartitionSpec)
 
     val node = new ModelTransformsUploadNode().setModelTransforms(eraseExecutionInfo)
 
@@ -100,6 +114,7 @@ class ModelTransformsPlanner(modelTransforms: ModelTransforms)(implicit outputPa
   }
 
   override def buildPlan: ConfPlan = {
+    validatePartitionIntervals()
     val upload = uploadNode
     val backfill = backfillNode
 

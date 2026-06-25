@@ -293,7 +293,7 @@ class ChainingFetcherTest extends SparkTestBase {
       logger.info(s"Diff count: ${diff.count()}")
       logger.info("diff result rows:")
       diff
-        .withTimeBasedColumn("ts_string", "ts", "yy-MM-dd HH:mm")
+        .withTimeFormattedColumn("ts_string", "ts", "yy-MM-dd HH:mm")
         .select("ts_string", diff.schema.fieldNames: _*)
         .show()
     }

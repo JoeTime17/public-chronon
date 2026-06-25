@@ -395,7 +395,7 @@ object TestUtils {
     val priceDf = DataFrameGen.events(spark, priceCols, 50, 30).filter(col("listing").isNotNull)
     val tsColString = "ts_string"
 
-    priceDf.withTimeBasedColumn(tsColString, format = "yyyy-MM-dd HH:mm:ss").save(priceTable)
+    priceDf.withTimeFormattedColumn(tsColString, Constants.TimeColumn, "yyyy-MM-dd HH:mm:ss").save(priceTable)
     val priceGroupBy = Builders.GroupBy(
       sources = Seq(Builders.Source.events(query = Builders.Query(), table = priceTable)),
       keyColumns = Seq("listing"),

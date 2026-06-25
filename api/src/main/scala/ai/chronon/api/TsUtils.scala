@@ -22,6 +22,7 @@ import java.util.{Date, TimeZone}
 
 object TsUtils {
   val formatter: FastDateFormat = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss", TimeZone.getTimeZone("UTC"))
+  private val DayMillis: Long = 24L * 60 * 60 * 1000
 
   // in millisecond precision
   def toStr(epochMillis: Long): String = {
@@ -36,6 +37,9 @@ object TsUtils {
   def datetimeToTs(desiredTime: String): Long = {
     formatter.parse(desiredTime).getTime
   }
+
+  def daysAgoMillis(days: Int, nowMillis: Long = System.currentTimeMillis()): Long =
+    nowMillis - days.toLong * DayMillis
 
   def round(epochMillis: Long, roundMillis: Long): Long =
     (epochMillis / roundMillis) * roundMillis

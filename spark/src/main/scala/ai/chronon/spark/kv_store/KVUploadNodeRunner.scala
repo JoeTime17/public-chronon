@@ -1,7 +1,7 @@
 package ai.chronon.spark.kv_store
 
 import ai.chronon.api.Constants.MetadataDataset
-import ai.chronon.api.Extensions.MetadataOps
+import ai.chronon.api.Extensions.{MetadataOps, TableInfoOps}
 import ai.chronon.api._
 import ai.chronon.api.planner.NodeRunner
 import ai.chronon.api.secrets.SecretResolver
@@ -118,6 +118,10 @@ class KVUploadNodeRunner(api: Api) extends NodeRunner {
 }
 
 object KVUploadNodeRunner {
+  private[chronon] val PartitionColumnProp = "spark.chronon.partition.column"
+  private[chronon] val PartitionFormatProp = "spark.chronon.partition.format"
+  private[chronon] val PartitionSpanMillisProp = "spark.chronon.partition.span.millis"
+  private[chronon] val PartitionOffsetMillisProp = "spark.chronon.partition.offset.millis"
 
   class KVUploadNodeRunnerArgs(args: Array[String]) extends ScallopConf(args) {
     val confPath = opt[String](required = true, descr = "Path to node configuration file")
@@ -169,9 +173,8 @@ object KVUploadNodeRunner {
       val nodeCommonConf = metadata.commonConf
       val mergedProps = mergeApiProps(nodeCommonConf, sparkConfApiProps(), props)
 
-      val api = instantiateApi(onlineClass, mergedProps)
-
-      implicit val partitionSpec: PartitionSpec = PartitionSpec.daily
+      implicit val partitionSpec: PartitionSpec = metadata.partitionSpec(PartitionSpec.daily)
+      val api = instantiateApi(onlineClass, mergedProps ++ partitionSpecProps(partitionSpec))
       val range = Some(PartitionRange(null, endDs))
 
       val runner = new KVUploadNodeRunner(api)
@@ -189,4 +192,12 @@ object KVUploadNodeRunner {
                                       sparkConfProps: Map[String, String],
                                       props: Map[String, String]): Map[String, String] =
     nodeCommonConf ++ sparkConfProps ++ props // CLI props take precedence
+
+  private[chronon] def partitionSpecProps(partitionSpec: PartitionSpec): Map[String, String] =
+    Map(
+      PartitionColumnProp -> partitionSpec.column,
+      PartitionFormatProp -> partitionSpec.format,
+      PartitionSpanMillisProp -> partitionSpec.spanMillis.toString,
+      PartitionOffsetMillisProp -> partitionSpec.offsetMillis.toString
+    )
 }

@@ -68,8 +68,12 @@ class TrainingSpec:
 
     def to_thrift(self):
         return ttypes.TrainingSpec(
-            trainingDataSource=normalize_source(self.training_data_source) if self.training_data_source else None,
-            trainingDataWindow=window_utils.normalize_window(self.training_data_window) if self.training_data_window else None,
+            trainingDataSource=normalize_source(self.training_data_source)
+            if self.training_data_source
+            else None,
+            trainingDataWindow=window_utils.normalize_window(self.training_data_window)
+            if self.training_data_window
+            else None,
             schedule=self.schedule,
             image=self.image,
             pythonModule=self.python_module,
@@ -130,7 +134,9 @@ class RolloutStrategy:
             rolloutType=self.rollout_type,
             validationTrafficPercentRamps=self.validation_traffic_percent_ramps,
             validationTrafficDurationMins=self.validation_traffic_duration_mins,
-            rolloutMetricThresholds=[m.to_thrift() for m in self.rollout_metric_thresholds] if self.rollout_metric_thresholds else None,
+            rolloutMetricThresholds=[m.to_thrift() for m in self.rollout_metric_thresholds]
+            if self.rollout_metric_thresholds
+            else None,
         )
 
 
@@ -163,6 +169,8 @@ def Model(
     table_properties: Optional[Dict[str, str]] = None,
     tags: Optional[Dict[str, str]] = None,
     environments: Optional[List[str]] = None,
+    partition_interval: Optional[Union[common.Window, str]] = None,
+    partition_offset: Optional[Union[common.Window, str]] = None,
 ) -> ttypes.Model:
     """
     Creates a Model object for ML model inference and orchestration.
@@ -206,6 +214,13 @@ def Model(
         List of environments where this Model should be deployed/available.
         Defaults to ['prod']. Valid values: 'prod', 'canary' (case-insensitive).
     :type environments: List[str]
+    :param partition_interval:
+        Output partition interval for model training/deploy nodes. Examples: "1d", "3h", "15m".
+        When set below daily, Chronon uses "yyyy-MM-dd-HH-mm" ds values.
+    :type partition_interval: Optional[Union[common.Window, str]]
+    :param partition_offset:
+        Offset from UTC midnight/epoch for the output partition grid.
+    :type partition_offset: Optional[Union[common.Window, str]]
     :return:
         A Model object
     """
@@ -221,6 +236,10 @@ def Model(
 
     assert isinstance(version, str), f"Version must be a string, but found {type(version).__name__}"
 
+    # output_table_info handles the no-grid case itself (returns None, and rejects a lone
+    # partition_offset loudly instead of silently dropping it)
+    output_info = window_utils.output_table_info(partition_interval, partition_offset=partition_offset)
+
     # Create metadata
     meta_data = ttypes.MetaData(
         outputNamespace=output_namespace,
@@ -229,6 +248,9 @@ def Model(
         tableProperties=table_properties,
         version=version,
         environments=environments,
+        executionInfo=common.ExecutionInfo(outputTableInfo=output_info)
+        if output_info is not None
+        else None,
     )
 
     model = ttypes.Model(
@@ -242,6 +264,19 @@ def Model(
         deploymentConf=deployment_conf.to_thrift() if deployment_conf else None,
     )
 
+    if (
+        output_info is not None
+        and window_utils.window_millis(output_info.partitionInterval) < window_utils.DAY_MILLIS
+        and model.trainingConf is not None
+    ):
+        source = model.trainingConf.trainingDataSource
+        if source is not None:
+            inner = source.events or source.entities or source.joinSource
+            source_table = getattr(inner, "table", None) or getattr(inner, "snapshotTable", None)
+            window_utils.validate_source_grid(
+                "This Model", window_utils.source_query(source), f"training source {source_table}"
+            )
+
     return mark_factory_created_config(model)
 
 
@@ -249,7 +284,7 @@ def _get_model_transforms_output_table_name(
     model_transforms: ttypes.ModelTransforms, full_name: bool = False
 ):
     """Generate output table name for ModelTransforms"""
-    return utils._ensure_name_and_get_output_table(
+    return utils._ensure_name_and_get_output_table_reference(
         model_transforms, ttypes.ModelTransforms, "models", full_name
     )
 

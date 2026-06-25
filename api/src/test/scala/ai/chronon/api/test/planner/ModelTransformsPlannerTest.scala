@@ -1,6 +1,7 @@
 package ai.chronon.api.test.planner
 
 import ai.chronon.api.{Builders => B, _}
+import ai.chronon.api.Extensions.{MetadataOps, TableInfoOps, WindowUtils}
 import ai.chronon.api.planner.ModelTransformsPlanner
 import ai.chronon.planner.Mode
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,6 +12,8 @@ import scala.jdk.CollectionConverters._
 class ModelTransformsPlannerTest extends AnyFlatSpec with Matchers {
 
   private implicit val testPartitionSpec: PartitionSpec = PartitionSpec.daily
+  private val threeHourOffsetSpec =
+    PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 3 * 60 * 60 * 1000L, 60 * 60 * 1000L)
 
   private def modularExecutionInfo: ExecutionInfo =
     new ExecutionInfo().setConf(
@@ -109,6 +112,82 @@ class ModelTransformsPlannerTest extends AnyFlatSpec with Matchers {
     backfillDeps should not be empty
     backfillDeps.length shouldBe 1
     backfillDeps.head.tableInfo.table shouldBe "test_namespace.test_join"
+  }
+
+  it should "preserve upstream join output grid on join source backfill dependencies" in {
+    val leftQuery = B.Query(partitionColumn = "ds")
+    leftQuery.setPartitionInterval(WindowUtils.fromMillis(threeHourOffsetSpec.spanMillis))
+    leftQuery.setPartitionOffset(WindowUtils.fromMillis(threeHourOffsetSpec.offsetMillis))
+
+    val join = B.Join(
+      left = B.Source.events(
+        query = leftQuery,
+        table = "test_namespace.events_table"
+      ),
+      joinParts = Seq.empty,
+      metaData = B.MetaData(
+        name = "test_join",
+        namespace = "test_namespace"
+      )
+    )
+    join.metaData.executionInfo.setOutputTableInfo(
+      new TableInfo().setTable(join.metaData.outputTable).withSpec(threeHourOffsetSpec)
+    )
+
+    val joinSource = B.Source.joinSource(
+      join = join,
+      query = B.Query()
+    )
+
+    val modelTransforms = buildModelTransforms("test_model_transforms_with_subdaily_join", joinSource)
+    modelTransforms.metaData.executionInfo.setOutputTableInfo(
+      new TableInfo().setTable(modelTransforms.metaData.outputTable).withSpec(threeHourOffsetSpec)
+    )
+    val planner = new ModelTransformsPlanner(modelTransforms)
+    val plan = planner.buildPlan
+
+    val backfillNode = plan.nodes.asScala.find(_.content.isSetModelTransformsBackfill)
+    backfillNode should be(defined)
+
+    val backfillDeps = backfillNode.get.metaData.executionInfo.tableDependencies.asScala
+    backfillDeps should have size 1
+
+    val tableInfo = backfillDeps.head.tableInfo
+    tableInfo.table shouldBe "test_namespace.test_join"
+    tableInfo.partitionFormat shouldBe threeHourOffsetSpec.format
+    tableInfo.partitionInterval shouldBe WindowUtils.fromMillis(threeHourOffsetSpec.spanMillis)
+    tableInfo.partitionOffset shouldBe WindowUtils.fromMillis(threeHourOffsetSpec.offsetMillis)
+  }
+
+  it should "reject invalid grids inside embedded JoinSource trees" in {
+    val join = B.Join(
+      left = B.Source.events(
+        query = B.Query(partitionColumn = "ds"),
+        table = "test_namespace.daily_events_table"
+      ),
+      joinParts = Seq.empty,
+      metaData = B.MetaData(
+        name = "test_join",
+        namespace = "test_namespace"
+      )
+    )
+    join.metaData.executionInfo.setOutputTableInfo(
+      new TableInfo().setTable(join.metaData.outputTable).withSpec(threeHourOffsetSpec)
+    )
+
+    val joinSource = B.Source.joinSource(
+      join = join,
+      query = B.Query()
+    )
+
+    val modelTransforms = buildModelTransforms("test_model_transforms_with_invalid_join_source", joinSource)
+    modelTransforms.metaData.executionInfo.setOutputTableInfo(
+      new TableInfo().setTable(modelTransforms.metaData.outputTable).withSpec(threeHourOffsetSpec)
+    )
+
+    val error = the[IllegalArgumentException] thrownBy new ModelTransformsPlanner(modelTransforms).buildPlan
+    error.getMessage should include("test_join")
+    error.getMessage should include("no declared partition_interval")
   }
 
   "ModelTransformsPlanner" should "use the base join output for join sources with derivations in non-modular mode" in {

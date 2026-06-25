@@ -3,6 +3,7 @@ package ai.chronon.spark.kv_store
 import ai.chronon.api.Constants.MetadataDataset
 import ai.chronon.api._
 import ai.chronon.api.Constants.KvUploadTimeoutMsKey
+import ai.chronon.api.Extensions.{WindowOps, WindowUtils}
 import ai.chronon.online.{Api, KVStore}
 import ai.chronon.online.fetcher.{FetchContext, MetadataStore}
 import ai.chronon.planner.{GroupByUploadToKVNode, JoinMetadataUpload, ModelTransformsUploadNode, NodeContent}
@@ -91,6 +92,17 @@ class KVUploadNodeRunnerTest
     uploadTableCaptor.getValue shouldEqual "test_namespace.test_groupby__upload"
     groupByNameCaptor.getValue shouldEqual "test_groupby"
     partitionCaptor.getValue shouldEqual "2023-01-01"
+  }
+
+  it should "encode the resolved output partition spec into API props" in {
+    val partitionSpec = PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 3 * WindowUtils.Hour.millis, WindowUtils.Hour.millis)
+
+    KVUploadNodeRunner.partitionSpecProps(partitionSpec) shouldBe Map(
+      KVUploadNodeRunner.PartitionColumnProp -> "ds",
+      KVUploadNodeRunner.PartitionFormatProp -> "yyyy-MM-dd-HH-mm",
+      KVUploadNodeRunner.PartitionSpanMillisProp -> (3 * WindowUtils.Hour.millis).toString,
+      KVUploadNodeRunner.PartitionOffsetMillisProp -> WindowUtils.Hour.millis.toString
+    )
   }
 
   it should "handle JOIN_METADATA_UPLOAD successfully" in {

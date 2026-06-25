@@ -40,8 +40,7 @@ class ModularMonolith(join: api.Join, dateRange: DateRange)(implicit tableUtils:
     logger.info(s"Starting ModularMonolith pipeline for join: ${join.metaData.name}")
     logger.info(s"Executing ${nodes.size} nodes in topological order")
 
-    // DateRange is guaranteed to be in daily spec
-    val queryRange = PartitionRange(dateRange)
+    val queryRange = PartitionRange(dateRange.startDate, dateRange.endDate)(partitionSpec)
 
     nodes.foreach { node =>
       runNode(node, queryRange)
@@ -62,9 +61,27 @@ class ModularMonolith(join: api.Join, dateRange: DateRange)(implicit tableUtils:
       return new DateRange().setStartDate(queryRange.start).setEndDate(queryRange.end)
     }
 
-    // Compute the input range needed for each dependency
+    // Compute the input range needed for each dependency, expressed in this node's output
+    // spec. Dependency input ranges carry the dependency's own partition spec (format,
+    // interval and offset may all differ from the output grid); unioning raw ds values across
+    // specs mixes partition-string domains and breaks parsing/ordering downstream (e.g. a
+    // daily "2023-08-12" start fed into a sub-daily "yyyy-MM-dd-HH-mm" StepRunner). Convert
+    // through the half-open time interval instead of translating strings directly.
+    val outputSpec = queryRange.partitionSpec
     val inputRanges = tableDeps.flatMap { dep =>
-      DependencyResolver.computeInputRange(queryRange, dep)
+      DependencyResolver.computeInputRange(queryRange, dep).map { inputRange =>
+        val inputSpec = inputRange.partitionSpec
+        if (inputSpec == outputSpec) {
+          inputRange
+        } else {
+          // null start = unbounded lookback - preserve it through the conversion
+          val start = Option(inputRange.start)
+            .map(s => outputSpec.at(inputSpec.partitionStartMillis(s)))
+            .orNull
+          val end = outputSpec.at(inputSpec.partitionEndMillis(inputRange.end) - 1)
+          PartitionRange(start, end)(outputSpec)
+        }
+      }
     }
 
     if (inputRanges.isEmpty) {
@@ -137,9 +154,8 @@ class ModularMonolith(join: api.Join, dateRange: DateRange)(implicit tableUtils:
 
   private def runJoinPartJob(joinPartNode: JoinPartNode, metaData: MetaData, nodeRange: DateRange): Unit = {
     StepRunner(nodeRange, metaData) { stepRange =>
-      // alignOutput=false: SNAPSHOT join parts write to the shifted (D-1) partition, which MergeJob reads.
-      // Enabling alignOutput consistently requires MergeJob to also stop shifting its reads, which is a
-      // larger change tracked separately.
+      // alignOutput=false preserves historical same-grid SNAPSHOT ds values. Cross-grid snapshot
+      // parts are physical join-grid partitions and carry their finer as-of buckets in ts.
       val joinPartJob = new JoinPartJob(joinPartNode, metaData, stepRange, alignOutput = false)
       joinPartJob.run(None)
     }
@@ -166,7 +182,7 @@ class ModularMonolith(join: api.Join, dateRange: DateRange)(implicit tableUtils:
 
   private def runUnionJoinJob(unionJoinNode: UnionJoinNode, metaData: MetaData, nodeRange: DateRange): Unit = {
     StepRunner(nodeRange, metaData) { stepRange =>
-      val range = PartitionRange(stepRange)
+      val range = PartitionRange(stepRange.startDate, stepRange.endDate)(partitionSpec)
       ai.chronon.spark.join.UnionJoin.computeJoinAndSave(unionJoinNode.join, range)(tableUtils)
     }
     logger.info(s"UnionJoin completed, output table: ${metaData.outputTable}")

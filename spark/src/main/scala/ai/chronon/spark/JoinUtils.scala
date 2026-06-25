@@ -21,14 +21,15 @@ import ai.chronon.api._
 import ai.chronon.api.DataModel.EVENTS
 import ai.chronon.api.Extensions._
 import ai.chronon.api.ScalaJavaConversions._
-import ai.chronon.api.planner.JoinPlanner
+import ai.chronon.api.planner.{JoinPlanner, PartitionSpecResolver}
 import ai.chronon.spark.batch.ModularMonolith
 import ai.chronon.spark.Extensions._
 import ai.chronon.spark.catalog.TableUtils
 import com.google.gson.Gson
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{Column, DataFrame}
 import org.apache.spark.sql.expressions.UserDefinedFunction
-import org.apache.spark.sql.functions.{coalesce, col, udf}
+import org.apache.spark.sql.functions.{coalesce, col, lit, pmod, udf}
+import org.apache.spark.sql.types.LongType
 import org.apache.spark.util.sketch.BloomFilter
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -159,7 +160,10 @@ object JoinUtils {
 
     implicit val tu: TableUtils = tableUtils
     val effectiveLeftSpec = leftSource.query.partitionSpec(tableUtils.partitionSpec)
-    val effectiveLeftRange = range.translate(effectiveLeftSpec)
+    // intersectingRange: when the left table's partitionInterval is coarser than the requested
+    // range (e.g. daily left under a 3h output), the end ds must come from the end of the
+    // range's last interval or we'd silently scan only the day's first sub-partition
+    val effectiveLeftRange = range.intersectingRange(effectiveLeftSpec)
 
     val partitionColumnOfLeft = effectiveLeftSpec.column
 
@@ -205,14 +209,19 @@ object JoinUtils {
     implicit val tu: TableUtils = tableUtils
     val leftSpec = leftSource.query.partitionSpec(tableUtils.partitionSpec)
 
-    // firstAvailablePartition normalizes results back to TableUtils' default spec; translate
-    // back into leftSpec so the constructed PartitionRange has start/end values that match
-    // its tagged spec. Without this, heterogeneous-partition joins build a mixed-format
-    // range (default-format start, custom-format end) that silently collapses downstream.
+    // firstAvailablePartition normalizes results to TableUtils' default spec only when the
+    // grids match (other-grid ds values come back raw); translate back into leftSpec so the
+    // constructed PartitionRange has start/end values that match its tagged spec. Without
+    // this, heterogeneous-partition joins build a mixed-format range (default-format start,
+    // custom-format end) that silently collapses downstream.
     val firstAvailablePartitionOpt =
       tableUtils
         .firstAvailablePartition(leftSource.table, leftSpec, subPartitionFilters = leftSource.subPartitionFilters)
-        .map(p => if (leftSpec == tableUtils.partitionSpec) p else tableUtils.partitionSpec.translate(p, leftSpec))
+        .map { p =>
+          if (leftSpec.hasSameGrid(tableUtils.partitionSpec) && leftSpec != tableUtils.partitionSpec)
+            tableUtils.partitionSpec.translate(p, leftSpec)
+          else p
+        }
     val configuredStartPartition = Option(leftSource.query.startPartition)
       .orElse(Option(leftSource.rootQuery).flatMap(query => Option(query.startPartition)))
     lazy val defaultLeftStart = configuredStartPartition
@@ -482,28 +491,43 @@ object JoinUtils {
     }
   }
 
-  def shiftDays(leftDataModel: DataModel, joinPart: JoinPart, leftRange: PartitionRange): PartitionRange = {
-    val shiftDays =
-      if (leftDataModel == EVENTS && joinPart.groupBy.inferredAccuracy == Accuracy.SNAPSHOT) {
-        -1
-      } else {
-        0
-      }
+  /** The snapshot grid a snapshot-accuracy join part lives on - see
+    * [[ai.chronon.api.planner.PartitionSpecResolver.snapshotSpec]].
+    */
+  def partSnapshotSpec(joinPart: JoinPart)(implicit tableUtils: TableUtils): PartitionSpec =
+    PartitionSpecResolver.snapshotSpec(joinPart, tableUtils.partitionSpec)
 
+  /** Snapshots are computed and stored on the snapshot grid: for each left partition, rows
+    * pick the latest snapshot whose time is at or before the rows' time.
+    * Same-grid left over same-grid snapshots degenerates to one-partition lookback - exactly the
+    * old behavior. A left range whose grid differs from the snapshot grid looks back to the
+    * snapshots just before its overlapping snapshot intervals; the merge join matches per row via
+    * TimePartitionColumn (the row ts floored to the snapshot grid).
+    */
+  def snapshotLookbackRange(leftRange: PartitionRange, snapshotSpec: PartitionSpec): PartitionRange =
+    leftRange.intersectingRange(snapshotSpec).shiftPartitions(-1)
+
+  def snapshotGridFloorMillis(tsMillis: Column, snapshotSpec: PartitionSpec): Column = {
+    val gridOffset = lit(Math.floorMod(snapshotSpec.offsetMillis, snapshotSpec.spanMillis))
+    (tsMillis - pmod(tsMillis - gridOffset, lit(snapshotSpec.spanMillis))).cast(LongType)
+  }
+
+  /** The RHS range a snapshot-accuracy join part should scan for a given left range. */
+  def snapshotScanRange(leftDataModel: DataModel,
+                        joinPart: JoinPart,
+                        leftRange: PartitionRange,
+                        snapshotSpec: PartitionSpec): PartitionRange = {
     //  left  | right  | acc
-    // events | events | snapshot  => right part tables are not aligned - so scan by leftTimeRange
-    // events | events | temporal  => already aligned - so scan by leftRange
-    // events | entities | snapshot => right part tables are not aligned - so scan by leftTimeRange
-    // events | entities | temporal => right part tables are aligned - so scan by leftRange
-    // entities | entities | snapshot => right part tables are aligned - so scan by leftRange
-    val rightRange = if (leftDataModel == EVENTS && joinPart.groupBy.inferredAccuracy == Accuracy.SNAPSHOT) {
-      // Disabling for now
-      // val leftTimeRange = leftTimeRangeOpt.getOrElse(leftDf.get.timeRange.toPartitionRange)
-      leftRange.shift(shiftDays)
+    // events | events | snapshot  => right part tables sit one snapshot behind - scan the previous snapshot
+    // events | events | temporal  => right part tables match leftRange - scan by leftRange
+    // events | entities | snapshot => right part tables sit one snapshot behind - scan the previous snapshot
+    // events | entities | temporal => right part tables match leftRange - scan by leftRange
+    // entities | entities | snapshot => right part tables match leftRange - scan by leftRange
+    if (leftDataModel == EVENTS && joinPart.groupBy.inferredAccuracy == Accuracy.SNAPSHOT) {
+      snapshotLookbackRange(leftRange, snapshotSpec)
     } else {
       leftRange
     }
-    rightRange
   }
 
   def computeLeftSourceTableName(join: api.Join)(implicit tableUtils: TableUtils): String = {

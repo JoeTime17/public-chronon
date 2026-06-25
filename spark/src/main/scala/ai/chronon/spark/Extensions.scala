@@ -25,7 +25,7 @@ import org.apache.avro.Schema
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{LongType, StructType}
+import org.apache.spark.sql.types.{LongType, StringType, StructType}
 import org.apache.spark.util.sketch.BloomFilter
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -60,7 +60,7 @@ object Extensions {
   case class DfWithStats(df: DataFrame, partitionCounts: Map[String, Long])(implicit val partitionSpec: PartitionSpec) {
     private val minPartition: String = partitionCounts.keys.min
     private val maxPartition: String = partitionCounts.keys.max
-    val partitionRange: PartitionRange = PartitionRange(minPartition, maxPartition)
+    val partitionRange: PartitionRange = PartitionRange(minPartition, maxPartition)(partitionSpec)
     val count: Long = partitionCounts.values.sum
 
     lazy val timeRange: TimeRange = df.calculateTimeRange
@@ -79,11 +79,16 @@ object Extensions {
 
   object DfWithStats {
     def apply(dataFrame: DataFrame)(implicit partitionSpec: PartitionSpec): DfWithStats = {
-      val tu = TableUtils(dataFrame.sparkSession)
-      val pCol = tu.partitionColumn
-      val pFormat = tu.partitionFormat
+      val pCol = partitionSpec.column
+      val pFormat = partitionSpec.format
+      // string ds values are already in the spec's format: date_format would route them through
+      // an implicit string->timestamp cast, which nulls any value Spark can't natively cast
+      // (e.g. dash-separated sub-daily formats) and would key every count under null
+      val partitionValueCol =
+        if (dataFrame.schema(pCol).dataType == StringType) col(pCol)
+        else date_format(col(pCol), pFormat)
       val partitionCounts = dataFrame
-        .groupBy(date_format(col(pCol), pFormat))
+        .groupBy(partitionValueCol)
         .count()
         .collect()
         .map(row => row.getString(0) -> row.getLong(1))
@@ -225,11 +230,29 @@ object Extensions {
       df.filter(cols.map(_ + " IS NOT NULL").mkString(" AND "))
     }
 
-    // convert a millisecond timestamp to string with the specified format
+    // format a millisecond timestamp as a raw time string - no partition grid semantics
+    def withTimeFormattedColumn(columnName: String, timeColumn: String, format: String): DataFrame =
+      df.withColumn(columnName, from_unixtime(df.col(timeColumn) / 1000, format))
+
+    // ds of the partition containing the timestamp: floored to the spec's grid
+    // (partitionInterval + partitionOffset) before formatting. Plain format truncation would
+    // leave sub-daily timestamps off the boundary (12:07 -> "... 12:07"), which silently
+    // breaks equality joins against on-boundary partition values.
     def withTimeBasedColumn(columnName: String,
                             timeColumn: String = Constants.TimeColumn,
-                            format: String = tableUtils.partitionSpec.format): DataFrame =
-      df.withColumn(columnName, from_unixtime(df.col(timeColumn) / 1000, format))
+                            spec: PartitionSpec = tableUtils.partitionSpec,
+                            format: String = null): DataFrame =
+      if (format != null) {
+        df.withTimeFormattedColumn(columnName, timeColumn, format)
+      } else {
+        val ts = df.col(timeColumn)
+        val gridOffset = lit(Math.floorMod(spec.offsetMillis, spec.spanMillis))
+        val floored = ts - pmod(ts - gridOffset, lit(spec.spanMillis))
+        df.withColumn(columnName, from_unixtime(floored / 1000, spec.format))
+      }
+
+    def withTimeBasedColumn(columnName: String, timeColumn: String, format: String): DataFrame =
+      df.withTimeFormattedColumn(columnName, timeColumn, format)
 
     def addTimebasedColIfExists(): DataFrame =
       if (df.schema.names.contains(Constants.TimeColumn)) {
@@ -247,14 +270,23 @@ object Extensions {
     def camelToSnake: DataFrame =
       df.columns.foldLeft(df)((renamed, col) => renamed.withColumnRenamed(col, camelToSnake(col)))
 
-    def withPartitionBasedTimestamp(colName: String, inputColumn: String = tableUtils.partitionColumn): DataFrame =
-      df.withColumn(colName, unix_timestamp(df.col(inputColumn), tableUtils.partitionSpec.format) * 1000)
+    def withPartitionBasedTimestamp(colName: String,
+                                    inputColumn: String = tableUtils.partitionColumn,
+                                    spec: PartitionSpec = tableUtils.partitionSpec): DataFrame =
+      df.withColumn(colName, unix_timestamp(df.col(inputColumn), spec.format) * 1000)
 
-    def withShiftedPartition(colName: String, days: Int = 1): DataFrame =
+    def withShiftedPartition(colName: String,
+                             days: Int = 1,
+                             spec: PartitionSpec = tableUtils.partitionSpec): DataFrame =
       df.withColumn(
         colName,
-        date_format(date_add(to_date(df.col(tableUtils.partitionColumn), tableUtils.partitionSpec.format), days),
-                    tableUtils.partitionSpec.format))
+        date_format(
+          from_unixtime(
+            unix_timestamp(df.col(tableUtils.partitionColumn), spec.format) +
+              (days.toLong * spec.spanMillis / 1000)),
+          spec.format
+        )
+      )
 
     def replaceWithReadableTime(cols: Seq[String], dropOriginal: Boolean): DataFrame = {
       cols.foldLeft(df) { (dfNew, col) =>
@@ -278,15 +310,14 @@ object Extensions {
         resultDf = resultDf.withColumnRenamed(existingSpec.column, newSpec.column)
       }
 
-      // replace old format with new one
-      if (existingSpec.format != newSpec.format) {
-        resultDf = resultDf.withColumn(
-          newSpec.column,
-          date_format(
-            to_date(col(newSpec.column), existingSpec.format),
-            newSpec.format
-          )
-        )
+      // translate partition values through the target spec; format equality is not enough
+      // because mixed grids can share a ds format but require target-grid flooring.
+      if (existingSpec.format != newSpec.format || !existingSpec.hasSameGrid(newSpec)) {
+        val seconds = unix_timestamp(col(newSpec.column), existingSpec.format)
+        val spanSeconds = newSpec.spanMillis / 1000
+        val offsetSeconds = Math.floorMod(newSpec.offsetMillis, newSpec.spanMillis) / 1000
+        val floored = seconds - pmod(seconds - lit(offsetSeconds), lit(spanSeconds))
+        resultDf = resultDf.withColumn(newSpec.column, from_unixtime(floored, newSpec.format))
       }
 
       resultDf

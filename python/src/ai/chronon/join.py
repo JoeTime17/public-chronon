@@ -20,6 +20,7 @@ from collections import Counter
 from typing import Dict, List, Optional, Union
 
 import ai.chronon.utils as utils
+import ai.chronon.windows as window_utils
 import gen_thrift.api.ttypes as api
 import gen_thrift.common.ttypes as common
 from ai.chronon.cli.compile.config_origin import mark_factory_created_config
@@ -30,7 +31,14 @@ logging.basicConfig(level=logging.INFO)
 
 def _get_output_table_name(join: api.Join, full_name: bool = False):
     """generate output table name for join backfill job"""
-    return utils._ensure_name_and_get_output_table(join, api.Join, "joins", full_name)
+    return utils._ensure_name_and_get_output_table_reference(join, api.Join, "joins", full_name)
+
+
+def _get_derived_output_table_name(join: api.Join, full_name: bool = False):
+    """Generate output table name for modular join derivation output."""
+    return utils._ensure_name_and_get_output_table_reference(
+        join, api.Join, "joins", full_name, suffix="__derived"
+    )
 
 
 def JoinPart(
@@ -113,6 +121,70 @@ def JoinPart(
     join_part = api.JoinPart(groupBy=group_by, keyMapping=key_mapping, prefix=prefix)
     join_part.tags = tags
     return join_part
+
+
+def _window_millis_or_none(window) -> Optional[int]:
+    return window_utils.window_millis(window) if window is not None else None
+
+
+def _format_millis(millis: int) -> str:
+    if millis % window_utils.DAY_MILLIS == 0:
+        return f"{millis // window_utils.DAY_MILLIS}d"
+    if millis % window_utils.HOUR_MILLIS == 0:
+        return f"{millis // window_utils.HOUR_MILLIS}h"
+    return f"{millis // window_utils.MINUTE_MILLIS}m"
+
+
+def _validate_online_join_subdaily_group_by_schedules(right_parts: List[api.JoinPart]) -> None:
+    """Online joins schedule sub-daily groupBy uploads independently."""
+    for part in right_parts or []:
+        group_by = part.groupBy
+        metadata = getattr(group_by, "metaData", None)
+        execution_info = getattr(metadata, "executionInfo", None)
+        output_info = getattr(execution_info, "outputTableInfo", None)
+        output_interval_ms = _window_millis_or_none(
+            getattr(output_info, "partitionInterval", None)
+        )
+        if output_interval_ms is None or output_interval_ms >= window_utils.DAY_MILLIS:
+            continue
+
+        group_by_name = getattr(metadata, "name", None) or "<unnamed>"
+        schedule = (
+            getattr(execution_info, "onlineSchedule", None)
+            or getattr(execution_info, "offlineSchedule", None)
+        )
+        normalized_schedule = schedule.strip().lower() if isinstance(schedule, str) else schedule
+        if normalized_schedule in (None, "", "none", "null", "@daily", "@never"):
+            raise ValueError(
+                f"Online Join includes sub-daily GroupBy '{group_by_name}' "
+                f"(partition_interval={_format_millis(output_interval_ms)}) without a regular "
+                "sub-daily offline_schedule or online_schedule. Declare the GroupBy schedule so "
+                "the orchestrator can schedule its upload independently."
+            )
+
+        try:
+            schedule_interval_ms = window_utils.regular_subdaily_schedule(schedule)
+        except ValueError as e:
+            raise ValueError(
+                f"Online Join includes sub-daily GroupBy '{group_by_name}' with invalid "
+                f"schedule '{schedule}': {e}"
+            ) from None
+
+        if schedule_interval_ms is None:
+            raise ValueError(
+                f"Online Join includes sub-daily GroupBy '{group_by_name}' "
+                f"(partition_interval={_format_millis(output_interval_ms)}) without a regular "
+                "sub-daily offline_schedule or online_schedule. Declare the GroupBy schedule so "
+                "the orchestrator can schedule its upload independently."
+            )
+
+        if schedule_interval_ms != output_interval_ms:
+            raise ValueError(
+                f"Online Join includes sub-daily GroupBy '{group_by_name}' with schedule "
+                f"'{schedule}' ({_format_millis(schedule_interval_ms)}) but output "
+                f"partition_interval={_format_millis(output_interval_ms)}. Sub-daily groupBy "
+                "uploads that feed online joins must be scheduled at their own partition cadence."
+            )
 
 
 def ExternalSource(
@@ -215,6 +287,7 @@ def Derivation(name: str, expression: str) -> api.Derivation:
         Use ``from ai.chronon.types import Derivation`` instead.
     """
     import warnings
+
     warnings.warn(
         "Importing Derivation from ai.chronon.join is deprecated. "
         "Use 'from ai.chronon.types import Derivation' instead.",
@@ -222,6 +295,7 @@ def Derivation(name: str, expression: str) -> api.Derivation:
         stacklevel=2,
     )
     from ai.chronon.derivation import Derivation as _Derivation
+
     return _Derivation(name=name, expression=expression)
 
 
@@ -292,6 +366,8 @@ def Join(
     enable_stats_compute: bool = None,
     modular_execution: bool = False,
     environments: Optional[List[str]] = None,
+    partition_interval: Optional[Union[common.Window, str]] = None,
+    partition_offset: Optional[Union[common.Window, str]] = None,
 ) -> api.Join:
     """
     Construct a join object. A join can pull together data from various GroupBy's both offline and online. This is also
@@ -348,15 +424,22 @@ def Join(
         users can register external sources into Api implementation. Chronon fetcher can invoke the implementation.
         This is applicable only for online fetching. Offline this will not be produce any values.
     :param offline_schedule:
-        Schedule expression for offline join compute tasks. Supports standard cron expressions
-        that run at most once per day. Examples: '@daily' (midnight), '0 2 * * *' (2am daily),
-        '30 14 * * MON-FRI' (weekdays at 2:30pm), '0 9 * * 1' (Mondays at 9am).
+        Schedule expression for offline join compute tasks. Supports standard cron expressions,
+        including regular sub-daily schedules. Examples: '@daily' (midnight), '0 2 * * *' (2am daily),
+        '0 */3 * * *' (every 3 hours), '5/15 * * * *' (every 15 minutes with a 5 minute processing offset).
         Use '@never' to explicitly disable offline scheduling.
-        Note: Hourly, sub-hourly, or multi-daily schedules are not supported.
     :param online_schedule:
         Schedule expression for online/deploy tasks. When online=True and online_schedule is not specified,
-        defaults to "@daily". Set to "@never" to explicitly disable online scheduling even when online=True.
+        defaults to offline_schedule. Set to "@never" to explicitly disable online scheduling even when online=True.
         Supports the same format as offline_schedule.
+    :param partition_interval:
+        Output partition interval for this Join. Examples: "1d", "3h", "15m".
+        When set below daily, Chronon uses "yyyy-MM-dd-HH-mm" ds values.
+    :param partition_offset:
+        Offset from UTC midnight/epoch for the output partition grid. Defaults to zero
+        (boundaries at midnight) and must be declared explicitly to move the grid; the cron
+        fire phase is treated as a processing delay relative to the declared grid, never as
+        a grid offset.
     :param row_ids:
         Columns of the left table that uniquely define a training record. Used as default keys during bootstrap.
         Optional.
@@ -467,12 +550,33 @@ def Join(
             "Either set online=True or remove the online_schedule parameter."
         )
 
+    subdaily_output = window_utils.is_subdaily(partition_interval, offline_schedule)
+
     # "@never" explicitly disables online scheduling even when online=True
     if online_schedule == "@never":
         online_schedule = None
-    # Set default online_schedule if online is True and online_schedule is not specified
+    # Set default online_schedule if online is True and online_schedule is not specified.
+    # Inherit the offline schedule only when it is sub-daily; daily confs keep the
+    # historical "@daily" default so existing semantic hashes don't churn.
     elif online and online_schedule is None:
-        online_schedule = "@daily"
+        if subdaily_output and offline_schedule not in (None, "@never"):
+            online_schedule = offline_schedule
+        else:
+            online_schedule = "@daily"
+    elif (
+        online
+        and subdaily_output
+        and online_schedule is not None
+        and offline_schedule not in (None, "@never")
+        and online_schedule != offline_schedule
+    ):
+        raise ValueError(
+            "online_schedule must match offline_schedule for sub-daily partition_interval when both are set. "
+            "Leave online_schedule empty to inherit the offline schedule."
+        )
+
+    if online:
+        _validate_online_join_subdaily_group_by_schedules(right_parts)
 
     if modular_execution:
         if conf is None:
@@ -492,7 +596,26 @@ def Join(
         historicalBackfill=historical_backfill,
         clusterConf=cluster_conf,
         enableStatsCompute=enable_stats_compute,
+        outputTableInfo=window_utils.output_table_info(
+            partition_interval,
+            partition_offset=partition_offset,
+            schedule=offline_schedule,
+        ),
     )
+
+    output_info = exec_info.outputTableInfo
+    if (
+        output_info is not None
+        and window_utils.window_millis(output_info.partitionInterval) < window_utils.DAY_MILLIS
+    ):
+        # the left feeds the join's own partitions; right parts pick the latest snapshot at
+        # or before each row's ts on their own grid
+        # (mixed hourly/daily/realtime cadence is the product) and are deliberately NOT checked
+        left_inner = updated_left.events or updated_left.entities or updated_left.joinSource
+        left_table = getattr(left_inner, "table", None) or getattr(left_inner, "snapshotTable", None)
+        window_utils.validate_source_grid(
+            "This Join", window_utils.source_query(updated_left), f"left source {left_table}"
+        )
 
     metadata = api.MetaData(
         online=online,
@@ -521,5 +644,8 @@ def Join(
 
     # Add the table property that calls the private function
     join.__class__.table = property(lambda self: _get_output_table_name(self, full_name=True))
+    join.__class__.derived_table = property(
+        lambda self: _get_derived_output_table_name(self, full_name=True)
+    )
 
     return mark_factory_created_config(join)

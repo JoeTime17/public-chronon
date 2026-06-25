@@ -13,9 +13,11 @@
 #     limitations under the License.
 
 from collections import OrderedDict
-from typing import Dict, List
+from typing import Dict, List, Union
 
+import ai.chronon.windows as window_utils
 import gen_thrift.api.ttypes as api
+import gen_thrift.common.ttypes as common
 
 
 def Query(
@@ -29,6 +31,9 @@ def Query(
     reversal_column: str = None,
     partition_column: str = None,
     partition_format: str = None,
+    partition_interval: Union[common.Window, str] = None,
+    partition_offset: Union[common.Window, str] = None,
+    partition_lag: Union[common.Window, str] = None,
     sub_partitions_to_wait_for: List[str] = None,
     time_partitioned: bool = None,
 ) -> api.Query:
@@ -84,6 +89,17 @@ def Query(
     :param partition_format:
         Date format string to expect the partition values to be in.
     :type partition_format: str, optional
+    :param partition_interval:
+        Partition interval for the source table. Examples: "1d", "3h", "15m".
+        Sub-daily partition values use "yyyy-MM-dd-HH-mm" unless partition_format is explicitly set.
+    :type partition_interval: Union[common.Window, str], optional
+    :param partition_offset:
+        Offset from UTC midnight/epoch for the source partition grid. Examples: "1h" for
+        partitions at 01:00, 04:00, ... with a "3h" partition_interval.
+    :type partition_offset: Union[common.Window, str], optional
+    :param partition_lag:
+        Partition lag to apply when resolving dependencies. Examples: "1d", "3h", "15m".
+    :type partition_lag: Union[common.Window, str], optional
     :param time_partitioned:
         Indicates the source table uses a timestamp or date column for time-based filtering
         instead of traditional Hive-style string partitioning. When True, partition_column
@@ -93,6 +109,13 @@ def Query(
     :type time_partitioned: bool, optional
     :return: A Query object that Chronon can use to scan just the necessary data efficiently.
     """
+    partition_spec = window_utils.PartitionSpec(
+        column=partition_column,
+        format=partition_format,
+        interval=partition_interval,
+        offset=partition_offset,
+        time_partitioned=time_partitioned,
+    )
     return api.Query(
         selects=selects,
         wheres=wheres,
@@ -102,10 +125,11 @@ def Query(
         setups=setups,
         mutationTimeColumn=mutation_time_column,
         reversalColumn=reversal_column,
-        partitionColumn=partition_column,
         subPartitionsToWaitFor=sub_partitions_to_wait_for,
-        partitionFormat=partition_format,
-        timePartitioned=time_partitioned,
+        partitionLag=window_utils.normalize_window(partition_lag)
+        if partition_lag is not None
+        else None,
+        **partition_spec.query_kwargs(),
     )
 
 

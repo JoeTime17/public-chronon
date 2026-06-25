@@ -43,13 +43,14 @@ class Eval(implicit tableUtils: TableUtils) {
     val sourceTable = join.left.table
 
     // Filter on the latest partition if it exists
-    val latestPartitionOpt = tableUtils.lastAvailablePartition(sourceTable,
-                                                               tablePartitionSpec =
-                                                                 Option(join.left.query.partitionSpec(partitionSpec)))
-    // Render a random string for the partition if it doesn't exist, just need to get schema
+    val leftSpec = join.left.query.partitionSpec(partitionSpec)
+    val latestPartitionOpt = tableUtils.lastAvailablePartition(sourceTable, tablePartitionSpec = Option(leftSpec))
+    // lastAvailablePartition normalizes grid-matching ds values to the global format and
+    // leaves other-grid values raw - tag the range with the spec the value actually arrived in
+    val arrivalSpec = if (leftSpec.hasSameGrid(partitionSpec)) partitionSpec else leftSpec
     val latestPartitonRange = latestPartitionOpt
       .map { partStr =>
-        PartitionRange(partStr, partStr)
+        PartitionRange(partStr, partStr)(arrivalSpec)
       }
       .getOrElse(twoDaysAgo)
 
@@ -61,14 +62,22 @@ class Eval(implicit tableUtils: TableUtils) {
   }
 
   private def getLastPartitonOpt(sources: Seq[api.Source]): Option[PartitionRange] = {
+    // Partition strings from different sources can be in different specs/formats, so compare
+    // them on the time axis and express the result in the ambient spec instead of sorting
+    // (and parsing) heterogeneous strings with one spec.
     sources
       .flatMap { source =>
-        tableUtils.lastAvailablePartition(source.table,
-                                          tablePartitionSpec = Option(source.query.partitionSpec(partitionSpec)))
+        val sourceSpec = source.query.partitionSpec(partitionSpec)
+        // grid-matching ds values come back normalized to the global format; parse with the
+        // spec the value is actually in
+        val arrivalSpec = if (sourceSpec.hasSameGrid(partitionSpec)) partitionSpec else sourceSpec
+        tableUtils
+          .lastAvailablePartition(source.table, tablePartitionSpec = Option(sourceSpec))
+          .map(arrivalSpec.partitionStartMillis)
       }
-      .sorted(Ordering[String].reverse)
-      .headOption
-      .map { latestPartition =>
+      .reduceOption((left, right) => math.max(left, right))
+      .map { latestMillis =>
+        val latestPartition = partitionSpec.at(latestMillis)
         PartitionRange(latestPartition, latestPartition)
       }
   }

@@ -46,7 +46,7 @@ class DriftTest extends SparkTestBase with Matchers {
     // generate anomalous data (join output)
     val prepareData = PrepareData(namespace)
     val join = prepareData.generateAnomalousFraudJoin
-    val df = prepareData.generateFraudSampleData(600000, "2023-01-01", "2023-02-30", join.metaData.loggedTable)
+    val df = prepareData.generateFraudSampleData(200000, "2023-01-01", "2023-02-28", join.metaData.loggedTable)
     df.show(10)
 
     // mock api impl for online fetching and uploading
@@ -58,7 +58,7 @@ class DriftTest extends SparkTestBase with Matchers {
     val api = new MockApi(kvStoreFunc, namespace)
 
     // compute summary table and packed table (for uploading)
-    Summarizer.compute(api, join.metaData, ds = "2023-02-30", useLogs = true)
+    Summarizer.compute(api, join.metaData, ds = "2023-02-28", useLogs = true)
     val summaryTable = join.metaData.summaryTable
     val packedTable = join.metaData.packedSummaryTable
     showTable(summaryTable)
@@ -84,7 +84,7 @@ class DriftTest extends SparkTestBase with Matchers {
 
     // fetch summaries
     val startMs = PartitionSpec.daily.epochMillis("2023-01-01")
-    val endMs = PartitionSpec.daily.epochMillis("2023-02-29")
+    val endMs = PartitionSpec.daily.epochMillis("2023-02-28")
     val summariesFuture = driftStore.getSummaries(join, Some(startMs), Some(endMs), None)
     val summaries = Await.result(summariesFuture, Duration.create(10, TimeUnit.SECONDS))
     logger.info(s"${summaries.length} summaries fetched successfully")

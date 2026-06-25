@@ -1,6 +1,6 @@
 package ai.chronon.api.test.planner
 
-import ai.chronon.api.Extensions.{WindowUtils, MetadataOps}
+import ai.chronon.api.Extensions.{MetadataOps, TableInfoOps, WindowUtils}
 import ai.chronon.api.planner.{DependencyResolver, TableDependencies}
 import ai.chronon.api.{
   Accuracy,
@@ -20,6 +20,8 @@ import org.scalatest.matchers.should.Matchers
 class TableDependenciesTest extends AnyFlatSpec with Matchers {
 
   private implicit val testPartitionSpec: PartitionSpec = PartitionSpec.daily
+  private val threeHourOffsetSpec =
+    PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 3 * 60 * 60 * 1000L, 60 * 60 * 1000L)
 
   "TableDependencies.fromTable" should "handle left Source with null query (default behavior)" in {
     val table = "test.events_table"
@@ -263,6 +265,32 @@ class TableDependenciesTest extends AnyFlatSpec with Matchers {
       dep.getStartOffset should equal(WindowUtils.zero())
       dep.getEndOffset should equal(WindowUtils.zero())
     }
+  }
+
+  it should "preserve the upstream join output grid on metadata upload dependencies" in {
+    import ai.chronon.api.Builders._
+    import scala.jdk.CollectionConverters._
+
+    val upstreamJoin = Join(
+      metaData = MetaData(namespace = "test_namespace", name = "upstream_join"),
+      left = Source.events(Query(), table = "test_namespace.upstream_events"),
+      joinParts = Seq.empty,
+      bootstrapParts = Seq.empty
+    )
+    upstreamJoin.metaData.executionInfo.setOutputTableInfo(
+      new TableInfo().setTable(upstreamJoin.metaData.outputTable).withSpec(threeHourOffsetSpec)
+    )
+
+    val sources = Seq(Source.joinSource(upstreamJoin, Query())).asJava
+
+    val result = TableDependencies.fromJoinSources(sources)
+
+    result should have size 1
+    val tableInfo = result.head.tableInfo
+    tableInfo.table should equal(upstreamJoin.metaData.outputTable + "__metadata_upload")
+    tableInfo.partitionFormat should equal(threeHourOffsetSpec.format)
+    tableInfo.partitionInterval should equal(WindowUtils.fromMillis(threeHourOffsetSpec.spanMillis))
+    tableInfo.partitionOffset should equal(WindowUtils.fromMillis(threeHourOffsetSpec.offsetMillis))
   }
 
   it should "return empty sequence when no JoinSources are present" in {

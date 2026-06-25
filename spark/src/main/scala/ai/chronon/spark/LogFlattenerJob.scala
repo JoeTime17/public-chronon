@@ -98,7 +98,7 @@ class LogFlattenerJob(session: SparkSession,
     if (stepDays.isEmpty) {
       ranges
     } else {
-      ranges.flatMap(_.steps(stepDays.get))
+      ranges.flatMap(_.stepsByDays(stepDays.get))
     }
   }
 

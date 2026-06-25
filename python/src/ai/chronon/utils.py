@@ -12,6 +12,7 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 
+import copy
 import gc
 import importlib
 import inspect
@@ -324,6 +325,94 @@ def sanitize(name):
 # passes it through unchanged. A `{{ db }}`-style token would be mangled to `____db____`
 # by sanitize and become unfindable at compile-time substitution.
 OUTPUT_NAMESPACE_PLACEHOLDER = "_chronon_namespace_placeholder_"
+
+
+class TableReference(str):
+    """String table name plus Chronon producer grid metadata.
+
+    This stays string-compatible for SQL formatting and thrift fields, while
+    source constructors can preserve a producer's non-daily output grid when a
+    consumer uses ``producer.table`` directly.
+    """
+
+    def __new__(
+        cls,
+        value: str,
+        *,
+        partition_column=None,
+        partition_format=None,
+        partition_interval=None,
+        partition_offset=None,
+        partition_spec=None,
+        producer_name=None,
+    ):
+        from ai.chronon import windows as window_utils
+
+        obj = str.__new__(cls, value)
+        obj.partition_spec = partition_spec or window_utils.PartitionSpec(
+            column=partition_column,
+            format=partition_format,
+            interval=partition_interval,
+            offset=partition_offset,
+        )
+        obj.partition_column = obj.partition_spec.column
+        obj.partition_format = obj.partition_spec.format
+        obj.partition_interval = obj.partition_spec.interval
+        obj.partition_offset = obj.partition_spec.offset
+        obj.producer_name = producer_name
+        return obj
+
+
+def _non_daily_output_grid(obj):
+    meta_data = getattr(obj, "metaData", None)
+    exec_info = getattr(meta_data, "executionInfo", None) if meta_data else None
+    table_info = getattr(exec_info, "outputTableInfo", None) if exec_info else None
+    from ai.chronon import windows as window_utils
+
+    partition_spec = window_utils.PartitionSpec.from_table_info(table_info)
+    if not partition_spec.has_interval() or partition_spec.is_daily_grid():
+        return {}
+
+    return {
+        "partition_spec": copy.deepcopy(partition_spec),
+    }
+
+
+def _ensure_name_and_get_output_table_reference(obj, cls, mod_prefix, full_name=False, suffix=""):
+    table = _ensure_name_and_get_output_table(obj, cls, mod_prefix, full_name)
+    return TableReference(
+        table + suffix,
+        producer_name=getattr(getattr(obj, "metaData", None), "name", None),
+        **_non_daily_output_grid(obj),
+    )
+
+
+def propagate_table_reference_grid(query, table):
+    """Copy a direct producer table reference's grid into a consumer query.
+
+    Explicit consumer partition_interval wins. When it is set, the consumer owns
+    the full source-grid declaration, including offset and format.
+    """
+    if (
+        query is None
+        or not isinstance(table, TableReference)
+        or query.partitionInterval is not None
+    ):
+        return query
+
+    from ai.chronon import windows as window_utils
+
+    table_spec = window_utils.PartitionSpec.from_table_reference(table)
+    if not table_spec.has_interval():
+        return query
+
+    result = copy.deepcopy(query)
+    resolved_spec = window_utils.PartitionSpec.from_table_info(result).with_missing_from(table_spec)
+    result.partitionInterval = copy.deepcopy(resolved_spec.interval)
+    result.partitionColumn = copy.deepcopy(resolved_spec.column)
+    result.partitionFormat = copy.deepcopy(resolved_spec.format)
+    result.partitionOffset = copy.deepcopy(resolved_spec.offset)
+    return result
 
 
 def output_table_name(obj, full_name: bool):

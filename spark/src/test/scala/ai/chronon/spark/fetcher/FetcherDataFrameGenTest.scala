@@ -92,7 +92,7 @@ class FetcherDataFrameGenTest extends SparkTestBase {
     val paymentsTable = s"$namespace.payments_table"
     val tsColString = "ts_string"
     shiftTimestamps(DataFrameGen.events(spark, paymentCols, rowCount, 60))
-      .withTimeBasedColumn(tsColString, format = "yyyy-MM-dd HH:mm:ss")
+      .withTimeFormattedColumn(tsColString, Constants.TimeColumn, "yyyy-MM-dd HH:mm:ss")
       .save(paymentsTable)
 
     val userPaymentsGroupBy = Builders.GroupBy(

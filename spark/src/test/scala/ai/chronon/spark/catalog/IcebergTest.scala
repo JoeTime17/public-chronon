@@ -30,42 +30,6 @@ class IcebergTest extends SparkTestBase with Matchers {
     Iceberg.supportSubPartitionsFilter shouldBe false
   }
 
-  "qualifyWithCatalog" should "qualify a single-part name with catalog and current namespace" in {
-    val result = Iceberg.qualifyWithCatalog("my_table")
-    result shouldBe "`spark_catalog`.`default`.`my_table`"
-  }
-
-  it should "qualify a two-part name with the default catalog" in {
-    val result = Iceberg.qualifyWithCatalog("my_ns.my_table")
-    result shouldBe "`spark_catalog`.`my_ns`.`my_table`"
-  }
-
-  it should "re-quote a fully qualified three-part name" in {
-    val result = Iceberg.qualifyWithCatalog("spark_catalog.my_ns.my_table")
-    result shouldBe "`spark_catalog`.`my_ns`.`my_table`"
-  }
-
-  it should "properly quote identifiers with special characters" in {
-    val result = Iceberg.qualifyWithCatalog("`my-ns`.`my-table`")
-    result shouldBe "`spark_catalog`.`my-ns`.`my-table`"
-  }
-
-  it should "properly quote SQL reserved words" in {
-    val result = Iceberg.qualifyWithCatalog("`select`.`table`")
-    result shouldBe "`spark_catalog`.`select`.`table`"
-  }
-
-  it should "properly quote a three-part name with special characters" in {
-    val result = Iceberg.qualifyWithCatalog("`my-catalog`.`my-ns`.`my-table`")
-    result shouldBe "`my-catalog`.`my-ns`.`my-table`"
-  }
-
-  it should "handle identifiers containing backticks" in {
-    // Spark parses ``a`b`` as the identifier a`b
-    val result = Iceberg.qualifyWithCatalog("`a``b`.`c``d`")
-    result shouldBe "`spark_catalog`.`a``b`.`c``d`"
-  }
-
   "Iceberg.partitions" should "return partition values for an Iceberg table" in {
     val tableName = "default.iceberg_partitions_test"
 
@@ -90,6 +54,9 @@ class IcebergTest extends SparkTestBase with Matchers {
       Map("ds" -> "2024-01-01"),
       Map("ds" -> "2024-01-02")
     )
+
+    Iceberg.partitions("`default`.`iceberg_partitions_test`", "") should contain theSameElementsAs parts
+    Iceberg.partitions("`spark_catalog`.`default`.`iceberg_partitions_test`", "") should contain theSameElementsAs parts
   }
 
   "Iceberg.primaryPartitions" should "return primary partition values" in {
@@ -119,6 +86,28 @@ class IcebergTest extends SparkTestBase with Matchers {
     a[NotImplementedError] should be thrownBy {
       Iceberg.primaryPartitions("any_table", "ds", "", subPartitionsFilter = Map("hr" -> "12"))
     }
+  }
+
+  it should "cast primary partition values before filtering null hour partitions" in {
+    val tableName = "default.iceberg_date_with_hr_partition_test"
+    spark.sql(s"DROP TABLE IF EXISTS $tableName")
+
+    spark.sql(s"""
+      CREATE TABLE $tableName (
+        id INT,
+        ds DATE,
+        hr STRING
+      ) USING iceberg
+      PARTITIONED BY (ds, hr)
+    """)
+
+    spark.sql(s"""
+      INSERT INTO $tableName VALUES
+      (1, DATE '2024-03-01', NULL),
+      (2, DATE '2024-03-02', '12')
+    """)
+
+    Iceberg.primaryPartitions(tableName, "ds", "") shouldBe List("2024-03-01")
   }
 
   it should "work with a single-part table name" in {
@@ -163,7 +152,7 @@ class IcebergTest extends SparkTestBase with Matchers {
     Iceberg.statsDateRange(tableName, "created_at", PartitionSpec.daily) shouldBe
       Some(StatsDateRange(start = "2024-04-01", end = "2024-04-03"))
     Iceberg.virtualPartitions(tableName, "created_at", PartitionSpec.daily) shouldBe
-      List("2024-04-01", "2024-04-02", "2024-04-03")
+      List("2024-04-01", "2024-04-02")
     Iceberg.firstAvailablePartition(tableName, "created_at", PartitionSpec.daily) shouldBe Some("2024-04-01")
     Iceberg.lastAvailablePartition(tableName, "created_at", PartitionSpec.daily) shouldBe Some("2024-04-02")
   }
@@ -231,7 +220,7 @@ class IcebergTest extends SparkTestBase with Matchers {
 
     Iceberg.statsDateRange(tableName, "created_at", PartitionSpec.daily) shouldBe None
     Iceberg.virtualPartitions(tableName, "created_at", PartitionSpec.daily) shouldBe
-      List("2024-05-01", "2024-05-02", "2024-05-03")
+      List("2024-05-01", "2024-05-02")
     Iceberg.firstAvailablePartition(tableName, "created_at", PartitionSpec.daily) shouldBe Some("2024-05-01")
     Iceberg.lastAvailablePartition(tableName, "created_at", PartitionSpec.daily) shouldBe Some("2024-05-02")
   }

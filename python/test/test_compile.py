@@ -648,6 +648,219 @@ def test_compile_never_leaves_namespace_placeholder_in_thriftjson(tmp_path, monk
     _assert_no_namespace_placeholder_in_compiled(tmp_path / "compiled")
 
 
+def test_compile_rejects_lost_table_reference_grid_metadata(tmp_path, monkeypatch, capsys):
+    _scaffold_repo(tmp_path)
+    _write(
+        tmp_path / "staging_queries" / "sample_team" / "producer.py",
+        dedent(
+            """
+            from ai.chronon.types import StagingQuery
+
+            hourly = StagingQuery(
+                query="SELECT 1 as user_id, 1 as value, 0L as ts",
+                offline_schedule="0 */3 * * *",
+                partition_interval="3h",
+                version=1,
+            )
+            """
+        ).strip(),
+    )
+    _write(
+        tmp_path / "group_bys" / "sample_team" / "consumer.py",
+        dedent(
+            """
+            from staging_queries.sample_team.producer import hourly
+            from ai.chronon.types import Aggregation, EventSource, GroupBy, Operation, Query, TimeUnit, Window
+
+            v1 = GroupBy(
+                sources=[
+                    EventSource(
+                        table=str(hourly.table),
+                        query=Query(
+                            selects={"user_id": "user_id", "value": "value"},
+                            time_column="ts",
+                        ),
+                    )
+                ],
+                keys=["user_id"],
+                aggregations=[
+                    Aggregation(
+                        input_column="value",
+                        operation=Operation.SUM,
+                        windows=[Window(1, TimeUnit.DAYS)],
+                    )
+                ],
+                version=1,
+            )
+            """
+        ).strip(),
+    )
+
+    _, has_errors, _ = _run_compile(tmp_path, monkeypatch, ignore_python_errors=True)
+
+    assert has_errors
+    out = capsys.readouterr().out
+    assert "did not receive partition_interval metadata" in out
+    assert "producer's .table" in out
+
+
+def _write_hourly_group_by_producer(tmp_path):
+    _write(
+        tmp_path / "group_bys" / "sample_team" / "producer.py",
+        dedent(
+            """
+            from ai.chronon.types import Aggregation, EventSource, GroupBy, Operation, Query, TimeUnit, Window
+
+            hourly = GroupBy(
+                sources=[
+                    EventSource(
+                        table="external.hourly_events",
+                        query=Query(
+                            selects={"user_id": "user_id", "value": "value"},
+                            time_column="ts",
+                            partition_column="ds",
+                            partition_interval="1h",
+                        ),
+                    )
+                ],
+                keys=["user_id"],
+                aggregations=[
+                    Aggregation(
+                        input_column="value",
+                        operation=Operation.SUM,
+                        windows=[Window(1, TimeUnit.DAYS)],
+                    )
+                ],
+                offline_schedule="0 * * * *",
+                partition_interval="1h",
+                version=1,
+            )
+            """
+        ).strip(),
+    )
+
+
+def test_compile_rejects_lost_table_reference_grid_metadata_in_join_part_group_by(
+    tmp_path, monkeypatch, capsys
+):
+    _scaffold_repo(tmp_path)
+    _write_hourly_group_by_producer(tmp_path)
+    _write(
+        tmp_path / "joins" / "sample_team" / "consumer.py",
+        dedent(
+            """
+            from group_bys.sample_team.producer import hourly
+            from ai.chronon.types import Aggregation, EventSource, GroupBy, Join, JoinPart, Operation, Query, TimeUnit, Window, selects
+
+            def nested_group_by():
+                nested = GroupBy(
+                    sources=[
+                        EventSource(
+                            table=str(hourly.table),
+                            query=Query(
+                                selects={"user_id": "user_id", "value": "value"},
+                                time_column="ts",
+                            ),
+                        )
+                    ],
+                    keys=["user_id"],
+                    aggregations=[
+                        Aggregation(
+                            input_column="value",
+                            operation=Operation.SUM,
+                            windows=[Window(1, TimeUnit.DAYS)],
+                        )
+                    ],
+                    version=1,
+                )
+                nested.metaData.name = "sample_team.nested"
+                return nested
+
+            v1 = Join(
+                left=EventSource(
+                    table="external.left_events",
+                    query=Query(
+                        selects=selects(user_id="user_id"),
+                        time_column="ts",
+                        partition_column="ds",
+                        partition_interval="1h",
+                    ),
+                ),
+                right_parts=[JoinPart(group_by=nested_group_by())],
+                row_ids=["user_id"],
+                offline_schedule="0 * * * *",
+                partition_interval="1h",
+                version=1,
+            )
+            """
+        ).strip(),
+    )
+
+    _, has_errors, _ = _run_compile(tmp_path, monkeypatch, ignore_python_errors=True)
+
+    assert has_errors
+    out = capsys.readouterr().out
+    assert "non-daily grid" in out
+    assert "partition_interval metadata" in out
+    assert "join part sample_team.nested source table" in out
+
+
+def test_compile_rejects_lost_table_reference_grid_metadata_in_nested_join_source(
+    tmp_path, monkeypatch, capsys
+):
+    _scaffold_repo(tmp_path)
+    _write_hourly_group_by_producer(tmp_path)
+    _write(
+        tmp_path / "joins" / "sample_team" / "consumer.py",
+        dedent(
+            """
+            from group_bys.sample_team.producer import hourly
+            from ai.chronon.types import EventSource, Join, JoinSource, Query, selects
+
+            def nested_join():
+                nested = Join(
+                    left=EventSource(
+                        table=str(hourly.table),
+                        query=Query(
+                            selects=selects(user_id="user_id"),
+                            time_column="ts",
+                        ),
+                    ),
+                    right_parts=[],
+                    version=1,
+                )
+                nested.metaData.name = "sample_team.nested"
+                return nested
+
+            v1 = Join(
+                left=JoinSource(
+                    join=nested_join(),
+                    query=Query(
+                        selects=selects(user_id="user_id"),
+                        time_column="ts",
+                        partition_column="ds",
+                        partition_interval="1h",
+                    ),
+                ),
+                right_parts=[],
+                row_ids=["user_id"],
+                offline_schedule="0 * * * *",
+                partition_interval="1h",
+                version=1,
+            )
+            """
+        ).strip(),
+    )
+
+    _, has_errors, _ = _run_compile(tmp_path, monkeypatch, ignore_python_errors=True)
+
+    assert has_errors
+    out = capsys.readouterr().out
+    assert "non-daily grid" in out
+    assert "partition_interval metadata" in out
+    assert "joinSource left source table" in out
+
+
 def test_compile_preserves_nested_left_join_source_name(tmp_path, monkeypatch):
     """A JoinSource used as Join.left should carry the nested join's compiled
     metadata name into the compiled thriftjson so downstream planning resolves

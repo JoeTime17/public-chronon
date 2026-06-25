@@ -3,6 +3,7 @@ Wrappers to directly create Source objects.
 """
 
 import gen_thrift.api.ttypes as ttypes
+from ai.chronon import utils
 
 
 def EventSource(
@@ -29,7 +30,12 @@ def EventSource(
 
     """
     return ttypes.Source(
-        events=ttypes.EventSource(table=table, topic=topic, query=query, isCumulative=is_cumulative)
+        events=ttypes.EventSource(
+            table=str(table),
+            topic=topic,
+            query=utils.propagate_table_reference_grid(query, table),
+            isCumulative=is_cumulative,
+        )
     )
 
 
@@ -61,10 +67,10 @@ def EntitySource(
     """
     return ttypes.Source(
         entities=ttypes.EntitySource(
-            snapshotTable=snapshot_table,
-            mutationTable=mutation_table,
+            snapshotTable=str(snapshot_table),
+            mutationTable=str(mutation_table) if mutation_table is not None else None,
             mutationTopic=mutation_topic,
-            query=query,
+            query=utils.propagate_table_reference_grid(query, snapshot_table),
         )
     )
 

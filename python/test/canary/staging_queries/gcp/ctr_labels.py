@@ -8,12 +8,12 @@ v1 = StagingQuery(
 SELECT 
     *,
     case when rand() < 0.5 then 0 else 1 end as label
-FROM {demo.derivations_v1.table}__derived
+FROM {demo.derivations_v1.derived_table}
 WHERE ds BETWEEN {{{{ start_date }}}} AND {{{{ end_date }}}}
 """,
     output_namespace="data",
     dependencies=[
-        TableDependency(table=f"{demo.derivations_v1.table}__derived", partition_column="ds", start_offset=0, end_offset=0),
+        TableDependency(table=demo.derivations_v1.derived_table, partition_column="ds", start_offset=0, end_offset=0),
     ],
     version=0,
 )

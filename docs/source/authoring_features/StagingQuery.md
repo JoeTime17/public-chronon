@@ -155,3 +155,4 @@ Key points:
 * The query should produce a `ds` column (e.g. via `DATE(event_ts) as ds`) so the output table is partitioned by date as usual.
 * Use `{{ end_date(offset=1) }}` for exclusive upper bounds on timestamp comparisons, since `{{ end_date }}` resolves to the last date in the range, not the day after.
 * The `time_partitioned=True` flag on the `TableDependency` tells the sensor to verify data coverage using `MAX(event_ts)` rather than checking for Hive partitions. Under the hood, Chronon computes `SELECT DATE(MAX(event_ts))` and compares it against the required date range.
+* For sub-daily StagingQueries, `time_partitioned=True` dependencies can omit `partition_interval`/`partition_offset`; Chronon slices them on the StagingQuery output grid. Physical Hive-style dependencies still need an explicit grid unless they come from another Chronon config's `.table`/`.derived_table` reference.

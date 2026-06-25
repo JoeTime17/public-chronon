@@ -1,6 +1,7 @@
 package ai.chronon.api.planner
 
 import ai.chronon.api.thrift.TBase
+import ai.chronon.api.Extensions._
 import ai.chronon.api.{MetaData, PartitionSpec, ThriftJsonCodec}
 import ai.chronon.planner.{ConfPlan, Node, NodeContent}
 
@@ -18,7 +19,8 @@ abstract class ConfPlanner[T](conf: T)(implicit outputPartitionSpec: PartitionSp
   def toNode[T <: TBase[_, _]: Manifest](metaData: MetaData,
                                          contentSetter: NodeContent => Unit,
                                          hashableNode: T): Node = {
-    val hash = ThriftJsonCodec.hexDigest(hashableNode)
+    val baseHash = ThriftJsonCodec.hexDigest(hashableNode)
+    val hash = Option(metaData).map(_.mixGridToken(baseHash)).getOrElse(baseHash)
 
     val content = new NodeContent()
     contentSetter(content)

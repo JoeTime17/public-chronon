@@ -2,6 +2,7 @@ package ai.chronon.api.test.planner
 
 import ai.chronon.api.planner.ExternalSourceSensorUtil
 import ai.chronon.api._
+import ai.chronon.api.Extensions.WindowUtils
 import ai.chronon.planner.ExternalSourceSensorNode
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -132,6 +133,42 @@ class ExternalSourceSensorUtilTest extends AnyFlatSpec with Matchers {
     val sensor = sensorNodes.head
     sensor.metaData.executionInfo.outputTableInfo.partitionColumn should equal("dt")
     sensor.metaData.executionInfo.outputTableInfo.partitionFormat should equal("yyyyMMdd")
+  }
+
+  it should "overwrite stale downstream partition fields when sensor output table is overridden" in {
+    val dependencySpec = PartitionSpec("dt", "yyyyMMdd", 24 * 60 * 60 * 1000)
+    val downstreamSpec = PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 60 * 60 * 1000)
+    val tableInfo = new TableInfo()
+      .setTable("data.events")
+      .setPartitionColumn(dependencySpec.column)
+      .setPartitionFormat(dependencySpec.format)
+      .setPartitionInterval(WindowUtils.fromMillis(dependencySpec.spanMillis))
+
+    val tableDep = new TableDependency().setTableInfo(tableInfo)
+
+    val downstreamOutput = new TableInfo()
+      .setTable("data.downstream")
+      .setPartitionColumn(downstreamSpec.column)
+      .setPartitionFormat(downstreamSpec.format)
+      .setPartitionInterval(WindowUtils.fromMillis(downstreamSpec.spanMillis))
+
+    val executionInfo = new ExecutionInfo()
+      .setOutputTableInfo(downstreamOutput)
+      .setTableDependencies(List(tableDep).asJava)
+
+    val metaData = new MetaData()
+      .setName("test_entity")
+      .setTeam("test_team")
+      .setVersion("1")
+      .setExecutionInfo(executionInfo)
+
+    val sensor = ExternalSourceSensorUtil.sensorNodes(metaData)(PartitionSpec.daily).head
+    val sensorTableInfo = sensor.metaData.executionInfo.outputTableInfo
+
+    sensorTableInfo.table should equal("data.events")
+    sensorTableInfo.partitionColumn should equal(dependencySpec.column)
+    sensorTableInfo.partitionFormat should equal(dependencySpec.format)
+    sensorTableInfo.partitionInterval should equal(WindowUtils.fromMillis(dependencySpec.spanMillis))
   }
 
   "sensorNodes" should "create unique sensor names for complex table names" in {

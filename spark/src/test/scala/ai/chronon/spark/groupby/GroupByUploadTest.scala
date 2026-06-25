@@ -634,25 +634,26 @@ class GroupByUploadTest extends SparkTestBase with Matchers {
     tableUtils.sql(s"USE $namespace")
 
     val eventsTable = "test_gb_with_derivations"
+    val compactPartitionFormat = "yyyyMMdd"
 
     // Create test data with the columns needed for the derivations GroupBy
     import org.apache.spark.sql.functions._
-      import spark.implicits._
+    import spark.implicits._
 
     val testData = Seq(
       ("test_user_123", 100, 42.5, System.currentTimeMillis() - 86400000L), // 1 day ago
       ("test_user_123", 200, 33.3, System.currentTimeMillis() - 172800000L), // 2 days ago
       ("test_user_456", 150, 25.0, System.currentTimeMillis() - 86400000L)
     ).toDF("id", "int_val", "double_val", "ts")
-      .withColumn(tableUtils.partitionColumn, from_unixtime(col("ts") / 1000, tableUtils.partitionFormat))
+      .withColumn(tableUtils.partitionColumn, from_unixtime(col("ts") / 1000, compactPartitionFormat))
 
     testData.save(s"$namespace.$eventsTable")
 
-    val groupByConf = makeDerivationsGroupBy(namespace, eventsTable)
+    val groupByConf = makeDerivationsGroupBy(namespace, eventsTable, compactPartitionFormat)
     GroupByUpload.run(groupByConf, endDs = yesterday)
   }
 
-  private def makeDerivationsGroupBy(namespace: String, eventsTable: String): GroupBy =
+  private def makeDerivationsGroupBy(namespace: String, eventsTable: String, partitionFormat: String): GroupBy =
     Builders.GroupBy(
       sources = Seq(
         Builders.Source.events(
@@ -669,7 +670,7 @@ class GroupByUploadTest extends SparkTestBase with Matchers {
             wheres = Seq.empty,
             timeColumn = "ts",
             startPartition = "20231106"
-          )
+          ).setPartitionFormat(partitionFormat)
         )
       ),
       keyColumns = Seq("id"),

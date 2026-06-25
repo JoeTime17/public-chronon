@@ -1,12 +1,12 @@
 package ai.chronon.spark.catalog
 
 import ai.chronon.api.PartitionSpec
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException
 import org.apache.spark.sql.catalyst.util.QuotingUtils
 import org.apache.spark.sql.connector.catalog.Identifier
-import org.apache.spark.sql.functions.{col, date_format, date_sub, min, max}
-import org.apache.spark.sql.types.{DateType, StringType, StructType}
+import org.apache.spark.sql.functions.{col, lit, min, max}
+import org.apache.spark.sql.types.{DataType, DateType, LongType, NumericType, StringType, StructType, TimestampType}
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.util.{Failure, Success, Try}
@@ -18,6 +18,17 @@ trait Format {
   def tableProperties: Map[String, String] = Map.empty[String, String]
 
   def tableTypeString: String = ""
+
+  // Raw epoch millis of a (possibly aggregated) time column; ds arithmetic happens Scala-side
+  // via PartitionSpec so grid flooring (partitionInterval + partitionOffset) has exactly one
+  // implementation. Chronon's
+  // convention: numeric time columns hold epoch MILLIS already - casting a numeric through
+  // TimestampType would interpret it as seconds and scramble units by 1000x.
+  protected def epochMillisCol(c: Column, dt: DataType): Column =
+    dt match {
+      case _: NumericType => c.cast(LongType)
+      case _              => c.cast(TimestampType).cast(LongType) * lit(1000L)
+    }
 
   def createTable(tableName: String,
                   schema: StructType,
@@ -118,8 +129,41 @@ trait Format {
   def partitions(tableName: String, partitionFilters: String)(implicit
       sparkSession: SparkSession): List[Map[String, String]]
 
+  /** The table's partition columns, coarsest-first as declared in the table definition. */
+  def partitionColumnNames(tableName: String)(implicit sparkSession: SparkSession): Seq[String] =
+    Try(sparkSession.catalog.listColumns(tableName).collect().filter(_.isPartition).map(_.name).toSeq)
+      .getOrElse(Seq.empty)
+
   // Does this format support sub partitions filters
   def supportSubPartitionsFilter: Boolean
+
+  /** Logical partitions for tables with no catalog partitions (e.g. clustered tables over a
+    * string ds column): the distinct values of the partition column. Compute planning
+    * (unfilledRanges, step runners) needs the SET of partitions, not just boundaries - an
+    * empty catalog listing would otherwise read as "everything missing" and force full
+    * recomputes of join-part/output tables that are fully populated. This is a single
+    * distinct aggregation and only runs on the empty-catalog path; string columns only,
+    * since timestamp-backed tables go through the timePartitioned/virtualPartitions path.
+    */
+  def scanDistinctPartitions(tableName: String, partitionColumn: String, partitionFilters: String)(implicit
+      sparkSession: SparkSession): List[String] = {
+    import sparkSession.implicits._
+    Try {
+      val df = sparkSession.read.table(tableName)
+      df.schema(partitionColumn).dataType match {
+        case StringType =>
+          val filtered = if (partitionFilters.isEmpty) df else df.where(partitionFilters)
+          filtered.select(col(partitionColumn)).distinct().as[String].collect().toList
+        case _ => List.empty
+      }
+    } match {
+      case Success(result) => result
+      case Failure(e) =>
+        logger.warn(
+          s"Failed to scan distinct partition values for $tableName.$partitionColumn: ${Option(e.getMessage).getOrElse("(no message)")}")
+        List.empty
+    }
+  }
 
   protected def metadataPartitions(tableName: String, partitionColumn: String)(implicit
       sparkSession: SparkSession): Option[List[String]] =
@@ -153,13 +197,21 @@ trait Format {
             .collect()
             .headOption
             .flatMap(v => Option(v))
-        case _ =>
-          df.select(date_format(date_sub(max(col(partitionColumn)).cast(DateType), 1), partitionSpec.format)
-            .as("last_partition"))
-            .as[String]
+        case DateType =>
+          df.select(epochMillisCol(max(col(partitionColumn)), DateType).as("max_millis"))
             .collect()
             .headOption
-            .flatMap(v => Option(v))
+            .filterNot(_.isNullAt(0))
+            .map(row => partitionSpec.at(row.getLong(0)))
+        case dt =>
+          // last COMPLETE partition: the one before the partition containing the max timestamp -
+          // identical to DATE(MAX) - 1 day for daily, but grid-correct (partitionInterval +
+          // partitionOffset) for sub-daily and offset specs
+          df.select(epochMillisCol(max(col(partitionColumn)), dt).as("max_millis"))
+            .collect()
+            .headOption
+            .filterNot(_.isNullAt(0))
+            .map(row => partitionSpec.before(partitionSpec.at(row.getLong(0))))
       }
     } match {
       case Success(result) => result
@@ -186,12 +238,12 @@ trait Format {
             .collect()
             .headOption
             .flatMap(v => Option(v))
-        case _ =>
-          df.select(date_format(min(col(partitionColumn)).cast(DateType), partitionSpec.format).as("first_partition"))
-            .as[String]
+        case dt =>
+          df.select(epochMillisCol(min(col(partitionColumn)), dt).as("min_millis"))
             .collect()
             .headOption
-            .flatMap(v => Option(v))
+            .filterNot(_.isNullAt(0))
+            .map(row => partitionSpec.at(row.getLong(0)))
       }
     } match {
       case Success(result) => result
@@ -205,17 +257,16 @@ trait Format {
     }
   }
 
-  // Unified last available partition: handles both string partition columns and timestamp/date columns.
-  // For string columns that are catalog partitions (Hive/Iceberg/Delta), uses metadata-only lookup.
-  // For non-string columns, falls back to the historical scan behavior: DATE(MAX(col)) - 1 day.
+  // Unified last available partition: metadata-only lookup for catalog-partitioned string columns,
+  // value scan (last complete partition interval) for timestamp/date/clustered columns.
+  // Formats with richer metadata (Iceberg manifests, Delta log stats) override to insert a
+  // stats tier between the two.
   def lastAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(implicit
       sparkSession: SparkSession): Option[String] =
     metadataLastAvailablePartition(tableName, partitionColumn)
       .orElse(scanLastAvailablePartition(tableName, partitionColumn, partitionSpec))
 
   // Unified first available partition: handles both string partition columns and timestamp/date columns.
-  // For string columns that are catalog partitions, uses metadata-only lookup.
-  // For timestamp/date columns, falls back to a scan.
   def firstAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(implicit
       sparkSession: SparkSession): Option[String] =
     metadataFirstAvailablePartition(tableName, partitionColumn)
@@ -224,14 +275,14 @@ trait Format {
   @deprecated("Use lastAvailablePartition instead", "0.1.0")
   def maxTimestampDate(tableName: String, timestampColumn: String, partitionSpec: PartitionSpec)(implicit
       sparkSession: SparkSession): Option[String] = {
-    import sparkSession.implicits._
     Try {
       val df = sparkSession.read.table(tableName)
-      df.select(date_format(max(col(timestampColumn)).cast(DateType), partitionSpec.format).as("max_date"))
-        .as[String]
+      val colType = df.schema(timestampColumn).dataType
+      df.select(epochMillisCol(max(col(timestampColumn)), colType).as("max_millis"))
         .collect()
         .headOption
-        .flatMap(v => Option(v))
+        .filterNot(_.isNullAt(0))
+        .map(row => partitionSpec.at(row.getLong(0)))
     } match {
       case Success(result) => result
       case Failure(e) =>
@@ -246,19 +297,26 @@ trait Format {
     import sparkSession.implicits._
     Try {
       val df = sparkSession.read.table(tableName)
+      val colType = df.schema(timestampColumn).dataType
       val result = df
         .select(
-          date_format(min(col(timestampColumn)).cast(DateType), partitionSpec.format).as("min_date"),
-          date_format(max(col(timestampColumn)).cast(DateType), partitionSpec.format).as("max_date")
+          epochMillisCol(min(col(timestampColumn)), colType).as("min_millis"),
+          epochMillisCol(max(col(timestampColumn)), colType).as("max_millis")
         )
-        .as[(String, String)]
+        .as[(Option[Long], Option[Long])]
         .collect()
         .headOption
 
       result
-        .flatMap { case (minDate, maxDate) =>
-          if (minDate == null || maxDate == null) None
-          else Some(partitionSpec.expandRange(minDate, maxDate))
+        .flatMap {
+          // the partition containing max is still in flight: enumerate complete partitions only
+          case (Some(minMillis), Some(maxMillis)) =>
+            val maxPartition = colType match {
+              case DateType => partitionSpec.at(maxMillis)
+              case _        => partitionSpec.before(partitionSpec.at(maxMillis))
+            }
+            Some(partitionSpec.expandRange(partitionSpec.at(minMillis), maxPartition))
+          case _ => None
         }
         .getOrElse(List.empty)
     } match {
@@ -282,11 +340,34 @@ private[catalog] case class StatsDateRange(start: String, end: String) {
 
 case class ResolvedTableName(catalog: String, namespace: String, table: String) {
   def toIdentifier: Identifier = Identifier.of(Array(namespace), table)
+
+  private[catalog] def quoted: String =
+    s"${QuotingUtils.quoteIdentifier(catalog)}.${QuotingUtils.quoteIdentifier(namespace)}.${QuotingUtils.quoteIdentifier(table)}"
 }
 
 object Format {
 
   private val stringOrdering: Ordering[String] = Ordering.String
+
+  /** Composition-mismatch canary: a table whose listing is nonempty but parses to ZERO ds
+    * values under the reader's spec reads as permanently empty downstream - sensors never fire,
+    * silently. One value parsing is enough to clear the canary; per-value mismatches surface
+    * later as loud ParseExceptions in range arithmetic. Sampled so huge listings stay cheap.
+    */
+  def zeroParsedPartitionsWarning(tableName: String, partitions: Seq[String], spec: PartitionSpec): Option[String] = {
+    if (partitions.isEmpty) None
+    else {
+      val sample = partitions.take(100)
+      if (sample.exists(value => Try(spec.epochMillis(value)).isSuccess)) None
+      else
+        Some(
+          s"Table $tableName listed ${partitions.size} partitions but none of the first ${sample.size} parse under " +
+            s"partition format '${spec.format}' (sample value: '${sample.head}'). Downstream readiness will treat " +
+            "this table as permanently empty and sensors will never fire. Common causes: a compact (dash-less) " +
+            "or stale partition format on the dependency's table info."
+        )
+    }
+  }
 
   def sanitizePartitionValues(partitions: Iterable[String]): List[String] = partitions.iterator
     .flatMap(Option(_))

@@ -82,7 +82,7 @@ object ParametricMacro {
     if (args.contains("offset")) {
       val offsetTry = Try { args("offset").toInt }
       require(offsetTry.isSuccess, "offset on start_date is not an integer")
-      result = partitionSpec.shift(result, offsetTry.get)
+      result = partitionSpec.shiftPartitions(result, offsetTry.get)
     }
 
     if (args.contains("lower_bound")) {

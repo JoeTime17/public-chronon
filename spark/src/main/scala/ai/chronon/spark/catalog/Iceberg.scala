@@ -7,7 +7,6 @@ import org.apache.iceberg.spark.source.SparkTable
 import org.apache.iceberg.types.Type
 import org.apache.spark.sql.connector.catalog.TableCatalog
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.util.QuotingUtils
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{StructType, TimestampType}
 
@@ -31,6 +30,9 @@ case object Iceberg extends Format {
       "format-version" -> "2"
     )
   }
+
+  def qualifyWithCatalog(tableName: String)(implicit sparkSession: SparkSession): String =
+    Format.resolveTableName(tableName).quoted
 
   override def primaryPartitions(tableName: String,
                                  partitionColumn: String,
@@ -56,7 +58,7 @@ case object Iceberg extends Format {
 
   override def partitions(tableName: String, partitionFilters: String)(implicit
       sparkSession: SparkSession): List[Map[String, String]] = {
-    val partitionsDf = sparkSession.table(s"${qualifyWithCatalog(tableName)}.partitions")
+    val partitionsDf = sparkSession.table(s"${Format.resolveTableName(tableName).quoted}.partitions")
 
     val index = partitionsDf.schema.fieldIndex("partition")
     val partitionColumnNames = partitionsDf.schema(index).dataType.asInstanceOf[StructType].fieldNames
@@ -74,22 +76,21 @@ case object Iceberg extends Format {
       .distinct
   }
 
-  /** Returns the partition column names from the Iceberg partition spec. Empty if unpartitioned.
-    * todo(tchow): Find a more permanent home for this as we always write Iceberg and this doesn't make much sense
-    * for other formats.
+  /** Partition column names from the Iceberg partition spec (via the .partitions metadata
+    * table, which the spark catalog's listColumns can't see). Empty if unpartitioned.
     */
-  def partitionColumnNames(tableName: String)(implicit sparkSession: SparkSession): Array[String] = {
-    val partitionsDf = sparkSession.table(s"${qualifyWithCatalog(tableName)}.partitions")
-    val index = partitionsDf.schema.fieldIndex("partition")
-    partitionsDf.schema(index).dataType.asInstanceOf[StructType].fieldNames
-  }
+  override def partitionColumnNames(tableName: String)(implicit sparkSession: SparkSession): Seq[String] =
+    Try {
+      val partitionsDf = sparkSession.table(s"${Format.resolveTableName(tableName).quoted}.partitions")
+      val index = partitionsDf.schema.fieldIndex("partition")
+      partitionsDf.schema(index).dataType.asInstanceOf[StructType].fieldNames.toSeq
+    }.getOrElse(Seq.empty)
 
   override def virtualPartitions(tableName: String, timestampColumn: String, partitionSpec: PartitionSpec)(implicit
       sparkSession: SparkSession): List[String] =
     metadataPartitions(tableName, timestampColumn)
       .filter(_.nonEmpty)
-      .orElse(statsDateRange(tableName, timestampColumn, partitionSpec)
-        .map(_.virtualPartitions(partitionSpec)))
+      .orElse(statsVirtualPartitions(tableName, timestampColumn, partitionSpec))
       .getOrElse(super.virtualPartitions(tableName, timestampColumn, partitionSpec))
 
   override def firstAvailablePartition(tableName: String, partitionColumn: String, partitionSpec: PartitionSpec)(
@@ -110,6 +111,16 @@ case object Iceberg extends Format {
       sparkSession.read.table(tableName).schema(columnName).dataType match {
         case TimestampType => partitionSpec.before(range.lastAvailablePartition)
         case _             => range.lastAvailablePartition
+      }
+    }
+
+  private def statsVirtualPartitions(tableName: String, columnName: String, partitionSpec: PartitionSpec)(implicit
+      sparkSession: SparkSession): Option[List[String]] =
+    statsDateRange(tableName, columnName, partitionSpec).map { range =>
+      sparkSession.read.table(tableName).schema(columnName).dataType match {
+        case TimestampType =>
+          partitionSpec.expandRange(range.firstAvailablePartition, partitionSpec.before(range.lastAvailablePartition))
+        case _ => range.virtualPartitions(partitionSpec)
       }
     }
 
@@ -222,14 +233,14 @@ case object Iceberg extends Format {
   private def getIcebergPartitions(tableName: String, partitionColumn: String)(implicit
       sparkSession: SparkSession): List[String] = {
 
-    val partitionsDf = sparkSession.table(s"${qualifyWithCatalog(tableName)}.partitions")
+    val partitionsDf = sparkSession.table(s"${Format.resolveTableName(tableName).quoted}.partitions")
 
     val index = partitionsDf.schema.fieldIndex("partition")
     if (partitionsDf.schema(index).dataType.asInstanceOf[StructType].fieldNames.contains("hr")) {
       // Hour filter is currently buggy in iceberg. https://github.com/apache/iceberg/issues/4718
       // so we collect and then filter.
       partitionsDf
-        .select(col(s"partition.$partitionColumn"), col("partition.hr"))
+        .select(col(s"partition.$partitionColumn").cast("string"), col("partition.hr"))
         .collect()
         .filter(_.get(1) == null)
         .flatMap(row => Option(row.getString(0)))
@@ -241,11 +252,6 @@ case object Iceberg extends Format {
         .flatMap(row => Option(row.getString(0)))
         .toList
     }
-  }
-
-  private[catalog] def qualifyWithCatalog(tableName: String)(implicit sparkSession: SparkSession): String = {
-    val resolved = Format.resolveTableName(tableName)
-    s"${QuotingUtils.quoteIdentifier(resolved.catalog)}.${QuotingUtils.quoteIdentifier(resolved.namespace)}.${QuotingUtils.quoteIdentifier(resolved.table)}"
   }
 
   override def supportSubPartitionsFilter: Boolean = false

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import ai.chronon.cli.compile.display.compiled_obj
 import ai.chronon.cli.compile.parse_configs as parser
 import ai.chronon.cli.logger as logger
+from ai.chronon import utils
 from ai.chronon.cli.compile import serializer
 from ai.chronon.cli.compile.compile_context import CompileContext, ConfigInfo
 from ai.chronon.cli.compile.display.compiled_obj import CompiledObj
@@ -14,7 +15,7 @@ from ai.chronon.cli.compile.parse_teams import merge_team_execution_info
 from ai.chronon.cli.formatter import Format, PromptException
 from ai.chronon.cli.theme import console
 from ai.chronon.types import MetaData
-from gen_thrift.api.ttypes import ConfType
+from gen_thrift.api.ttypes import ConfType, GroupBy, Join, ModelTransforms, StagingQuery
 
 logger = logger.get_logger()
 
@@ -82,6 +83,8 @@ class Compiler:
         for config_info in config_infos:
             if config_info.config_type is not None:
                 self.compile_context.compile_status.close_cls(config_info.cls.__name__)
+
+        self._validate_chronon_table_reference_grid_propagation(all_compiled_objects)
 
         # Validate changes once after all classes have been processed
         self.compile_context.validator.validate_changes(all_compiled_objects, validate_all)
@@ -155,6 +158,147 @@ class Compiler:
             if tracker.files_to_errors:
                 return True
         return False
+
+    def _validate_chronon_table_reference_grid_propagation(self, compiled_objects: List[CompiledObj]) -> None:
+        known_non_daily_tables = self._known_non_daily_chronon_tables(compiled_objects)
+        if not known_non_daily_tables:
+            return
+
+        for co in compiled_objects:
+            if not co.obj:
+                continue
+            errors = [
+                error
+                for table, grid_declared, field in self._table_uses(co.obj)
+                for error in [self._chronon_table_reference_error(table, grid_declared, field, known_non_daily_tables)]
+                if error is not None
+            ]
+            if not errors:
+                continue
+            error_co = CompiledObj(
+                name=co.name,
+                obj=None,
+                file=co.file,
+                errors=errors,
+                obj_type=co.obj_type,
+                tjson=co.tjson,
+            )
+            self.compile_context.compile_status.add_object_update_display(error_co, co.obj_type)
+
+    def _known_non_daily_chronon_tables(self, compiled_objects: List[CompiledObj]) -> Dict[str, Tuple[str, str]]:
+        result = {}
+        for co in compiled_objects:
+            obj = co.obj
+            if not obj or not isinstance(obj, (GroupBy, Join, ModelTransforms, StagingQuery)):
+                continue
+            if not utils._non_daily_output_grid(obj):
+                continue
+            table = utils.output_table_name(obj, full_name=True)
+            result[table] = (co.name, "table")
+            if isinstance(obj, Join) and obj.derivations:
+                result[f"{table}__derived"] = (co.name, "derived_table")
+        return result
+
+    def _table_uses(self, obj: Any) -> List[Tuple[str, bool, str]]:
+        uses = []
+        seen = set()
+
+        def field(prefix: str, suffix: str) -> str:
+            return f"{prefix} {suffix}".strip()
+
+        def add_source(source, field_prefix: str):
+            if source is None:
+                return
+            if source.events:
+                query = source.events.query
+                uses.append(
+                    (
+                        source.events.table,
+                        query is not None and query.partitionInterval is not None,
+                        field_prefix,
+                    )
+                )
+            elif source.entities:
+                query = source.entities.query
+                uses.append(
+                    (
+                        source.entities.snapshotTable,
+                        query is not None and query.partitionInterval is not None,
+                        field_prefix,
+                    )
+                )
+            elif source.joinSource:
+                add_join(source.joinSource.join, field(field_prefix, "joinSource"))
+
+        def add_group_by(group_by, field_prefix: str):
+            if group_by is None:
+                return
+            key = ("group_by", id(group_by))
+            if key in seen:
+                return
+            seen.add(key)
+            for source in group_by.sources or []:
+                add_source(source, field(field_prefix, "source table"))
+
+        def add_join(join, field_prefix: str):
+            if join is None:
+                return
+            key = ("join", id(join))
+            if key in seen:
+                return
+            seen.add(key)
+            add_source(join.left, field(field_prefix, "left source table"))
+            for part in join.joinParts or []:
+                group_by = part.groupBy
+                group_by_name = getattr(getattr(group_by, "metaData", None), "name", None)
+                part_prefix = f"{field_prefix} join part"
+                if group_by_name:
+                    part_prefix = f"{part_prefix} {group_by_name}"
+                add_group_by(group_by, part_prefix)
+            for bootstrap in join.bootstrapParts or []:
+                query = bootstrap.query
+                uses.append(
+                    (
+                        bootstrap.table,
+                        query is not None and query.partitionInterval is not None,
+                        field(field_prefix, "bootstrap table"),
+                    )
+                )
+
+        if isinstance(obj, (GroupBy, ModelTransforms)):
+            add_group_by(obj, "")
+        elif isinstance(obj, Join):
+            add_join(obj, "")
+        elif isinstance(obj, StagingQuery):
+            for dep in obj.tableDependencies or []:
+                table_info = dep.tableInfo
+                if table_info is not None:
+                    uses.append(
+                        (
+                            table_info.table,
+                            table_info.partitionInterval is not None,
+                            "table dependency",
+                        )
+                    )
+
+        return [(table, grid_declared, field) for table, grid_declared, field in uses if table]
+
+    def _chronon_table_reference_error(
+        self,
+        table: str,
+        grid_declared: bool,
+        field: str,
+        known_non_daily_tables: Dict[str, Tuple[str, str]],
+    ) -> Optional[ValueError]:
+        if grid_declared or table not in known_non_daily_tables:
+            return None
+
+        producer_name, accessor = known_non_daily_tables[table]
+        return ValueError(
+            f"{field} '{table}' is produced by Chronon config '{producer_name}' with a non-daily grid, "
+            f"but the consumer did not receive partition_interval metadata. Use the producer's .{accessor} "
+            "property directly, or explicitly set partition_interval/partition_offset on the consumer."
+        )
 
     def _compile_team_metadata(self):
         """

@@ -66,6 +66,28 @@ class ConfigChange:
     is_version_change: bool = False
 
 
+def _output_grid_token(obj) -> Optional[str]:
+    """The output partition grid is a data-layout property (changing it renames every ds in
+    the output table), so unlike the rest of metaData it participates in in-place change
+    detection --
+    via a conditional token so daily/unset grids contribute nothing and existing confs never
+    churn. The schedule (and hence the derived delay) stays excluded. Canonicalized to millis
+    so Window(1, DAYS) == Window(24, HOURS) == unset. Mirrors MetadataOps.outputGridToken in
+    scala Extensions."""
+    from ai.chronon.windows import DAY_MILLIS, window_millis
+
+    meta = getattr(obj, "metaData", None)
+    exec_info = getattr(meta, "executionInfo", None) if meta else None
+    info = getattr(exec_info, "outputTableInfo", None) if exec_info else None
+    if info is None or info.partitionInterval is None:
+        return None
+    interval_ms = window_millis(info.partitionInterval)
+    offset_ms = window_millis(info.partitionOffset) if info.partitionOffset else 0
+    if interval_ms == DAY_MILLIS and offset_ms == 0:
+        return None
+    return f"grid:interval_ms={interval_ms},offset_ms={offset_ms}"
+
+
 def _strip_fields_recursive(obj, fields_to_strip):
     """Recursively remove specified fields from all dicts in a JSON tree."""
     if isinstance(obj, dict):
@@ -269,6 +291,12 @@ class ConfValidator(object):
         old_json = json.loads(thrift_simple_json(old_obj))
         _strip_fields_recursive(new_json, skipped_fields)
         _strip_fields_recursive(old_json, skipped_fields)
+        # stripping metaData would hide a grid change; reinject the grid as a synthetic field
+        if "metaData" in skipped_fields:
+            for stripped_json, source_obj in ((new_json, obj), (old_json, old_obj)):
+                token = _output_grid_token(source_obj)
+                if token:
+                    stripped_json["__outputGrid"] = token
         return new_json != old_json
 
     def safe_to_overwrite(self, obj: object) -> bool:

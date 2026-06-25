@@ -1,7 +1,7 @@
 package ai.chronon.spark.batch
 
 import ai.chronon.api.DataModel.{ENTITIES, EVENTS}
-import ai.chronon.api.Extensions.{DateRangeOps, DerivationOps, GroupByOps, JoinPartOps, MetadataOps}
+import ai.chronon.api.Extensions.{DateRangeOps, DerivationOps, GroupByOps, JoinPartOps, MetadataOps, TableInfoOps}
 import ai.chronon.api.PartitionRange.toTimeRange
 import ai.chronon.api._
 import ai.chronon.online.metrics.Metrics
@@ -11,7 +11,8 @@ import ai.chronon.spark.catalog.TableUtils
 import ai.chronon.spark.join.UnionJoin
 import ai.chronon.spark.{GroupBy, JoinUtils}
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.functions.{col, date_format}
+import org.apache.spark.sql.functions.{col, date_format, explode, lit, udf, unix_timestamp}
+import org.apache.spark.sql.types.{LongType, StringType}
 import org.apache.spark.util.sketch.BloomFilter
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -37,6 +38,21 @@ class JoinPartJob(node: JoinPartNode,
   private val leftTable = node.leftSourceTable
   private val joinPart = node.joinPart
   private val dateRange = range.toPartitionRange
+
+  // Snapshot-accuracy parts compute at the RHS groupBy's declared grid (the join grid when
+  // nothing is declared). Physical part-table partitions still use tableUtils.partitionSpec.
+  private val partSnapshotSpec: PartitionSpec = {
+    val joinSpec = tableUtils.partitionSpec
+    val planned = Option(joinPart.groupBy.metaData)
+      .filter(md => Option(md.executionInfo).flatMap(ei => Option(ei.outputTableInfo)).exists(_.isSetPartitionInterval))
+      .map(_ => joinPart.groupBy.partitionSpec(joinSpec))
+
+    val resolved = planned.getOrElse(JoinUtils.partSnapshotSpec(joinPart))
+    if (resolved.hasSameGrid(joinSpec)) joinSpec else resolved.copy(column = joinSpec.column)
+  }
+  private lazy val snapshotTableUtils: TableUtils =
+    if (partSnapshotSpec == tableUtils.partitionSpec) tableUtils
+    else TableUtils(tableUtils.sparkSession, partSnapshotSpec)
   private val skewKeys: Option[Map[String, Seq[String]]] = Option(node.skewKeys).map { skewKeys =>
     skewKeys.asScala.map { case (k, v) => k -> v.asScala.toSeq }.toMap
   }
@@ -65,7 +81,7 @@ class JoinPartJob(node: JoinPartNode,
 
         val runSmallMode = JoinUtils.runSmallMode(tableUtils, cachedLeftDf)
 
-        val leftWithStats = cachedLeftDf.withStats
+        val leftWithStats = DfWithStats(cachedLeftDf)(partitionSpec)
 
         val joinLevelBloomMapOpt =
           JoinUtils.genBloomFilterIfNeeded(joinPart, node.leftDataModel, dateRange, None)
@@ -93,7 +109,11 @@ class JoinPartJob(node: JoinPartNode,
     // val partMetrics = Metrics.Context(metrics, joinPart) -- TODO is this metrics context sufficient, or should we pass thru for monolith join?
     val partMetrics = Metrics.Context(Metrics.Environment.JoinOffline, joinPart.groupBy)
 
-    val rightRange = JoinUtils.shiftDays(node.leftDataModel, joinPart, leftRange)
+    val crossGridSnapshot = node.leftDataModel == EVENTS &&
+      joinPart.groupBy.inferredAccuracy == Accuracy.SNAPSHOT &&
+      !partSnapshotSpec.hasSameGrid(tableUtils.partitionSpec)
+    val rightRange = JoinUtils.snapshotScanRange(node.leftDataModel, joinPart, leftRange, partSnapshotSpec)
+    val outputRange = if (crossGridSnapshot) leftRange else rightRange
 
     // Can kill the option after we deprecate monolith join job
     jobContext.leftDf.foreach { leftDf =>
@@ -106,7 +126,7 @@ class JoinPartJob(node: JoinPartNode,
 
         // Cache join part data into intermediate table
         if (filledDf.isDefined) {
-          logger.info(s"Writing to join part table: $partTable for partition range $rightRange")
+          logger.info(s"Writing to join part table: $partTable for partition range $outputRange")
           filledDf.get.save(partTable, jobContext.tableProps.toMap)
         } else {
           logger.info(s"Skipping $partTable because no data in computed joinPart.")
@@ -123,7 +143,7 @@ class JoinPartJob(node: JoinPartNode,
     }
 
     if (tableUtils.tableReachable(partTable)) {
-      Some(tableUtils.scanDf(query = null, partTable, range = Some(rightRange)))
+      Some(tableUtils.scanDf(query = null, partTable, range = Some(outputRange)))
     } else {
       // Happens when everything is handled by bootstrap
       None
@@ -152,10 +172,10 @@ class JoinPartJob(node: JoinPartNode,
 
     val rightSkewFilter = JoinUtils.partSkewFilter(joinPart, skewKeys)
 
-    def genGroupBy(partitionRange: PartitionRange) =
+    def genGroupBy(partitionRange: PartitionRange, effectiveTableUtils: TableUtils = tableUtils) =
       GroupBy.from(joinPart.groupBy,
                    partitionRange,
-                   tableUtils,
+                   effectiveTableUtils,
                    computeDependency = true,
                    rightBloomMap,
                    rightSkewFilter,
@@ -206,10 +226,17 @@ class JoinPartJob(node: JoinPartNode,
       skewFilteredLeft.select(columns: _*)
     }
 
-    lazy val shiftedPartitionRange = if (alignOutput) unfilledPartitionRange else unfilledPartitionRange.shift(-1)
+    // RHS-grid lookback: snapshot part partitions are named one RHS partitionInterval before
+    // their snapshot time. alignOutput only makes sense when the RHS grid matches the join grid.
+    lazy val shiftedPartitionRange =
+      if (alignOutput && partSnapshotSpec.hasSameGrid(tableUtils.partitionSpec)) unfilledPartitionRange
+      else JoinUtils.snapshotLookbackRange(unfilledPartitionRange, partSnapshotSpec)
 
+    // normalize non-string (date/timestamp-typed) partition columns into formatted ds values.
+    // String values pass through untouched: date_format's implicit string->timestamp cast
+    // nulls values Spark can't natively cast (e.g. dash-separated sub-daily formats).
     val renamedLeftDf = renamedLeftRawDf.select(renamedLeftRawDf.columns.map {
-      case c if c == tableUtils.partitionColumn =>
+      case c if c == tableUtils.partitionColumn && renamedLeftRawDf.schema(c).dataType != StringType =>
         date_format(renamedLeftRawDf.col(c), tableUtils.partitionFormat).as(c)
       case c => renamedLeftRawDf.col(c)
     }.toList: _*)
@@ -218,7 +245,7 @@ class JoinPartJob(node: JoinPartNode,
       case (ENTITIES, EVENTS, _)   => partitionRangeGroupBy.snapshotEvents(dateRange)
       case (ENTITIES, ENTITIES, _) => partitionRangeGroupBy.snapshotEntities
       case (EVENTS, EVENTS, Accuracy.SNAPSHOT) =>
-        genGroupBy(shiftedPartitionRange).snapshotEvents(shiftedPartitionRange)
+        genGroupBy(shiftedPartitionRange, snapshotTableUtils).snapshotEvents(shiftedPartitionRange)
       case (EVENTS, EVENTS, Accuracy.TEMPORAL) =>
         if (tableUtils.skewFreeMode) {
 
@@ -239,11 +266,16 @@ class JoinPartJob(node: JoinPartNode,
           genGroupBy(unfilledPartitionRange).temporalEvents(renamedLeftDf, Some(toTimeRange(unfilledPartitionRange)))
         }
 
-      case (EVENTS, ENTITIES, Accuracy.SNAPSHOT) => genGroupBy(shiftedPartitionRange).snapshotEntities
+      case (EVENTS, ENTITIES, Accuracy.SNAPSHOT) =>
+        genGroupBy(shiftedPartitionRange, snapshotTableUtils).snapshotEntities
 
       case (EVENTS, ENTITIES, Accuracy.TEMPORAL) =>
-        // Snapshots and mutations are partitioned with ds holding data between <ds 00:00> and ds <23:59>.
-        genGroupBy(unfilledPartitionRange.shift(-1)).temporalEntities(renamedLeftDf)
+        // Snapshots and mutations live on the groupBy's declared (typically daily) grid: a
+        // partition holds data between its interval start and end. Run the computation in
+        // that grid's universe so the ds_of_ts/mutation-day arithmetic lands on it; left
+        // partition values pass through unchanged.
+        genGroupBy(JoinUtils.snapshotLookbackRange(unfilledPartitionRange, partSnapshotSpec), snapshotTableUtils)
+          .temporalEntities(renamedLeftDf)
     }
 
     val rightDfWithDerivations = if (joinPart.groupBy.hasDerivations) {
@@ -260,11 +292,38 @@ class JoinPartJob(node: JoinPartNode,
       rightDf
     }
 
+    val outputDf =
+      if (
+        node.leftDataModel == EVENTS &&
+        joinPart.groupBy.inferredAccuracy == Accuracy.SNAPSHOT &&
+        !partSnapshotSpec.hasSameGrid(tableUtils.partitionSpec)
+      ) {
+        val snapshotStartMillis =
+          (unix_timestamp(col(tableUtils.partitionColumn), partSnapshotSpec.format) * lit(1000L)).cast(LongType)
+        val physicalSpec = tableUtils.partitionSpec
+        val physicalColumn = tableUtils.partitionColumn
+        val snapshotSpanMillis = partSnapshotSpec.spanMillis
+        val physicalPartitions = udf { asOfMillis: Long =>
+          physicalSpec
+            .rangeIntersecting(PartitionInterval(asOfMillis, asOfMillis + snapshotSpanMillis))
+            .map(_.partitions)
+            .getOrElse(Seq.empty)
+        }
+        rightDfWithDerivations
+          // Cross-grid part tables are physically placed on the join output grid; `ts` carries
+          // the RHS snapshot as-of boundary used by merge for per-row matching.
+          .withColumn(Constants.TimeColumn, snapshotStartMillis + lit(partSnapshotSpec.spanMillis))
+          .withColumn(physicalColumn, explode(physicalPartitions(col(Constants.TimeColumn))))
+          .where(col(physicalColumn).isin(unfilledPartitionRange.partitions: _*))
+      } else {
+        rightDfWithDerivations
+      }
+
     if (showDf) {
       logger.info(s"printing results for joinPart: ${joinPart.groupBy.metaData.name}")
-      rightDfWithDerivations.prettyPrint()
+      outputDf.prettyPrint()
     }
 
-    Some(rightDfWithDerivations)
+    Some(outputDf)
   }
 }

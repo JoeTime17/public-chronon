@@ -8,16 +8,25 @@ import org.apache.spark.sql.functions.{
   coalesce,
   col,
   count,
-  date_format,
   from_json,
   lit,
   min,
   max,
-  to_date,
+  timestamp_millis,
   to_timestamp,
   when
 }
-import org.apache.spark.sql.types.{DataType, DateType, MapType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{
+  DataType,
+  DateType,
+  LongType,
+  MapType,
+  NumericType,
+  StringType,
+  StructField,
+  StructType,
+  TimestampType
+}
 
 import scala.util.{Failure, Success, Try}
 
@@ -25,8 +34,6 @@ import scala.util.{Failure, Success, Try}
 // across Delta versions (e.g. 2 params in 3.2, 3 params in 3.3), so compiling against an older
 // version will cause NoSuchMethodError at runtime if the EMR-bundled Delta jar has a newer signature.
 case object DeltaLake extends Format {
-
-  private val DayMillis = 24L * 60L * 60L * 1000L
 
   override def tableTypeString: String = "delta"
 
@@ -54,12 +61,18 @@ case object DeltaLake extends Format {
 
   }
 
+  // the spark catalog's listColumns doesn't expose partitioning for delta tables; the delta
+  // log's own metadata is the ordered source of truth
+  override def partitionColumnNames(tableName: String)(implicit sparkSession: SparkSession): Seq[String] =
+    Try {
+      sparkSession.sql(s"DESCRIBE DETAIL $tableName").select("partitionColumns").head().getSeq[String](0).toList
+    }.getOrElse(Seq.empty)
+
   override def virtualPartitions(tableName: String, timestampColumn: String, partitionSpec: PartitionSpec)(implicit
       sparkSession: SparkSession): List[String] = {
     metadataPartitions(tableName, timestampColumn)
       .filter(_.nonEmpty)
-      .orElse(statsDateRange(tableName, timestampColumn, partitionSpec)
-        .map(_.virtualPartitions(partitionSpec)))
+      .orElse(statsVirtualPartitions(tableName, timestampColumn, partitionSpec))
       .getOrElse(super.virtualPartitions(tableName, timestampColumn, partitionSpec))
   }
 
@@ -81,6 +94,16 @@ case object DeltaLake extends Format {
       sparkSession.read.table(tableName).schema(columnName).dataType match {
         case TimestampType => partitionSpec.before(range.lastAvailablePartition)
         case _             => range.lastAvailablePartition
+      }
+    }
+
+  private def statsVirtualPartitions(tableName: String, columnName: String, partitionSpec: PartitionSpec)(implicit
+      sparkSession: SparkSession): Option[List[String]] =
+    statsDateRange(tableName, columnName, partitionSpec).map { range =>
+      sparkSession.read.table(tableName).schema(columnName).dataType match {
+        case TimestampType =>
+          partitionSpec.expandRange(range.firstAvailablePartition, partitionSpec.before(range.lastAvailablePartition))
+        case _ => range.virtualPartitions(partitionSpec)
       }
     }
 
@@ -107,12 +130,15 @@ case object DeltaLake extends Format {
           col("stats.maxValues").getItem(columnName).as("max_value")
         )
 
+      // raw epoch millis, grid-floored via spec.at in Scala: a format-truncation here would
+      // emit off-boundary ds values for sub-daily or offset specs (e.g. '...09:17' from
+      // MIN(ts)=09:17 on a 3h grid)
       val boundaries = stats
         .agg(
           count(lit(1)).as("fileCount"),
           count(when(col("min_value").isNull || col("max_value").isNull, lit(1))).as("missingCount"),
-          date_format(min(statsBoundary("min_value", columnType, partitionSpec)), partitionSpec.format).as("start"),
-          date_format(max(statsBoundary("max_value", columnType, partitionSpec)), partitionSpec.format).as("end")
+          (min(statsBoundary("min_value", columnType, partitionSpec)).cast("long") * 1000).as("startMillis"),
+          (max(statsBoundary("max_value", columnType, partitionSpec)).cast("long") * 1000).as("endMillis")
         )
         .collect()
         .headOption
@@ -120,11 +146,11 @@ case object DeltaLake extends Format {
       boundaries.flatMap { row =>
         val fileCount = row.getAs[Long]("fileCount")
         val missingCount = row.getAs[Long]("missingCount")
-        val start = row.getAs[String]("start")
-        val end = row.getAs[String]("end")
 
-        if (fileCount > 0 && missingCount == 0 && start != null && end != null) {
-          Some(StatsDateRange(start = start, end = end))
+        if (fileCount > 0 && missingCount == 0 && !row.isNullAt(2) && !row.isNullAt(3)) {
+          Some(
+            StatsDateRange(start = partitionSpec.at(row.getAs[Long]("startMillis")),
+                           end = partitionSpec.at(row.getAs[Long]("endMillis"))))
         } else {
           None
         }
@@ -144,16 +170,19 @@ case object DeltaLake extends Format {
     }
   }
 
+  // always a TIMESTAMP-typed column so the boundary survives as epoch time; the session
+  // timezone is UTC by convention, making the casts grid-safe. Numeric columns are epoch
+  // MILLIS per chronon convention - a direct TimestampType cast would read them as seconds.
   private def statsBoundary(boundaryColumn: String, columnType: DataType, partitionSpec: PartitionSpec): Column =
     columnType match {
       case DateType =>
-        col(boundaryColumn).cast(DateType)
-      case StringType if partitionSpec.spanMillis >= DayMillis =>
-        coalesce(to_date(col(boundaryColumn), partitionSpec.format), col(boundaryColumn).cast(DateType))
+        col(boundaryColumn).cast(DateType).cast(TimestampType)
       case StringType =>
-        coalesce(to_timestamp(col(boundaryColumn), partitionSpec.format), col(boundaryColumn).cast("timestamp"))
+        coalesce(to_timestamp(col(boundaryColumn), partitionSpec.format), col(boundaryColumn).cast(TimestampType))
+      case _: NumericType =>
+        timestamp_millis(col(boundaryColumn).cast(LongType))
       case _ =>
-        col(boundaryColumn).cast("timestamp")
+        col(boundaryColumn).cast(TimestampType)
     }
 
   override def supportSubPartitionsFilter: Boolean = true

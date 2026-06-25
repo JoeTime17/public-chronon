@@ -1,6 +1,6 @@
 package ai.chronon.api.planner
 import ai.chronon.api
-import ai.chronon.api.{Accuracy, BootstrapPart, DataModel, TableDependency, TableInfo, Window}
+import ai.chronon.api.{Accuracy, BootstrapPart, DataModel, PartitionSpec, TableDependency, TableInfo, Window}
 import ai.chronon.api.Extensions._
 import ai.chronon.api.ScalaJavaConversions.{IterableOps, IteratorOps}
 
@@ -8,15 +8,26 @@ import scala.collection.JavaConverters._
 
 object TableDependencies {
 
+  def fromTableInfo(tableInfo: TableInfo, shift: Option[Window] = None): TableDependency =
+    new TableDependency()
+      .setTableInfo(tableInfo.deepCopy())
+      .setStartOffset(shift.getOrElse(WindowUtils.zero()))
+      .setEndOffset(shift.getOrElse(WindowUtils.zero()))
+
   def fromStagingQuery(stagingQuery: api.StagingQuery): Seq[TableDependency] = {
     Option(stagingQuery.tableDependencies)
       .map(_.toScala.toSeq)
       .getOrElse(Seq.empty)
   }
 
-  def fromJoin(join: api.Join): Seq[TableDependency] = {
+  def fromJoin(join: api.Join, outputPartitionSpec: Option[PartitionSpec] = None): Seq[TableDependency] = {
     val joinParts = Option(join.joinParts).map(_.iterator().toScala.toArray).getOrElse(Array.empty)
-    val joinPartDeps = joinParts.flatMap((jp) => fromGroupBy(jp.groupBy, Option(join.left).map(_.dataModel)))
+    val leftDataModel = Option(join.left).map(_.dataModel)
+    val joinPartDeps = joinParts.flatMap { jp =>
+      val snapshotShift =
+        outputPartitionSpec.flatMap(PartitionSpecResolver.snapshotSourceShift(jp, leftDataModel, _))
+      fromGroupBy(jp.groupBy, leftDataModel, snapshotShift)
+    }
     val leftDep = scala.Option(join.left).map((src) => fromTable(src.table, src.query))
     val bootstrap =
       scala.Option(join.bootstrapParts).map(_.toScala.toArray[BootstrapPart]).getOrElse(Array.empty[BootstrapPart])
@@ -24,7 +35,9 @@ object TableDependencies {
     (leftDep.toSeq ++ joinPartDeps.toSeq ++ bootstrapDeps.toSeq)
   }
 
-  def fromGroupBy(groupBy: api.GroupBy, leftDataModel: Option[DataModel] = None): Seq[TableDependency] =
+  def fromGroupBy(groupBy: api.GroupBy,
+                  leftDataModel: Option[DataModel] = None,
+                  snapshotShift: Option[Window] = None): Seq[TableDependency] =
     groupBy.sources
       .iterator()
       .toScala
@@ -39,7 +52,7 @@ object TableDependencies {
           case (Some(api.DataModel.EVENTS), Accuracy.TEMPORAL, DataModel.ENTITIES) =>
             dep(shift = Some(source.partitionInterval)) ++ dep(forMutations = true)
 
-          case (Some(api.DataModel.EVENTS), Accuracy.SNAPSHOT, _) => dep()
+          case (Some(api.DataModel.EVENTS), Accuracy.SNAPSHOT, _) => dep(shift = snapshotShift)
 
           case _ => dep()
 
@@ -70,6 +83,11 @@ object TableDependencies {
       // we go by the amount of data that is available in the source.
       case (DataModel.EVENTS, None, _) => null
 
+      // an unbounded aggregation window means the same thing as no max window: every available
+      // partition matters. It must NOT enter partition arithmetic - Int.MaxValue days lands in BCE
+      // territory whose year-of-era ds values sort BEFORE real dates and poison range minimums.
+      case (DataModel.EVENTS, Some(aggregationWindow), _) if aggregationWindow.isUnboundedSentinel => null
+
       case (DataModel.EVENTS, Some(aggregationWindow), _) =>
         lagOpt match {
           case Some(lag) => WindowUtils.plus(aggregationWindow, lag)
@@ -79,12 +97,21 @@ object TableDependencies {
 
     val inputTable = if (forMutations) source.mutationsTable.get else source.rawTable
 
-    val tableInfo = new TableInfo()
+    val tableInfo = PartitionSpecResolver
+      .joinSourceOutputTableInfo(source)
+      .map(_.deepCopy())
+      .getOrElse {
+        new TableInfo()
+          .setPartitionColumn(source.query.getPartitionColumn)
+          .setPartitionFormat(source.query.getPartitionFormat)
+          .setPartitionInterval(source.query.getPartitionInterval)
+          .setPartitionOffset(source.query.getPartitionOffset)
+      }
       .setTable(inputTable)
       .setIsCumulative(source.isCumulative)
-      .setPartitionColumn(source.query.getPartitionColumn)
-      .setPartitionFormat(source.query.getPartitionFormat)
-      .setPartitionInterval(source.query.getPartitionInterval)
+    // only stamped when true so existing compiled confs serialize byte-identically
+    if (Option(source.query).exists(query => query.isSetTimePartitioned && query.timePartitioned))
+      tableInfo.setTimePartitioned(true)
 
     val tableDep = new TableDependency()
       .setTableInfo(tableInfo)
@@ -116,6 +143,10 @@ object TableDependencies {
       .setPartitionColumn(query.getPartitionColumn)
       .setPartitionFormat(query.getPartitionFormat)
       .setPartitionInterval(query.getPartitionInterval)
+      .setPartitionOffset(query.getPartitionOffset)
+    // only stamped when true so existing compiled confs serialize byte-identically
+    if (query.isSetTimePartitioned && query.timePartitioned)
+      tableInfo.setTimePartitioned(true)
 
     new TableDependency()
       .setTableInfo(tableInfo)
@@ -138,11 +169,14 @@ object TableDependencies {
           metaData <- Option(upstreamJoin.metaData).toSeq
         } yield {
           val upstreamMetadataUploadTable = metaData.outputTable + "__metadata_upload"
+          val tableInfo = PartitionSpecResolver
+            .joinSourceOutputTableInfo(joinSourceSource)
+            .map(_.deepCopy())
+            .getOrElse(new TableInfo())
+            .setTable(upstreamMetadataUploadTable)
+
           new TableDependency()
-            .setTableInfo(
-              new TableInfo()
-                .setTable(upstreamMetadataUploadTable)
-            )
+            .setTableInfo(tableInfo)
             .setStartOffset(WindowUtils.zero())
             .setEndOffset(WindowUtils.zero())
         }

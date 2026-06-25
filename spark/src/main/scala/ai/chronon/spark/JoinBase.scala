@@ -36,6 +36,7 @@ import com.google.gson.Gson
 import ai.chronon.api.MetaData
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types.LongType
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.time.Instant
@@ -51,6 +52,12 @@ abstract class JoinBase(val joinConfCloned: api.Join,
   @transient lazy val logger: Logger = LoggerFactory.getLogger(getClass)
   implicit val tu = tableUtils
   private implicit val partitionSpec: PartitionSpec = tableUtils.partitionSpec
+
+  // the join's own declared output spec (executionInfo.outputTableInfo, defaulting to the
+  // ambient TableUtils spec): part snapshot grids are compared against THIS, not against
+  // tableUtils.partitionSpec, which only happens to match it on standard runs
+  protected val joinOutputSpec: PartitionSpec =
+    joinConfCloned.partitionSpec(tableUtils.partitionSpec)
 
   val joinMetaData: MetaData = joinConfCloned.metaData
   assert(Option(joinMetaData.outputNamespace).nonEmpty, "output namespace could not be empty or null")
@@ -71,6 +78,10 @@ abstract class JoinBase(val joinConfCloned: api.Join,
 
   def joinWithLeft(leftDf: DataFrame, rightDf: DataFrame, joinPart: JoinPart): DataFrame = {
     val partLeftKeys = joinPart.rightToLeft.values.toArray
+    lazy val partSpec = JoinUtils.partSnapshotSpec(joinPart)
+    val leftEventsSnapshot =
+      joinConfCloned.left.dataModel == api.DataModel.EVENTS && joinPart.groupBy.inferredAccuracy == Accuracy.SNAPSHOT
+    val crossGridSnapshot = leftEventsSnapshot && !partSpec.hasSameGrid(joinOutputSpec)
 
     // compute join keys, besides the groupBy keys -  like ds, ts etc.,
     val additionalKeys: Seq[String] = {
@@ -101,28 +112,49 @@ abstract class JoinBase(val joinConfCloned: api.Join,
     }
     val keyRenamedRightDf = prefixedRightDf.select(newColumns: _*)
 
-    // adjust join keys
-    val joinableRightDf = if (additionalKeys.contains(Constants.TimePartitionColumn)) {
-      // increment one day to align with left side ts_ds
-      // because one day was decremented from the partition range for snapshot accuracy
+    // adjust join keys: the snapshot pick is per row ON THE RHS GROUPBY'S DECLARED GRID - a row
+    // at time T reads the latest RHS snapshot whose time is <= T, independent of the join's own
+    // grid. Daily RHS under a daily join degenerates to the historical behavior.
+    val joinableRightDf = if (crossGridSnapshot) {
+      keyRenamedRightDf
+        .withColumn(Constants.TimePartitionColumn, col(Constants.TimeColumn).cast(LongType))
+        .drop(tableUtils.partitionColumn, Constants.TimeColumn)
+        .dropDuplicates(keys)
+    } else if (additionalKeys.contains(Constants.TimePartitionColumn)) {
+      // snapshot partition p holds the aggregate as of epoch(p) + one RHS partitionInterval;
+      // rename to that snapshot time so it matches the left rows' RHS-grid floor
       keyRenamedRightDf
         .withColumn(
           Constants.TimePartitionColumn,
-          date_format(date_add(to_date(col(tableUtils.partitionColumn), tableUtils.partitionSpec.format), 1),
-                      tableUtils.partitionSpec.format)
+          date_format(
+            from_unixtime(
+              unix_timestamp(col(tableUtils.partitionColumn), partSpec.format) +
+                partSpec.spanMillis / 1000),
+            partSpec.format
+          )
         )
         .drop(tableUtils.partitionColumn)
     } else {
       keyRenamedRightDf
     }
 
+    // per-joinPart left match key: floor(left.ts, RHS grid)
+    val joinableLeftDf = if (crossGridSnapshot) {
+      leftDf.withColumn(Constants.TimePartitionColumn,
+                        JoinUtils.snapshotGridFloorMillis(col(Constants.TimeColumn), partSpec))
+    } else if (additionalKeys.contains(Constants.TimePartitionColumn)) {
+      leftDf.withTimeBasedColumn(Constants.TimePartitionColumn, spec = partSpec)
+    } else {
+      leftDf
+    }
+
     logger.info(s"""
                |Join keys for ${joinPart.groupBy.metaData.name}: ${keys.mkString(", ")}
                |Left Schema:
-               |${leftDf.schema.pretty}
+               |${joinableLeftDf.schema.pretty}
                |Right Schema:
                |${joinableRightDf.schema.pretty}""".stripMargin)
-    val joinedDf = coalescedJoin(leftDf, joinableRightDf, keys)
+    val joinedDf = coalescedJoin(joinableLeftDf, joinableRightDf, keys)
     logger.info(s"""Final Schema:
                |${joinedDf.schema.pretty}
                |""".stripMargin)
@@ -343,7 +375,8 @@ abstract class JoinBase(val joinConfCloned: api.Join,
       )
       .getOrElse(Seq.empty)
 
-    def finalResult: DataFrame = tableUtils.scanDf(null, outputTable, range = Some(rangeToFill))
+    val outputRangeToFill = rangeToFill.intersectingRange(tableUtils.partitionSpec)
+    def finalResult: DataFrame = tableUtils.scanDf(null, outputTable, range = Some(outputRangeToFill))
 
     if (unfilledRanges.isEmpty) {
       logger.info(s"\nThere is no data to compute based on end partition of ${rangeToFill.end}.\n\n Exiting..")

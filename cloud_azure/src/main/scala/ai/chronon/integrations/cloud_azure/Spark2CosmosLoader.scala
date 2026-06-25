@@ -1,5 +1,6 @@
 package ai.chronon.integrations.cloud_azure
 
+import ai.chronon.api.PartitionSpec
 import ai.chronon.integrations.cloud_azure.CosmosKVStore.buildKeyHash
 import ai.chronon.spark.catalog
 import ai.chronon.spark.submission.SparkSessionBuilder
@@ -13,6 +14,10 @@ import org.slf4j.LoggerFactory
   */
 object Spark2CosmosLoader {
   @transient private lazy val logger = LoggerFactory.getLogger(getClass)
+  private[cloud_azure] val PartitionColumnProp = "spark.chronon.partition.column"
+  private[cloud_azure] val PartitionFormatProp = "spark.chronon.partition.format"
+  private[cloud_azure] val PartitionSpanMillisProp = "spark.chronon.partition.span.millis"
+  private[cloud_azure] val PartitionOffsetMillisProp = "spark.chronon.partition.offset.millis"
 
   class Conf(args: Seq[String]) extends ScallopConf(args) {
     val tableName = opt[String](
@@ -55,6 +60,23 @@ object Spark2CosmosLoader {
       descr = "TTL in seconds",
       default = Some(432000) // 5 days
     )
+    val partitionColumn = opt[String](
+      name = "partition-column",
+      descr = "Partition column for the upload table",
+      default = Some("ds")
+    )
+    val partitionFormat = opt[String](
+      name = "partition-format",
+      descr = "Partition format for the upload table"
+    )
+    val partitionSpanMillis = opt[Long](
+      name = "partition-span-millis",
+      descr = "Partition interval in milliseconds for the upload table"
+    )
+    val partitionOffsetMillis = opt[Long](
+      name = "partition-offset-millis",
+      descr = "Partition offset in milliseconds for the upload table"
+    )
     verify()
   }
 
@@ -68,15 +90,15 @@ object Spark2CosmosLoader {
 
     try {
       val tableUtils = catalog.TableUtils(spark)
+      val partitionSpec = partitionSpecFromConfig(config, tableUtils.partitionSpec)
 
-      // Calculate timestamp (endDs + 1 day)
-      val endDsPlusOne = tableUtils.partitionSpec.epochMillis(config.endDs()) + tableUtils.partitionSpec.spanMillis
+      val endDsPlusOne = partitionSpec.partitionEndMillis(config.endDs())
 
       // Read data from offline table
       val dataDf = tableUtils.sql(s"""
         |SELECT key_bytes, value_bytes, '${config.dataset()}' as dataset
         |FROM ${config.tableName()}
-        |WHERE ds = '${config.endDs()}'
+        |WHERE ${partitionSpec.column} = '${config.endDs()}'
         |""".stripMargin)
 
       logger.info(s"Read ${dataDf.count()} records from ${config.tableName()}")
@@ -102,6 +124,14 @@ object Spark2CosmosLoader {
       spark.stop()
     }
   }
+
+  private[cloud_azure] def partitionSpecFromConfig(config: Conf, fallback: PartitionSpec): PartitionSpec =
+    PartitionSpec(
+      config.partitionColumn.toOption.getOrElse(fallback.column),
+      config.partitionFormat.toOption.getOrElse(fallback.format),
+      config.partitionSpanMillis.toOption.getOrElse(fallback.spanMillis),
+      config.partitionOffsetMillis.toOption.getOrElse(fallback.offsetMillis)
+    )
 
   /** Transform DataFrame with required Cosmos DB fields
     * Adds: id, keyHash, tsMillis, ttl

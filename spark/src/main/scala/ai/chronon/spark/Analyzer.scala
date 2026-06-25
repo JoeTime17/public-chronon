@@ -383,8 +383,8 @@ class Analyzer(tableUtils: TableUtils,
     } else {
       val firstUnfilledPartition = unfilledRanges.min.start
       lazy val groupByOps = new GroupByOps(groupBy)
-      lazy val leftShiftedPartitionRangeStart = unfilledRanges.min.shift(-1).start
-      lazy val rightShiftedPartitionRangeStart = unfilledRanges.min.shift(1).start
+      lazy val leftShiftedPartitionRangeStart = unfilledRanges.min.shiftPartitions(-1).start
+      lazy val rightShiftedPartitionRangeStart = unfilledRanges.min.shiftPartitions(1).start
       val maxWindow = groupByOps.maxWindow
       maxWindow match {
         case Some(window) =>

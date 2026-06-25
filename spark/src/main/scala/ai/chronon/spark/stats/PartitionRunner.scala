@@ -75,7 +75,7 @@ class PartitionRunner[T](verb: String,
     val outputPartitionsToCompute = (inputPartitions.toSet -- existingOutputPartitions) -- outputPartitionsToIgnore
 
     // TODO: break at this point for multiple input case
-    val outputSteps = collapseToRange(outputPartitionsToCompute).flatMap(_.steps(stepSize))
+    val outputSteps = collapseToRange(outputPartitionsToCompute).flatMap(_.stepsByDays(stepSize))
     val inputSteps = outputSteps.map(computeInputRange)
 
     println(s"""

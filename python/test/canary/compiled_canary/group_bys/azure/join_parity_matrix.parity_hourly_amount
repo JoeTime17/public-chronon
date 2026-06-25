@@ -1,0 +1,128 @@
+{
+  "accuracy": 1,
+  "aggregations": [
+    {
+      "argMap": {},
+      "inputColumn": "amount_1h",
+      "operation": 7
+    },
+    {
+      "argMap": {},
+      "inputColumn": "amount_1h",
+      "operation": 7,
+      "windows": [
+        {
+          "length": 6,
+          "timeUnit": 0
+        }
+      ]
+    }
+  ],
+  "keyColumns": [
+    "user_id"
+  ],
+  "metaData": {
+    "columnHashes": {
+      "amount_1h_sum": "e9516041cfec04ed1e46b1c42a856aaa",
+      "amount_1h_sum_6h": "e9516041cfec04ed1e46b1c42a856aaa",
+      "user_id": "f7ad44f3126b656537eecd6ac6751015"
+    },
+    "customJson": "{\"airflowDependencies\": [{\"name\": \"wf_join_matrix_input_hourly_events_with_offset_0\", \"spec\": \"join_matrix_input.hourly_events/ds={{ macros.ds_add(ds, 0) }}\"}]}",
+    "executionInfo": {
+      "conf": {
+        "common": {
+          "spark.chronon.coalesce.factor": "10",
+          "spark.chronon.partition.column": "ds",
+          "spark.chronon.partition.format": "yyyy-MM-dd",
+          "spark.chronon.table.format_provider.class": "ai.chronon.integrations.cloud_azure.AzureFormatProvider",
+          "spark.chronon.table_write.format": "iceberg",
+          "spark.default.parallelism": "10",
+          "spark.driver.cores": "1",
+          "spark.driver.extraJavaOptions": "-Dlog4j.configurationFile=/opt/chronon/log4j2.properties",
+          "spark.driver.memory": "4g",
+          "spark.driver.memoryOverhead": "1g",
+          "spark.executor.cores": "1",
+          "spark.executor.extraJavaOptions": "-Dlog4j.configurationFile=/opt/chronon/log4j2.properties",
+          "spark.executor.memory": "512m",
+          "spark.sql.catalog.spark_catalog": "org.apache.iceberg.spark.SparkCatalog",
+          "spark.sql.catalog.spark_catalog.credential": "",
+          "spark.sql.catalog.spark_catalog.header.X-Iceberg-Access-Delegation": "",
+          "spark.sql.catalog.spark_catalog.jdbc.password": "{POSTGRES_PASSWORD}",
+          "spark.sql.catalog.spark_catalog.jdbc.user": "chronon",
+          "spark.sql.catalog.spark_catalog.scope": "",
+          "spark.sql.catalog.spark_catalog.type": "jdbc",
+          "spark.sql.catalog.spark_catalog.uri": "jdbc:postgresql://{POSTGRES_HOST}:5432/iceberg_catalog?sslmode=require",
+          "spark.sql.catalog.spark_catalog.warehouse": "abfss://crucible@ziplineai2.dfs.core.windows.net/claims-demo/warehouse",
+          "spark.sql.defaultCatalog": "spark_catalog",
+          "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+          "spark.sql.shuffle.partitions": "10",
+          "taskmanager.memory.process.size": "4G"
+        }
+      },
+      "env": {
+        "common": {
+          "ARTIFACT_PREFIX": "abfss://crucible@ziplineai2.dfs.core.windows.net/claims-demo/artifacts",
+          "AUTH_SCOPE": "api://dev-zipline-auth",
+          "CHRONON_ONLINE_ARGS": " -Ztasks=1 -Zbootstrap=zipline-demo-events.servicebus.windows.net:9093",
+          "CLOUD_PROVIDER": "azure",
+          "CUSTOMER_ID": "claims-demo",
+          "EVAL_URL": "http://hub.claims-demo-hub.svc.cluster.local:3903",
+          "FLINK_JARS_URI": "abfss://dev-zipline-artifacts@ziplineai2.dfs.core.windows.net/spark-3.5.3/libs/",
+          "FLINK_SASL_JAAS_CONFIG_VAULT_URI": "https://eventhub-sasl-jaas.vault.azure.net/secrets/sasl-jass-config",
+          "FLINK_STATE_URI": "abfss://crucible@ziplineai2.dfs.core.windows.net/claims-demo/flink-state",
+          "FRONTEND_URL": "http://hub.claims-demo-hub.svc.cluster.local:3903",
+          "HUB_URL": "http://hub.claims-demo-hub.svc.cluster.local:3903",
+          "K8S_NAMESPACE": "claims-demo-hub",
+          "OC_CREDENTIAL_VAULT_URI": "",
+          "POSTGRES_HOST": "crucible-claims-pg-westus.postgres.database.azure.com",
+          "POSTGRES_PASSWORD_VAULT_URI": "https://crucible-azure-kv.vault.azure.net/secrets/postgres-password",
+          "SNOWFLAKE_JDBC_URL": "jdbc:snowflake://VEJLULX-AZURE.snowflakecomputing.com/?user=demo_batch_service&db=Demo&schema=CLAIMS_DEMO&warehouse=demo_wh",
+          "SNOWFLAKE_PRIVATE_KEY_VAULT_URI": "https://demo-service-writer-pkey.vault.azure.net/secrets/snowflake-private-key",
+          "SPARK_CLUSTER_NAME": "http://crucible.crucible-system.svc.cluster.local:8080",
+          "SPARK_EVENT_LOG_DIR": "abfss://crucible@ziplineai2.dfs.core.windows.net/spark-events",
+          "SPARK_EVENT_LOG_ENABLED": "true",
+          "SPARK_HISTORY_SERVER_URL": "http://spark-history-server.crucible-system.svc.cluster.local:18080",
+          "SPARK_IMAGE": "ziplinecanary.azurecr.io/chronon-spark-azure:latest",
+          "SPARK_SERVICE_ACCOUNT": "spark",
+          "VERSION": "latest",
+          "WAREHOUSE_PREFIX": "abfss://crucible@ziplineai2.dfs.core.windows.net/claims-demo/warehouse"
+        }
+      },
+      "historicalBackfill": 0,
+      "offlineSchedule": "0 * * * *",
+      "outputTableInfo": {
+        "partitionColumn": "ds",
+        "partitionFormat": "yyyy-MM-dd-HH-mm",
+        "partitionInterval": {
+          "length": 1,
+          "timeUnit": 0
+        }
+      }
+    },
+    "name": "azure.join_parity_matrix.parity_hourly_amount",
+    "outputNamespace": "join_matrix",
+    "sourceFile": "group_bys/azure/join_parity_matrix.py",
+    "team": "azure"
+  },
+  "sources": [
+    {
+      "events": {
+        "query": {
+          "partitionColumn": "ds",
+          "partitionFormat": "yyyy-MM-dd-HH-mm",
+          "partitionInterval": {
+            "length": 1,
+            "timeUnit": 0
+          },
+          "selects": {
+            "amount_1h": "amount_1h",
+            "user_id": "user_id"
+          },
+          "startPartition": "2023-08-13-19-00",
+          "timeColumn": "ts"
+        },
+        "table": "join_matrix_input.hourly_events"
+      }
+    }
+  ]
+}

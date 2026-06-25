@@ -412,6 +412,91 @@ class EvalTest extends SparkTestBase {
     assertTrue(queryCheck.getMessage.contains("non_existent_column"))
   }
 
+  private def saveCompactFormatTable(namespace: String): String = {
+    val data = List(
+      Column("user_id", api.StringType, 10),
+      Column("amount", api.LongType, 1000)
+    )
+    val tableName = s"$namespace.compact_format_source"
+    spark.sql(s"DROP TABLE IF EXISTS $tableName")
+    DataFrameGen
+      .events(spark, data, 100, partitions = 10)
+      .withColumn("ds", date_format(to_date(col("ds"), "yyyy-MM-dd"), "yyyyMMdd"))
+      .save(tableName)
+    tableName
+  }
+
+  private def compactQuery(selects: Map[String, String]): Query = {
+    val query = Builders.Query(selects = selects, startPartition = "20200101")
+    query.setPartitionFormat("yyyyMMdd")
+    query
+  }
+
+  it should "eval a groupBy over a yyyyMMdd cumulative source without parse errors" in {
+    val namespace = "testeval_compact_cumulative"
+    createDatabase(namespace)
+    val tableName = saveCompactFormatTable(namespace)
+
+    // cumulative events exercise the lastAvailablePartition path in GroupBy.getIntersectedRange,
+    // which must use the source's partition spec instead of the ambient yyyy-MM-dd one
+    val source = Builders.Source.events(
+      query = compactQuery(Builders.Selects("user_id", "amount", "ts")),
+      table = tableName,
+      isCumulative = true
+    )
+
+    val groupByConf = Builders.GroupBy(
+      sources = Seq(source),
+      keyColumns = Seq("user_id"),
+      aggregations = Seq(Builders.Aggregation(operation = Operation.SUM, inputColumn = "amount")),
+      metaData = Builders.MetaData(name = "test_compact_cumulative_groupby", namespace = namespace, team = "chronon")
+    )
+
+    val (result, schema) = eval.evalGroupBy(groupByConf)
+
+    assertNotNull(result)
+    // a partition parse error would surface as a source expression failure
+    assertTrue(
+      Option(result.getSourceExpressionCheck).forall(_.getCheckResult != CheckResult.FAILURE)
+    )
+    assertTrue(schema.nonEmpty)
+  }
+
+  it should "eval a join with a yyyyMMdd left source without parse errors" in {
+    val namespace = "testeval_compact_left"
+    createDatabase(namespace)
+    val tableName = saveCompactFormatTable(namespace)
+
+    val groupByConf = Builders.GroupBy(
+      sources = Seq(
+        Builders.Source.events(
+          query = compactQuery(Builders.Selects("user_id", "amount", "ts")),
+          table = tableName
+        )),
+      keyColumns = Seq("user_id"),
+      aggregations = Seq(Builders.Aggregation(operation = Operation.SUM, inputColumn = "amount")),
+      metaData = Builders.MetaData(name = "test_compact_left_groupby", namespace = namespace, team = "chronon")
+    )
+
+    val joinConf = Builders.Join(
+      left = Builders.Source.events(
+        query = compactQuery(Builders.Selects("user_id", "ts")),
+        table = tableName
+      ),
+      joinParts = Seq(Builders.JoinPart(groupBy = groupByConf)),
+      metaData = Builders.MetaData(name = "test.compact_left_join", namespace = namespace, team = "chronon")
+    )
+
+    val result = eval.evalJoin(joinConf)
+
+    assertNotNull(result)
+    // a partition parse error in sampleLeftSource would surface as a left expression failure
+    assertTrue(
+      Option(result.getLeftExpressionCheck).forall(_.getCheckResult != CheckResult.FAILURE)
+    )
+    assertEquals(CheckResult.SUCCESS, result.getLeftTimestampCheck.getCheckResult)
+  }
+
   def createAndSetupJoin(namespace: String,
                          badLeftSourceTimestamp: Boolean = false,
                          badLeftSourceExpression: Boolean = false,

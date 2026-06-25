@@ -83,6 +83,41 @@ class ExternalSourceSensorIntegrationTest extends AnyFlatSpec with Matchers {
     }
   }
 
+  it should "use the resolved groupBy output spec for time-partitioned source sensors" in {
+    val threeHourSpec = PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 3 * 60 * 60 * 1000)
+    val query = new Query()
+      .setPartitionColumn("event_ts")
+      .setPartitionFormat(threeHourSpec.format)
+      .setTimePartitioned(true)
+
+    val outputInfo = new TableInfo()
+      .setTable("test_namespace.subdaily_groupby")
+      .withSpec(threeHourSpec)
+
+    val groupBy = Builders.GroupBy(
+      sources = Seq(Builders.Source.events(query, table = "data.time_partitioned_events")),
+      keyColumns = Seq("user"),
+      aggregations = Seq(Builders.Aggregation(Operation.COUNT, "events", Seq(WindowUtils.Hour))),
+      metaData = Builders.MetaData(
+        namespace = "test_namespace",
+        name = "subdaily_groupby",
+        executionInfo = new ExecutionInfo().setOutputTableInfo(outputInfo)
+      ),
+      accuracy = Accuracy.TEMPORAL
+    )
+
+    val sensor = GroupByPlanner(groupBy).buildPlan.nodes.asScala
+      .find(_.content.isSetExternalSourceSensor)
+      .get
+      .content
+      .getExternalSourceSensor
+
+    sensor.sourceTableDependency.tableInfo.isTimePartitioned should be(true)
+    sensor.metaData.executionInfo.outputTableInfo.partitionColumn should equal("event_ts")
+    sensor.metaData.executionInfo.outputTableInfo.partitionFormat should equal(threeHourSpec.format)
+    sensor.metaData.executionInfo.outputTableInfo.partitionInterval should equal(WindowUtils.fromMillis(threeHourSpec.spanMillis))
+  }
+
   "StagingQueryPlanner" should "create external sensor nodes for table dependencies" in {
     val tableDeps = Seq(
       createTableDependency("data.raw_events"),

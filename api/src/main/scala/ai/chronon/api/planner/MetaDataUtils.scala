@@ -5,6 +5,9 @@ import ai.chronon.api.ScalaJavaConversions.JListOps
 
 import java.util
 
+/** Metadata layering for planner nodes: names, table dependencies, stepDays and mode-merged
+  * conf/env.
+  */
 object MetaDataUtils {
 
   def layer(baseMetadata: MetaData,
@@ -15,6 +18,7 @@ object MetaDataUtils {
             outputTableOverride: Option[String] = None)(implicit partitionSpec: PartitionSpec): MetaData = {
 
     val copy = baseMetadata.deepCopy()
+    val effectivePartitionSpec = copy.partitionSpec(partitionSpec)
     val newName = nodeName
     copy.setName(newName)
 
@@ -35,22 +39,37 @@ object MetaDataUtils {
       copy.executionInfo.setOutputTableInfo(new TableInfo())
     }
 
-    val tableInfo =
-      if (outputTableOverride.isDefined) {
-        copy.executionInfo.outputTableInfo.setTable(outputTableOverride.get)
-      } else {
+    outputTableOverride match {
+      case Some(outputTable) =>
+        // Changing table identity also changes ownership of the partition metadata: rewrite all
+        // partition fields so layered sensors cannot keep stale downstream grids.
+        copy.executionInfo.outputTableInfo.setTable(outputTable).withSpec(partitionSpec)
+      case None =>
         // if output table is not set, use the base metadata's output table
         // fully qualified: namespace + outputTable
-        copy.executionInfo.outputTableInfo.setTable(copy.outputTable)
-      }
+        // effectivePartitionSpec already preserves author-declared output fields and fills
+        // missing fields from the default spec.
+        copy.executionInfo.outputTableInfo.setTable(copy.outputTable).withSpec(effectivePartitionSpec)
+    }
 
-    tableInfo
-      .setPartitionColumn(partitionSpec.column)
-      .setPartitionFormat(partitionSpec.format)
-      .setPartitionInterval(WindowUtils.hours(partitionSpec.spanMillis))
+    val resolvedTableDependencies = PartitionSpecResolver.resolveDependencies(tableDependencies, effectivePartitionSpec)
+
+    // time-partitioned dependencies have no physical grid - their column is a real timestamp -
+    // so apply the node's own grid to them: range math, sensing, and orchestration then
+    // quantize intraday requirements on the node's own partitionInterval instead of assuming
+    // daily (which would stall sub-daily readiness until the upstream day closes)
+    resolvedTableDependencies.foreach { dep =>
+      Option(dep.tableInfo).filter(ti => ti.isSetTimePartitioned && ti.timePartitioned).foreach { ti =>
+        if (!ti.isSetPartitionInterval)
+          ti.setPartitionInterval(WindowUtils.fromMillis(effectivePartitionSpec.spanMillis))
+        if (!ti.isSetPartitionOffset && effectivePartitionSpec.offsetMillis != 0)
+          ti.setPartitionOffset(WindowUtils.fromMillis(effectivePartitionSpec.offsetMillis))
+        if (!ti.isSetPartitionFormat) ti.setPartitionFormat(effectivePartitionSpec.format)
+      }
+    }
 
     // set table dependencies
-    copy.executionInfo.setTableDependencies(tableDependencies.toJava)
+    copy.executionInfo.setTableDependencies(resolvedTableDependencies.toJava)
 
     copy
   }

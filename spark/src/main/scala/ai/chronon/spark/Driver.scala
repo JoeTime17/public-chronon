@@ -17,7 +17,7 @@
 package ai.chronon.spark
 
 import ai.chronon.api
-import ai.chronon.api.{Constants, DateRange, PartitionRange, PartitionSpec, ThriftJsonCodec}
+import ai.chronon.api.{Constants, DateRange, PartitionRange, PartitionSpec, ThriftJsonCodec, TsUtils}
 import ai.chronon.api.Constants.{KvTablePrefixArg, MetadataDataset}
 import ai.chronon.api.Extensions.{GroupByOps, JoinPartOps, MetadataOps, SourceOps}
 import ai.chronon.api.planner.RelevantLeftForJoinPart
@@ -287,7 +287,7 @@ object Driver {
           s"Filling partitions for join:$joinName, partitions:[$startPartition, $endPartition], steps:$stepDays")
 
         val partitionRange = PartitionRange(startPartition, endPartition)(tableUtils.partitionSpec)
-        val partitionSteps = partitionRange.steps(stepDays)
+        val partitionSteps = partitionRange.stepsByDays(stepDays)
 
         partitionSteps.zipWithIndex.foreach { case (stepRange, idx) =>
           logger.info(s"Processing range $stepRange (${idx + 1}/${partitionSteps.length})")
@@ -453,7 +453,7 @@ object Driver {
       new Analyzer(
         tableUtils,
         args.confPath(),
-        args.startDate.getOrElse(tableUtils.partitionSpec.shiftBackFromNow(3)),
+        args.startDate.getOrElse(tableUtils.partitionSpec.at(TsUtils.daysAgoMillis(3))),
         args.endDate(),
         args.skewKeyCount(),
         args.sample(),

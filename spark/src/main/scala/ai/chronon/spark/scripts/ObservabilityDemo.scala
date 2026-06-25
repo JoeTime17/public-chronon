@@ -193,7 +193,7 @@ object ObservabilityDemo {
 
     val endDs: ScallopOption[String] = opt[String](
       name = "end-ds",
-      default = Some("2023-02-30"),
+      default = Some("2023-02-28"),
       descr = "End date in YYYY-MM-DD format"
     )
 

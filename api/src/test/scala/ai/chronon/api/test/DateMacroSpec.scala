@@ -207,4 +207,17 @@ class DateMacroSpec extends AnyFlatSpec with Matchers {
 
     result shouldBe """SELECT * FROM table WHERE ds BETWEEN '2023-01-01' AND '2023-01-31'"""
   }
+
+  // sub-daily specs: offset means N partition steps; ds values render in the spec's own format
+  it should "render sub-daily ds values and step-denominated offsets" in {
+    val threeHourlyAt1 = PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 3 * 60 * 60 * 1000L, 60 * 60 * 1000L)
+    val query =
+      """SELECT * FROM table WHERE ds BETWEEN {{ start_date(offset=-2) }} AND {{ end_date }} AND latest = {{ latest_date }}"""
+    val result =
+      applyBasicDateMacros("2023-01-10-01-00", "2023-01-10-07-00", "2023-01-10-22-00", threeHourlyAt1)(query)
+
+    // offset=-2 steps back two 3h partitions, wrapping through the 01:00 boundary
+    result shouldBe
+      """SELECT * FROM table WHERE ds BETWEEN '2023-01-09-19-00' AND '2023-01-10-07-00' AND latest = '2023-01-10-22-00'"""
+  }
 }

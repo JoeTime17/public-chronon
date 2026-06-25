@@ -11,6 +11,20 @@ from ai.chronon.cli.theme import print_error, print_info, print_warning
 from ai.chronon.repo import utils
 
 
+def _format_hub_partition(value, default_value):
+    if value is None:
+        return default_value
+    if isinstance(value, datetime):
+        if value.second != 0 or value.microsecond != 0:
+            raise ValueError(f"Hub partition {value} must be aligned to minute precision")
+        if value.time() == datetime.min.time():
+            return value.strftime("%Y-%m-%d")
+        return value.strftime("%Y-%m-%d-%H-%M")
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    return str(value)
+
+
 class ZiplineHub:
     def __init__(
         self,
@@ -646,12 +660,8 @@ class ZiplineHub:
         concurrency=None,
     ):
         url = f"{self.base_url}/workflow/v2/start"
-        end_dt = end.strftime("%Y-%m-%d") if end else date.today().strftime("%Y-%m-%d")
-        start_dt = (
-            start.strftime("%Y-%m-%d")
-            if start
-            else (date.today() - timedelta(days=14)).strftime("%Y-%m-%d")
-        )
+        end_dt = _format_hub_partition(end, date.today().strftime("%Y-%m-%d"))
+        start_dt = _format_hub_partition(start, (date.today() - timedelta(days=14)).strftime("%Y-%m-%d"))
         workflow_request = {
             "confName": conf_name,
             "confHash": conf_hash,
@@ -685,8 +695,8 @@ class ZiplineHub:
 
     def preview_clear_downstream(self, conf_name, branch, user, start, end):
         url = f"{self.base_url}/workflow/v2/clear-downstream/preview"
-        start_dt = start.strftime("%Y-%m-%d") if start else None
-        end_dt = end.strftime("%Y-%m-%d") if end else None
+        start_dt = _format_hub_partition(start, None)
+        end_dt = _format_hub_partition(end, None)
         clear_request = {
             "confName": conf_name,
             "branch": branch,

@@ -1,3 +1,4 @@
+import datetime
 import functools
 import json
 import logging
@@ -10,6 +11,7 @@ from typing import Optional
 import click
 import requests
 
+from ai.chronon import windows as window_utils
 from ai.chronon.cli import options as cli_options
 from ai.chronon.cli.formatter import (
     Format,
@@ -53,11 +55,9 @@ def _env_string_to_enum(env_str: str) -> int:
     return env_map.get(env_str.lower(), Environment.PROD)
 
 
-def _validate_at_most_daily_schedule(schedule_expression: str) -> Optional[str]:
-    """Validates that a schedule expression runs at most once per day.
+def _validate_supported_schedule(schedule_expression: str) -> Optional[str]:
+    """Validates that a schedule expression is either at most daily or regular sub-daily.
     Returns None if valid, error message string if invalid."""
-    import datetime
-
     from croniter import croniter
 
     if not schedule_expression or schedule_expression.strip().lower() in ("", "none", "null", "@daily", "@never"):
@@ -65,37 +65,94 @@ def _validate_at_most_daily_schedule(schedule_expression: str) -> Optional[str]:
 
     schedule_expression = schedule_expression.strip()
 
+    if schedule_expression.startswith("@"):
+        return "Only @daily and @never aliases are supported; use a 5-field cron expression otherwise."
+
     try:
         croniter(schedule_expression, datetime.datetime(2024, 1, 1, 0, 0))
     except (ValueError, TypeError) as e:
         return f"Invalid cron expression syntax: {e}"
 
     try:
-        test_start = datetime.datetime(2024, 1, 1, 0, 0)
-        for day_offset in range(7):
-            day_start = test_start + datetime.timedelta(days=day_offset)
-            day_end = day_start + datetime.timedelta(days=1)
-            cron_start = day_start - datetime.timedelta(seconds=1)
-            cron = croniter(schedule_expression, cron_start)
-            executions_in_day = 0
-            for _ in range(200):
-                next_run = cron.get_next(datetime.datetime)
-                if next_run >= day_end:
-                    break
-                executions_in_day += 1
-                if executions_in_day > 1:
-                    return (
-                        f"Schedule runs {executions_in_day} times on "
-                        f"{day_start.strftime('%A')} ({day_start.strftime('%Y-%m-%d')}). "
-                        f"Only at-most-daily schedules are allowed."
-                    )
+        window_utils.regular_subdaily_schedule(schedule_expression)
     except Exception as e:
         return f"Error validating schedule frequency: {e}"
 
     return None
 
 
-ALLOWED_DATE_FORMATS = ["%Y-%m-%d"]
+def _validate_at_most_daily_schedule(schedule_expression: str) -> Optional[str]:
+    return _validate_supported_schedule(schedule_expression)
+
+
+_PARTITION_DS_FORMATS = (
+    ("%Y-%m-%d", "%Y-%m-%d"),
+    ("%Y/%m/%d", "%Y-%m-%d"),
+    ("%Y-%m-%d-%H", "%Y-%m-%d-%H-00"),
+    ("%Y-%m-%d-%H-%M", "%Y-%m-%d-%H-%M"),
+    ("%Y-%m-%d-%H:%M", "%Y-%m-%d-%H-%M"),
+    ("%Y-%m-%d %H", "%Y-%m-%d-%H-00"),
+    ("%Y-%m-%d %H:%M", "%Y-%m-%d-%H-%M"),
+    ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d-%H-%M"),
+    ("%Y/%m/%d %H", "%Y-%m-%d-%H-00"),
+    ("%Y/%m/%d %H:%M", "%Y-%m-%d-%H-%M"),
+    ("%Y/%m/%d %H:%M:%S", "%Y-%m-%d-%H-%M"),
+    ("%Y-%m-%dT%H", "%Y-%m-%d-%H-00"),
+    ("%Y-%m-%dT%H:%M", "%Y-%m-%d-%H-%M"),
+    ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d-%H-%M"),
+)
+_PARTITION_DS_FORMAT_HELP = "YYYY-MM-DD, YYYY-MM-DD-HH, YYYY-MM-DD-HH-mm, ISO, or space-separated datetime"
+
+
+def _validate_partition_ds_precision(parsed, value):
+    if parsed.second != 0 or parsed.microsecond != 0:
+        raise ValueError(f"'{value}' must be aligned to minute precision")
+
+
+def _parse_partition_ds(value):
+    if isinstance(value, datetime.datetime):
+        _validate_partition_ds_precision(value, value)
+        return value
+    if isinstance(value, date):
+        return datetime.datetime.combine(value, datetime.time.min)
+
+    raw = str(value).strip()
+    for date_format, _ in _PARTITION_DS_FORMATS:
+        try:
+            parsed = datetime.datetime.strptime(raw, date_format)
+        except ValueError:
+            continue
+        _validate_partition_ds_precision(parsed, value)
+        return parsed
+    raise ValueError(f"'{value}' does not match any supported date format: {_PARTITION_DS_FORMAT_HELP}")
+
+
+def _format_partition_ds(value):
+    raw = str(value).strip()
+    for date_format, output_format in _PARTITION_DS_FORMATS:
+        try:
+            parsed = datetime.datetime.strptime(raw, date_format)
+        except ValueError:
+            continue
+        _validate_partition_ds_precision(parsed, value)
+        return parsed.strftime(output_format)
+    if isinstance(value, (datetime.datetime, date)):
+        parsed = _parse_partition_ds(value)
+        return parsed.strftime("%Y-%m-%d-%H-%M" if parsed.time() != datetime.time.min else "%Y-%m-%d")
+    raise ValueError(f"'{value}' does not match any supported date format: {_PARTITION_DS_FORMAT_HELP}")
+
+
+class PartitionDsParamType(click.ParamType):
+    name = "partition"
+
+    def convert(self, value, param, ctx):
+        try:
+            return _format_partition_ds(value)
+        except ValueError as e:
+            self.fail(str(e), param, ctx)
+
+
+PARTITION_DS = PartitionDsParamType()
 
 
 def _resolve_data_type_kinds(obj):
@@ -231,8 +288,8 @@ def ds_option(func):
         "--date",
         "--ds",
         "ds",
-        help="End date for the backfill (format: YYYY-MM-DD).",
-        type=click.DateTime(formats=ALLOWED_DATE_FORMATS),
+        help=f"End date for the backfill (format: {_PARTITION_DS_FORMAT_HELP}).",
+        type=PARTITION_DS,
     )(func)
 
 
@@ -241,8 +298,8 @@ def start_ds_option(func):
         "--start-date",
         "--start-ds",
         "start_ds",
-        type=click.DateTime(formats=ALLOWED_DATE_FORMATS),
-        help="Start date override for a range backfill (format: YYYY-MM-DD). "
+        type=PARTITION_DS,
+        help=f"Start date override for a range backfill (format: {_PARTITION_DS_FORMAT_HELP}). "
         "Supports staging query, group by, and join jobs. "
         "May leave holes in the output table due to the overridden date range.",
     )(func)
@@ -276,7 +333,7 @@ def confirm_end_ds_not_future(end_ds, assume_yes: bool = False):
     """
     if end_ds is None or assume_yes:
         return
-    end_date_value = end_ds.date() if hasattr(end_ds, "date") else end_ds
+    end_date_value = _parse_partition_ds(end_ds).date()
     today = date.today()
     if end_date_value >= today:
         click.confirm(
@@ -298,8 +355,8 @@ def end_ds_option(func):
         "--end-date",
         "--end-ds",
         "end_ds",
-        help="End date for a range backfill (format: YYYY-MM-DD).",
-        type=click.DateTime(formats=ALLOWED_DATE_FORMATS),
+        help=f"End date for a range backfill (format: {_PARTITION_DS_FORMAT_HELP}).",
+        type=PARTITION_DS,
         default=str(date.today() - timedelta(days=2)),
         show_default=True,
     )
@@ -931,8 +988,8 @@ def clear_downstream(conf, repo, hub_url, use_auth, format, start_ds, end_ds, as
     affected_confs = preview_json.get("affectedConfs", [])
 
     print_key_value("Conf", conf_name, format=format)
-    start_str = start_ds.strftime("%Y-%m-%d") if hasattr(start_ds, "strftime") else str(start_ds)
-    end_str = end_ds.strftime("%Y-%m-%d") if hasattr(end_ds, "strftime") else str(end_ds)
+    start_str = str(start_ds)
+    end_str = str(end_ds)
     print_key_value("Range", f"{start_str} to {end_str}", format=format)
     print_key_value("Affected confs", len(affected_confs), format=format)
     click.echo()
@@ -1458,12 +1515,12 @@ def get_schedule_modes(conf_path: str):
 
     # Validate schedule expressions using croniter-based validation
     if offline_schedule:
-        validation_error = _validate_at_most_daily_schedule(offline_schedule)
+        validation_error = _validate_supported_schedule(offline_schedule)
         if validation_error:
             raise ValueError(f"Invalid offline_schedule: {validation_error}")
 
     if online_schedule:
-        validation_error = _validate_at_most_daily_schedule(online_schedule)
+        validation_error = _validate_supported_schedule(online_schedule)
         if validation_error:
             raise ValueError(f"Invalid online_schedule: {validation_error}")
 

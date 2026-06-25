@@ -1,6 +1,7 @@
 package ai.chronon.spark.model
 
 import ai.chronon.api._
+import ai.chronon.api.Extensions.{MetadataOps, TableInfoOps}
 import ai.chronon.api.planner.NodeRunner
 import ai.chronon.online._
 import ai.chronon.planner.{Node, NodeContent}
@@ -259,7 +260,7 @@ object ModelNodeRunner {
 
       val api = instantiateApi(onlineClass, props)
 
-      implicit val partitionSpec: PartitionSpec = PartitionSpec.daily
+      implicit val partitionSpec: PartitionSpec = metadata.partitionSpec(PartitionSpec.daily)
 
       val range = Some(PartitionRange(null, endDs))
       val runner = new ModelNodeRunner(api)

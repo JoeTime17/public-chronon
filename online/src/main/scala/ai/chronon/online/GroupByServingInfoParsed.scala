@@ -30,11 +30,18 @@ class GroupByServingInfoParsed(val groupByServingInfo: GroupByServingInfo)
     extends GroupByServingInfo(groupByServingInfo)
     with Serializable {
 
-  // the is not really used - we just need the format
-  private val partitionSpec = PartitionSpec("ds", groupByServingInfo.dateFormat, WindowUtils.Day.millis)
+  // only consulted when the explicit batchEndTs watermark is absent (uploads from older versions);
+  // lazy so a missing/invalid dateFormat only fails when the fallback is actually exercised
+  private lazy val partitionSpec = {
+    val intervalMillis = Option(groupByServingInfo.partitionInterval).map(_.millis).getOrElse(WindowUtils.Day.millis)
+    val offset = Option(groupByServingInfo.partitionOffset).map(_.millis).getOrElse(0L)
+    PartitionSpec("ds", groupByServingInfo.dateFormat, intervalMillis, offset)
+  }
 
   // streaming starts scanning after batchEnd
-  lazy val batchEndTsMillis: Long = partitionSpec.epochMillis(batchEndDate)
+  lazy val batchEndTsMillis: Long =
+    if (groupByServingInfo.isSetBatchEndTs) groupByServingInfo.getBatchEndTs
+    else partitionSpec.epochMillis(batchEndDate)
   private def parser = new Schema.Parser()
 
   val MutationAvroFields: Seq[StructField] = Seq(TimeField, ReversalField)

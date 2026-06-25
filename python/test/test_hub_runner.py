@@ -11,6 +11,7 @@
 #     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
+import datetime
 from unittest.mock import Mock, patch
 
 import click
@@ -20,6 +21,7 @@ from rich.text import Text
 
 from ai.chronon.cli.formatter import Format
 from ai.chronon.repo.hub_runner import get_conf_type, hub, redeploy_streaming, repo_option
+from ai.chronon.repo.zipline_hub import _format_hub_partition
 from gen_thrift.api.ttypes import Environment
 
 
@@ -224,6 +226,98 @@ class TestHubRunner:
         ])
 
         assert result.exit_code == 0
+
+    @patch('requests.post')
+    @patch('ai.chronon.repo.hub_runner.get_current_branch')
+    def test_backfill_accepts_subdaily_date_formats(
+        self,
+        mock_get_current_branch,
+        mock_post,
+        canary,
+        online_join_conf,
+    ):
+        """Subdaily Hub backfills should validate common date spellings and send Chronon partitions."""
+        mock_get_current_branch.return_value = "test-branch"
+
+        runner = CliRunner()
+        result = self._run_and_print(runner, hub, [
+            'backfill',
+            online_join_conf,
+            '--chronon-root', canary,
+            '--no-use-auth',
+            '--start-ds', '2024-01-15 03:30',
+            '--end-ds', '2024-01-15T06:30',
+            '--skip-compile',
+        ])
+
+        assert result.exit_code == 0
+        json_payload = mock_post.call_args[1]['json']
+        assert json_payload['start'] == "2024-01-15-03-30"
+        assert json_payload['end'] == "2024-01-15-06-30"
+
+    @patch('requests.post')
+    @patch('ai.chronon.repo.hub_runner.get_current_branch')
+    def test_backfill_accepts_slash_and_zero_second_date_formats(
+        self,
+        mock_get_current_branch,
+        mock_post,
+        canary,
+        online_join_conf,
+    ):
+        mock_get_current_branch.return_value = "test-branch"
+
+        runner = CliRunner()
+        result = self._run_and_print(runner, hub, [
+            'backfill',
+            online_join_conf,
+            '--chronon-root', canary,
+            '--no-use-auth',
+            '--start-ds', '2024/01/15 03:30:00',
+            '--end-ds', '2024-01-15-06:30',
+            '--skip-compile',
+        ])
+
+        assert result.exit_code == 0
+        json_payload = mock_post.call_args[1]['json']
+        assert json_payload['start'] == "2024-01-15-03-30"
+        assert json_payload['end'] == "2024-01-15-06-30"
+
+    def test_backfill_rejects_invalid_date_formats(self, canary, online_join_conf):
+        runner = CliRunner()
+        result = runner.invoke(hub, [
+            'backfill',
+            online_join_conf,
+            '--chronon-root', canary,
+            '--no-use-auth',
+            '--start-ds', '2024-99-15',
+            '--end-ds', '2024-01-15',
+            '--skip-compile',
+        ])
+
+        assert result.exit_code != 0
+        assert "does not match any supported date format" in result.output
+
+    def test_backfill_rejects_second_precision_date_formats(self, canary, online_join_conf):
+        runner = CliRunner()
+        result = runner.invoke(hub, [
+            'backfill',
+            online_join_conf,
+            '--chronon-root', canary,
+            '--no-use-auth',
+            '--start-ds', '2024-01-15 03:30:01',
+            '--end-ds', '2024-01-15',
+            '--skip-compile',
+        ])
+
+        assert result.exit_code != 0
+        assert "must be aligned to minute precision" in result.output
+
+    def test_zipline_hub_partition_format_preserves_subdaily_datetimes(self):
+        assert _format_hub_partition(datetime.date(2024, 1, 15), None) == "2024-01-15"
+        assert _format_hub_partition(datetime.datetime(2024, 1, 15, 0, 0), None) == "2024-01-15"
+        assert _format_hub_partition(datetime.datetime(2024, 1, 15, 3, 30), None) == "2024-01-15-03-30"
+        with pytest.raises(ValueError, match="minute precision"):
+            _format_hub_partition(datetime.datetime(2024, 1, 15, 3, 30, 1), None)
 
     @patch('requests.post')
     @patch('ai.chronon.repo.hub_runner.get_current_branch')

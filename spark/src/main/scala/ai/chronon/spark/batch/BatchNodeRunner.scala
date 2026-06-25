@@ -14,7 +14,7 @@ import ai.chronon.spark.catalog.TableUtils
 import ai.chronon.spark.join.UnionJoin
 import ai.chronon.spark.submission.{NodeConfReader, SparkSessionBuilder}
 import ai.chronon.spark.utils.SemanticUtils
-import ai.chronon.spark.{GroupBy, GroupByUpload, Join, ModelTransformsJob}
+import ai.chronon.spark.{GroupBy, GroupByUpload, Join, ModelTransformsJob, RunnerUtils}
 import org.rogach.scallop.{ScallopConf, ScallopOption}
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -71,6 +71,9 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
     val tableInfo = conf.sourceTableDependency.tableInfo
     val hasPartitionColumn = Option(tableInfo.partitionColumn).isDefined
     val hasTriggerExpr = Option(tableInfo.triggerExpr).isDefined
+    val requiredRange = DependencyResolver
+      .computeInputRange(range, conf.sourceTableDependency)
+      .getOrElse(range)
 
     // Case 1: triggerExpr overrides — user-defined readiness check
     if (hasTriggerExpr) {
@@ -90,7 +93,7 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
             .getOrElse(throw new RuntimeException(s"Trigger expression query returned no results"))
             .get(0)
 
-          val maxPartition = range.end
+          val maxPartition = requiredRange.end
           val triggerValueStr = triggerValue.toString
           logger.info(s"Trigger value: ${triggerValueStr}, Max partition: ${maxPartition}")
 
@@ -120,27 +123,30 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
       return retryTriggerExpr(0)
     }
 
-    // Case 2: Has partition column — unified check: lastAvailablePartition >= range.end
-    // Works for dense Hive, sparse Hive, Iceberg hidden partitions, timestamp columns — all the same.
+    // Case 2: Has partition column — unified check on epoch millis: the data watermark must
+    // pass the last millisecond of the required input range. Works for gap-free Hive, gappy
+    // Hive, Iceberg hidden partitions, timestamp columns — and across partitionIntervals and
+    // formats without ds translation.
     if (hasPartitionColumn) {
       val spec = tableInfo.partitionSpec(tableUtils.partitionSpec)
       @tailrec
       def retry(attempt: Long): Try[Unit] = {
         Try {
-          logger.info(s"Checking last available partition for ${tableName} column ${tableInfo.partitionColumn}")
-          val lastPartition = tableUtils
-            .lastAvailablePartition(tableName, tablePartitionSpec = Some(spec))
-            .getOrElse(throw new RuntimeException(s"Could not determine last available partition for ${tableName}"))
+          logger.info(s"Checking data watermark for ${tableName} column ${tableInfo.partitionColumn}")
+          val watermark = tableUtils
+            .dataWatermarkMillis(tableName, Some(spec))
+            .getOrElse(throw new RuntimeException(s"Could not determine data watermark for ${tableName}"))
 
-          val requiredEnd = range.end
-          logger.info(s"Last available partition: ${lastPartition}, required end: ${requiredEnd}")
+          val requiredEndMillis = requiredRange.maxMillis
+          logger.info(s"Data watermark: ${TsUtils.toStr(watermark)}, required end: ${TsUtils.toStr(requiredEndMillis)}")
 
-          if (lastPartition >= requiredEnd) {
-            logger.info(s"Sensor succeeded: ${lastPartition} >= ${requiredEnd}")
+          if (watermark > requiredEndMillis) {
+            logger.info(s"Sensor succeeded: ${TsUtils.toStr(watermark)} > ${TsUtils.toStr(requiredEndMillis)}")
             ()
           } else {
             throw new RuntimeException(
-              s"Sensor check failed: last available partition ${lastPartition} < required end ${requiredEnd}")
+              s"Sensor check failed: data watermark ${TsUtils.toStr(watermark)} has not passed " +
+                s"required end ${TsUtils.toStr(requiredEndMillis)}")
           }
         } match {
           case Success(_) => Success(())
@@ -334,6 +340,8 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
 
       statsExtractor.extractPartitionStatsWithRowCounts(outputTable, confName) match {
         case Some(result) =>
+          // Reached after this runner has written the requested output partition(s); row-count
+          // logging is best-effort observability before KV-backed stats persistence below.
           logIcebergPartitionRowCounts(outputTable, confName, range, result.partitionRowCounts)
 
           val tileSummaries = result.tileSummaries
@@ -409,28 +417,38 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
     try {
       logger.info(
         s"Logging Iceberg partition row counts for table: $outputTable within range [${range.start}, ${range.end}]")
-      val col = partitionSpec.column
-      val translated = range.translate(partitionSpec)
-      val matched: Seq[(String, Long)] = partitionRowCounts.toSeq
-        .flatMap { case (key, rows) =>
-          key.find(_._1 == col).map { case (_, dsVal) =>
-            val pathStr = key.map { case (k, v) => s"$k=$v" }.mkString("/")
-            (dsVal, pathStr, rows)
+      if (!range.wellDefined) {
+        logger.warn(
+          s"Skipping Iceberg partition row-count logging for table $outputTable because range [${range.start}, ${range.end}] is not well-defined")
+        Some(Seq.empty)
+      } else {
+        val col = partitionSpec.column
+        val rangeStartMillis = range.startMillis
+        val rangeEndStartMillis = partitionSpec.partitionStartMillis(range.end)
+        val matched: Seq[(String, Long)] = partitionRowCounts.toSeq
+          .flatMap { case (key, rows) =>
+            key.find(_._1 == col).flatMap { case (_, partitionValue) =>
+              Try(partitionSpec.partitionStartMillis(partitionValue)).toOption
+                .filter(partitionMillis =>
+                  partitionMillis >= rangeStartMillis && partitionMillis <= rangeEndStartMillis)
+                .map { _ =>
+                  val pathStr = key.map { case (k, v) => s"$k=$v" }.mkString("/")
+                  pathStr -> rows
+                }
+            }
+          }
+          .sortBy { case (pathStr, _) => pathStr }
+
+        if (matched.isEmpty) {
+          logger.info(
+            s"No Iceberg partitions found within range [${range.start}, ${range.end}] for '$confName' table=$outputTable")
+        } else {
+          matched.foreach { case (pathStr, rows) =>
+            logger.info(s"Iceberg row count for '$confName' table=$outputTable $pathStr: $rows rows")
           }
         }
-        .filter { case (dsVal, _, _) => dsVal >= translated.start && dsVal <= translated.end }
-        .sortBy { case (_, pathStr, _) => pathStr }
-        .map { case (_, pathStr, rows) => pathStr -> rows }
-
-      if (matched.isEmpty) {
-        logger.info(
-          s"No Iceberg partitions found within range [${translated.start}, ${translated.end}] for '$confName' table=$outputTable")
-      } else {
-        matched.foreach { case (pathStr, rows) =>
-          logger.info(s"Iceberg row count for '$confName' table=$outputTable $pathStr: $rows rows")
-        }
+        Some(matched)
       }
-      Some(matched)
     } catch {
       case e: Exception =>
         logger.warn(
@@ -457,7 +475,7 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
 
       case NodeContent._Fields.SOURCE_WITH_FILTER =>
         logger.info(s"Running source with filter job for '${metadata.name}' for range: [${range.start}, ${range.end}]")
-        new SourceJob(conf.getSourceWithFilter, metadata, dateRange)(tableUtils).run()
+        new SourceJob(conf.getSourceWithFilter, metadata, dateRange)(jobTableUtils(range)).run()
         logger.info(s"Successfully completed source with filter job for '${metadata.name}'")
 
       case NodeContent._Fields.JOIN_BOOTSTRAP =>
@@ -467,7 +485,7 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
 
       case NodeContent._Fields.JOIN_PART =>
         logger.info(s"Running join part job for '${metadata.name}' for range: [${range.start}, ${range.end}]")
-        new JoinPartJob(conf.getJoinPart, metadata, dateRange, alignOutput = true)(tableUtils).run()
+        new JoinPartJob(conf.getJoinPart, metadata, dateRange, alignOutput = true)(jobTableUtils(range)).run()
         logger.info(s"Successfully completed join part job for '${metadata.name}'")
 
       case NodeContent._Fields.JOIN_MERGE =>
@@ -490,7 +508,7 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
           conf.getGroupByBackfill.groupBy,
           range.start,
           range.end,
-          tableUtils
+          jobTableUtils(range)
         )
         logger.info(s"Successfully completed groupBy backfill for '${metadata.name}'")
 
@@ -535,32 +553,34 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
     }
   }
 
+  private def runPartitionSpec(metadata: MetaData, conf: NodeContent): PartitionSpec =
+    metadata.partitionSpec(tableUtils.partitionSpec)
+
+  private def jobTableUtils(range: PartitionRange): TableUtils =
+    if (range.partitionSpec == tableUtils.partitionSpec) tableUtils
+    else TableUtils(tableUtils.sparkSession, range.partitionSpec)
+
   private def postJobActions(metadata: MetaData, range: PartitionRange, tableStatsDataset: Option[String]): Unit = {
-    val outputTablePartitionSpec = (for {
-      meta <- Option(metadata)
-      executionInfo <- Option(meta.executionInfo)
-      outputTableInfo <- Option(executionInfo.outputTableInfo)
-      definedSpec = outputTableInfo.partitionSpec(tableUtils.partitionSpec)
-    } yield definedSpec).getOrElse(tableUtils.partitionSpec)
+    val outputTablePartitionSpec = metadata.partitionSpec(tableUtils.partitionSpec)
     val outputTable = metadata.executionInfo.outputTableInfo.table
 
-    val firstOutputPartition =
-      tableUtils.firstAvailablePartition(outputTable, partitionSpec = outputTablePartitionSpec)
-    val lastOutputPartition =
-      tableUtils.lastAvailablePartition(outputTable, tablePartitionSpec = Option(outputTablePartitionSpec))
-    val translatedRange = range.translate(tableUtils.partitionSpec)
+    // completeness is validated on epoch millis - spec-free, no cross-format ds comparison
+    val watermark = tableUtils.dataWatermarkMillis(outputTable, Some(outputTablePartitionSpec))
+    val requiredEndMillis = range.maxMillis
 
     logger.info(
-      s"Output table last available partition for '${metadata.name}': ${lastOutputPartition.getOrElse("none")}")
+      s"Output table data watermark for '${metadata.name}': ${watermark.map(TsUtils.toStr).getOrElse("none")}")
 
     // Validate output covers the requested range
-    lastOutputPartition match {
-      case Some(lastPartition) if lastPartition >= translatedRange.end =>
+    watermark match {
+      case Some(w) if w > requiredEndMillis =>
         logger.info(
-          s"Output table $outputTable covers requested range (last: $lastPartition >= end: ${translatedRange.end})")
-      case Some(lastPartition) =>
+          s"Output table $outputTable covers requested range " +
+            s"(watermark: ${TsUtils.toStr(w)} > required end: ${TsUtils.toStr(requiredEndMillis)})")
+      case Some(w) =>
         logger.error(
-          s"After job completion, output table $outputTable last partition $lastPartition < required end ${translatedRange.end}")
+          s"After job completion, output table $outputTable watermark ${TsUtils.toStr(w)} <= " +
+            s"required end ${TsUtils.toStr(requiredEndMillis)}")
       case None =>
         logger.error(s"After job completion, output table $outputTable has no partitions")
     }
@@ -588,11 +608,13 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
                                   firstAvailablePartition: Option[String],
                                   lastAvailablePartition: Option[String],
                                   ready: Boolean,
-                                  requiredEnd: String,
+                                  requiredEndMillis: Long,
                                   semanticHash: Option[String])
 
-  /** Computes partition statuses for input tables using lastAvailablePartition >= required end.
-    * Works uniformly for dense, sparse, Hive, Iceberg, timestamp columns.
+  /** Computes partition statuses for input tables: ready when the table's data watermark has
+    * passed the required input range's last millisecond. Works uniformly for gap-free and gappy
+    * Hive, Iceberg, timestamp columns - and across partitionIntervals and formats without ds
+    * translation.
     */
   private[batch] def computeInputTablePartitionStatuses(
       metadata: MetaData,
@@ -611,26 +633,35 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
     inputTableDependencies
       .filterNot(_._2.forall(td => td.isSetIsSoftNodeDependency && td.isSoftNodeDependency))
       .flatMap { case (table, deps) =>
-        val requiredEnds = deps
+        // readiness compares epoch watermarks - spec-free, so a sub-daily node over a
+        // daily (or differently-formatted) input needs no ds translation at all
+        val requiredEndsMillis = deps
           .flatMap { td =>
             DependencyResolver
               .computeInputRange(range, td)
-              .map(_.translate(tableUtils.partitionSpec).end)
+              // start may be unbounded (null) - only the end partition's last millisecond matters here
+              .map(_.maxMillis)
           }
           .toSeq
           .sorted
 
-        if (requiredEnds.isEmpty) {
+        if (requiredEndsMillis.isEmpty) {
           None
         } else {
           val inputPartitionSpec = deps.head.tableInfo.partitionSpec(tableUtils.partitionSpec)
 
           val firstPartition =
             tableUtils.firstAvailablePartition(table, partitionSpec = inputPartitionSpec)
-          val lastPartition = tableUtils.lastAvailablePartition(table, tablePartitionSpec = Some(inputPartitionSpec))
-          val requiredEnd = requiredEnds.last
-
-          val ready = lastPartition.exists(_ >= requiredEnd)
+          // one metadata read answers both the display value and readiness
+          val watermark = tableUtils.dataWatermark(table, Some(inputPartitionSpec))
+          // diagnostics keep the historical global-format presentation for same-grid tables
+          val lastPartition = watermark.map { case (value, _) =>
+            if (inputPartitionSpec.hasSameGrid(tableUtils.partitionSpec))
+              inputPartitionSpec.translate(value, tableUtils.partitionSpec)
+            else value
+          }
+          val requiredEndMillis = requiredEndsMillis.last
+          val ready = watermark.exists(_._2 > requiredEndMillis)
 
           // Collect semanticHash values from all dependencies for this table
           val semanticHashes = deps.flatMap { td =>
@@ -648,7 +679,7 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
             semanticHashes.headOption
           }
 
-          Some(TablePartitionStatus(table, firstPartition, lastPartition, ready, requiredEnd, semanticHash))
+          Some(TablePartitionStatus(table, firstPartition, lastPartition, ready, requiredEndMillis, semanticHash))
         }
       }
   }
@@ -664,7 +695,16 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
   ): Int = {
     Try {
       val metadata = node.metaData
-      val range = PartitionRange(startDs, endDs)(PartitionSpec.daily)
+      val spec = runPartitionSpec(metadata, node.content)
+      // catch a daily-formatted arg handed to a sub-daily node (and vice versa) before any work runs
+      Seq(startDs, endDs).foreach { ds =>
+        require(
+          Try(spec.at(spec.epochMillis(ds)) == ds).getOrElse(false),
+          s"--start-ds/--end-ds value '$ds' is not a valid partition value for node '${metadata.name}' " +
+            s"(expected format '${spec.format}' on a ${spec.spanMillis}ms grid with offset ${spec.offsetMillis}ms)"
+        )
+      }
+      val range = PartitionRange(startDs, endDs)(spec)
 
       val inputTablePartitionStatuses = computeInputTablePartitionStatuses(metadata, range, tableUtils)
 
@@ -688,7 +728,8 @@ class BatchNodeRunner(node: Node, tableUtils: TableUtils, api: Api) extends Node
             "(if the table exists, check logs above for credential or connectivity errors):\n" +
             notReadyTables
               .map { tps =>
-                s"Table: ${tps.name}, last available: ${tps.lastAvailablePartition.getOrElse("none")}, required end: ${tps.requiredEnd}"
+                s"Table: ${tps.name}, last available: ${tps.lastAvailablePartition.getOrElse("none")}, " +
+                  s"required end: ${TsUtils.toStr(tps.requiredEndMillis)}"
               }
               .mkString("\n")
         )
@@ -757,7 +798,8 @@ object BatchNodeRunner {
     val resolvedEnv = SecretResolver.resolveVaultUris(sys.env.toMap)
     val driverSecrets = resolvedEnv -- sys.env.keySet
     val node = NodeConfReader.read(batchArgs.confPath())
-    val tableUtils = TableUtils(SparkSessionBuilder.build(s"batch-node-runner-${node.metaData.name}"))
+    val sparkSession = SparkSessionBuilder.build(s"batch-node-runner-${node.metaData.name}")
+    val tableUtils = RunnerUtils.tableUtilsForMetadata(sparkSession, node.metaData)
     val api = instantiateApi(batchArgs.onlineClass(), batchArgs.apiProps ++ driverSecrets)
     val runner = new BatchNodeRunner(node, tableUtils, api)
     val exitCode =

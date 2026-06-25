@@ -125,7 +125,7 @@ object ModelTransformsJob {
       // Get effective partition spec and range
       val effectiveSpec =
         Option(query).map(_.partitionSpec(tableUtils.partitionSpec)).getOrElse(tableUtils.partitionSpec)
-      val effectiveRange = dateRange.translate(effectiveSpec)
+      val effectiveRange = dateRange.intersectingRange(effectiveSpec)
       val partitionColumn = effectiveSpec.column
 
       val df = tableUtils.scanDf(

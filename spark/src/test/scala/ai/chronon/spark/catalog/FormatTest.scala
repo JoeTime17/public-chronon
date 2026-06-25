@@ -156,6 +156,31 @@ class FormatTest extends SparkTestBase {
     fmt.lastAvailablePartition(tableName, "created_at", PartitionSpec.daily)(spark) shouldBe Some("2024-04-02")
   }
 
+  it should "return the max date when scanning a date column" in {
+    val tableName = "format_date_scan_last_available_test"
+    spark.sql(s"""
+      CREATE OR REPLACE TEMP VIEW $tableName AS
+      SELECT * FROM VALUES
+        (1, DATE '2024-04-01'),
+        (2, DATE '2024-04-03')
+      AS t(id, ds)
+    """)
+
+    val fmt = new Format {
+      override def supportSubPartitionsFilter = false
+      override def partitions(tableName: String, partitionFilters: String)(implicit ss: SparkSession) = Nil
+      override def primaryPartitions(tableName: String,
+                                     partitionColumn: String,
+                                     partitionFilters: String,
+                                     subPartitionsFilter: Map[String, String])(implicit
+          ss: SparkSession) = Nil
+    }
+
+    fmt.lastAvailablePartition(tableName, "ds", PartitionSpec.daily)(spark) shouldBe Some("2024-04-03")
+    fmt.virtualPartitions(tableName, "ds", PartitionSpec.daily)(spark) shouldBe
+      List("2024-04-01", "2024-04-02", "2024-04-03")
+  }
+
   it should "resolve table names consistently with Spark SQL" in {
     spark.sql("CREATE DATABASE IF NOT EXISTS spark_non_default_catalog.custom_test_db")
     spark.sql(
@@ -187,6 +212,11 @@ class FormatTest extends SparkTestBase {
     assertEquals("spark_catalog", resolved.catalog)
     assertEquals(spark.catalog.currentDatabase, resolved.namespace)
     assertEquals("tbl", resolved.table)
+  }
+
+  it should "quote resolved table names" in {
+    Format.resolveTableName("`my-catalog`.`my-ns`.`my-table`").quoted shouldBe "`my-catalog`.`my-ns`.`my-table`"
+    Format.resolveTableName("`a``b`.`c``d`").quoted shouldBe "`spark_catalog`.`a``b`.`c``d`"
   }
 
   it should "strip destination catalog in rename SQL when source and destination share a catalog" in {
@@ -235,6 +265,25 @@ class FormatTest extends SparkTestBase {
 
   it should "handle every segment quoted" in {
     Format.parseIdentifier("`c`.`s`.`t`") shouldBe Seq("c", "s", "t")
+  }
+
+  // --- zero-parsed-partitions canary ---
+
+  it should "warn when a nonempty listing parses zero partitions under the spec" in {
+    val threeHourly = PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 3 * 60 * 60 * 1000)
+    // compact ds values, or values missing their minute level: nothing parses, the table reads as
+    // permanently empty
+    Format.zeroParsedPartitionsWarning("db.t", List("20260603-04", "20260603-05"), threeHourly) shouldBe defined
+    Format.zeroParsedPartitionsWarning("db.t", List("2026-06-03-03"), threeHourly) shouldBe defined
+  }
+
+  it should "stay quiet for empty listings or when any partition parses" in {
+    val threeHourly = PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 3 * 60 * 60 * 1000)
+    Format.zeroParsedPartitionsWarning("db.t", List.empty, threeHourly) shouldBe empty
+    Format.zeroParsedPartitionsWarning("db.t", List("2026-06-03-03-00"), threeHourly) shouldBe empty
+    // one parseable ds among garbage means the table is usable; per-value failures
+    // surface later as loud ParseExceptions instead
+    Format.zeroParsedPartitionsWarning("db.t", List("garbage", "2026-06-03-03-00"), threeHourly) shouldBe empty
   }
 
 }

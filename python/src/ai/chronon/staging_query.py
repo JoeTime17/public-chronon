@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import re
@@ -11,6 +12,7 @@ import ai.chronon.airflow_helpers as airflow_helpers
 import gen_thrift.api.ttypes as ttypes
 import gen_thrift.common.ttypes as common
 from ai.chronon import utils
+from ai.chronon import windows as window_utils
 from ai.chronon.airflow_helpers import AIRFLOW_DEPENDENCIES_KEY
 from ai.chronon.cli.compile.config_origin import mark_factory_created_config
 
@@ -40,7 +42,7 @@ def _normalize_table_name(table_name: str) -> str:
 
 def _get_output_table_name(staging_query: ttypes.StagingQuery, full_name: bool = False):
     """generate output table name for staging query job"""
-    return utils._ensure_name_and_get_output_table(
+    return utils._ensure_name_and_get_output_table_reference(
         staging_query, ttypes.StagingQuery, "staging_queries", full_name
     )
 
@@ -100,6 +102,8 @@ class TableDependency:
     table: str
     partition_column: Optional[str] = None
     partition_format: Optional[str] = None
+    partition_interval: Optional[Union[common.Window, str]] = None
+    partition_offset: Optional[Union[common.Window, str]] = None
     additional_partitions: Optional[List[str]] = None
     offset: Optional[int] = None
     start_offset: Optional[int] = None
@@ -107,6 +111,24 @@ class TableDependency:
     start_cutoff: Optional[str] = None
     end_cutoff: Optional[str] = None
     time_partitioned: Optional[bool] = None
+
+    def __post_init__(self):
+        if (
+            self.partition_interval is None
+            and isinstance(self.table, utils.TableReference)
+            and self.table.partition_interval is not None
+        ):
+            resolved_spec = window_utils.PartitionSpec(
+                column=self.partition_column,
+                format=self.partition_format,
+                interval=self.partition_interval,
+                offset=self.partition_offset,
+            ).with_missing_from(window_utils.PartitionSpec.from_table_reference(self.table))
+            self.partition_interval = copy.deepcopy(resolved_spec.interval)
+            self.partition_column = copy.deepcopy(resolved_spec.column)
+            self.partition_format = copy.deepcopy(resolved_spec.format)
+            self.partition_offset = copy.deepcopy(resolved_spec.offset)
+        self.table = str(self.table)
 
     def resolved_offsets(self) -> Tuple[Optional[int], int]:
         """Resolve ``(start_offset, end_offset)`` from the dataclass fields using
@@ -147,12 +169,20 @@ class TableDependency:
         resolved_start_offset, resolved_end_offset = self.resolved_offsets()
 
         return common.TableDependency(
-            tableInfo=common.TableInfo(
+            tableInfo=window_utils.PartitionSpec(
+                column=self.partition_column,
+                format=self.partition_format,
+                interval=(
+                    self.partition_interval
+                    if self.partition_interval is not None
+                    else None
+                    if self.time_partitioned
+                    else common.Window(1, common.TimeUnit.DAYS)
+                ),
+                offset=self.partition_offset,
+                time_partitioned=self.time_partitioned,
+            ).table_info(
                 table=self.table,
-                partitionColumn=self.partition_column,
-                partitionFormat=self.partition_format,
-                partitionInterval=common.Window(1, common.TimeUnit.DAYS),
-                timePartitioned=self.time_partitioned,
             ),
             startOffset=(
                 None
@@ -163,6 +193,32 @@ class TableDependency:
             startCutOff=self.start_cutoff,
             endCutOff=self.end_cutoff,
         )
+
+
+def _propagate_output_grid_to_time_partitioned_dependency(
+    dependency: TableDependency, output_info: common.TableInfo
+) -> None:
+    if (
+        dependency is None
+        or not dependency.time_partitioned
+        or dependency.partition_interval is not None
+    ):
+        return
+
+    output_spec = window_utils.PartitionSpec.from_table_info(output_info)
+    if not output_spec.is_subdaily_grid():
+        return
+
+    resolved_spec = window_utils.PartitionSpec(
+        column=dependency.partition_column,
+        format=dependency.partition_format,
+        interval=dependency.partition_interval,
+        offset=dependency.partition_offset,
+    ).with_missing_from(output_spec)
+    dependency.partition_interval = copy.deepcopy(resolved_spec.interval)
+    dependency.partition_column = copy.deepcopy(resolved_spec.column)
+    dependency.partition_format = copy.deepcopy(resolved_spec.format)
+    dependency.partition_offset = copy.deepcopy(resolved_spec.offset)
 
 
 def StagingQuery(
@@ -183,6 +239,8 @@ def StagingQuery(
     recompute_days: Optional[int] = None,
     additional_partitions: List[str] = None,
     environments: Optional[List[str]] = None,
+    partition_interval: Optional[Union[common.Window, str]] = None,
+    partition_offset: Optional[Union[common.Window, str]] = None,
 ) -> ttypes.StagingQuery:
     """
     Creates a StagingQuery object for executing arbitrary SQL queries with templated date parameters.
@@ -208,16 +266,24 @@ def StagingQuery(
         Additional metadata that does not directly affect computation, but is useful for management.
     :type tags: Dict[str, str]
     :param offline_schedule:
-        The offline schedule interval for batch jobs. Supports standard cron expressions
-        that run at most once per day. Examples:
+        The offline schedule interval for batch jobs. Supports standard cron expressions,
+        including regular sub-daily schedules. Examples:
         '@daily': Legacy format for midnight daily execution
         '0 2 * * *': Daily at 2:00 AM
-        '30 14 * * MON-FRI': Weekdays at 2:30 PM
-        '0 9 * * 1': Mondays at 9:00 AM
-        '15 23 * * SUN': Sundays at 11:15 PM
+        '0 */3 * * *': Every 3 hours
+        '5/15 * * * *': Every 15 minutes with a 5 minute processing offset
         '@never': Explicitly disable offline scheduling
-        Note: Hourly, sub-hourly, or multi-daily schedules are not supported.
     :type offline_schedule: str
+    :param partition_interval:
+        Output partition interval for this StagingQuery. Examples: "1d", "3h", "15m".
+        When set below daily and no partition format is supplied, Chronon uses "yyyy-MM-dd-HH-mm".
+    :type partition_interval: Optional[Union[common.Window, str]]
+    :param partition_offset:
+        Offset from UTC midnight/epoch for the output partition grid. Defaults to zero
+        (boundaries at midnight) and must be declared explicitly to move the grid; the cron
+        fire phase is treated as a processing delay relative to the declared grid, never as
+        a grid offset.
+    :type partition_offset: Optional[Union[common.Window, str]]
     :param conf:
         Configuration properties for the StagingQuery.
     :type conf: common.ConfigProperties
@@ -290,12 +356,28 @@ def StagingQuery(
         env=env_vars,
         stepDays=step_days,
         clusterConf=cluster_conf,
+        outputTableInfo=window_utils.output_table_info(
+            partition_interval,
+            partition_offset=partition_offset,
+            schedule=offline_schedule,
+        ),
     )
 
     airflow_dependencies = []
+    output_info = exec_info.outputTableInfo
+    subdaily_output = (
+        output_info is not None
+        and window_utils.window_millis(output_info.partitionInterval) < window_utils.DAY_MILLIS
+    )
 
     if dependencies:
         for d in dependencies:
+            if isinstance(d, TableDependency):
+                _propagate_output_grid_to_time_partitioned_dependency(d, output_info)
+            if subdaily_output and isinstance(d, TableDependency):
+                window_utils.validate_table_dependency_grid(
+                    "This StagingQuery", d, f"dependency {d.table}"
+                )
             if isinstance(d, TableDependency) and d.partition_column is not None:
                 _, end_offset = d.resolved_offsets()
                 airflow_dependency = airflow_helpers.create_airflow_dependency(

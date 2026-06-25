@@ -363,4 +363,86 @@ class StagingQueryTest extends SparkTestBase {
     val expectedPartitionCols = Seq(tableUtils.partitionColumn, "region", "device")
     assertEquals(expectedPartitionCols.toSet, partitionColumnNames.toSet)
   }
+
+  private val threeHourSpec = PartitionSpec("ds", "yyyy-MM-dd-HH-mm", 3 * 60 * 60 * 1000)
+
+  it should "render inclusive sub-daily macro values with an exclusive end via offset" in {
+    val subDailyTableUtils = TableUtils(spark, threeHourSpec)
+    // the macro engine renders quoted values
+    val rendered = StagingQuery.substitute(
+      subDailyTableUtils,
+      "SELECT {{ start_date }} AS s, {{ end_date }} AS e, {{ end_date(offset=1) }} AS x",
+      start = "2024-01-01-06-00",
+      end = "2024-01-01-06-00",
+      latest = "2024-01-01-06-00"
+    )
+
+    // start_date and end_date are inclusive output-domain ds values; offset=1 renders the
+    // exclusive interval end
+    assertEquals(
+      "SELECT '2024-01-01-06-00' AS s, '2024-01-01-06-00' AS e, '2024-01-01-09-00' AS x",
+      rendered
+    )
+  }
+
+  // Space/colon formats are NOT the default (ds values become object-store directory names,
+  // where spaces and colons URL-escape — Hive percent-escapes colons), but they remain
+  // expressible when declared explicitly. This test deliberately declares the legacy
+  // space/colon format to lock the explicit-format capability.
+  private val spaceColonSpec = PartitionSpec("ds", "yyyy-MM-dd HH:mm", 3 * 60 * 60 * 1000)
+
+  it should "write and replay sub-daily partitions with an explicit space/colon format" in {
+    val subDailyTableUtils = TableUtils(spark, spaceColonSpec)
+    val inputTable = s"$namespace.subdaily_staging_input"
+    spark.sql(s"DROP TABLE IF EXISTS $inputTable")
+    spark.sql(s"""CREATE TABLE $inputTable (
+                 |  user STRING,
+                 |  session_length INT,
+                 |  ds STRING
+                 |)
+                 |PARTITIONED BY (ds)""".stripMargin)
+    spark.sql(s"""INSERT INTO $inputTable VALUES
+                 |('a', 1, '2024-01-01 03:00'),
+                 |('b', 2, '2024-01-01 03:00'),
+                 |('c', 3, '2024-01-01 06:00')
+                 |""".stripMargin)
+
+    val stagingQueryConf = Builders.StagingQuery(
+      query = s"select * from $inputTable WHERE ds BETWEEN {{ start_date }} AND {{ end_date }}",
+      startPartition = "2024-01-01 00:00",
+      metaData = Builders.MetaData(name = "test.subdaily_staging", namespace = namespace)
+    )
+    val outputTable = stagingQueryConf.metaData.outputTable
+
+    val stagingQuery = new StagingQuery(stagingQueryConf, "2024-01-01 06:00", subDailyTableUtils)
+
+    def fire(partition: String): Unit =
+      stagingQuery.compute(PartitionRange(partition, partition)(spaceColonSpec), Seq.empty, Some(true))
+
+    // distinct schedule fires write distinct formatted partitions
+    fire("2024-01-01 03:00")
+    // explicitly-declared space/colon partition values must round-trip through the catalog
+    assertEquals(List("2024-01-01 03:00"), subDailyTableUtils.partitions(outputTable).sorted)
+
+    fire("2024-01-01 06:00")
+    assertEquals(List("2024-01-01 03:00", "2024-01-01 06:00"), subDailyTableUtils.partitions(outputTable).sorted)
+
+    // replaying one fire is idempotent and only touches that partition
+    spark.sql(s"INSERT INTO $inputTable VALUES ('d', 4, '2024-01-01 03:00')")
+    fire("2024-01-01 03:00")
+
+    val threeOClockUsers = spark
+      .sql(s"SELECT user FROM $outputTable WHERE ds = '2024-01-01 03:00'")
+      .collect()
+      .map(_.getString(0))
+      .sorted
+    assertEquals(Seq("a", "b", "d"), threeOClockUsers.toSeq)
+
+    val sixOClockUsers = spark
+      .sql(s"SELECT user FROM $outputTable WHERE ds = '2024-01-01 06:00'")
+      .collect()
+      .map(_.getString(0))
+      .sorted
+    assertEquals(Seq("c"), sixOClockUsers.toSeq)
+  }
 }
