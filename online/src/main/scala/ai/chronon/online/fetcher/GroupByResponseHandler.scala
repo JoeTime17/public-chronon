@@ -109,7 +109,7 @@ class GroupByResponseHandler(fetchContext: FetchContext, metadataStore: Metadata
     ) {
       if (fetchContext.debug)
         logger.info("Both batch and streaming data are null")
-      return null
+      return aggregator.windowedAggregator.finalize(aggregator.windowedAggregator.init)
     }
 
     // Streaming metrics
