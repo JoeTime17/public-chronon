@@ -77,7 +77,7 @@ class DataprocSubmitterTest extends AnyFlatSpec with MockitoSugar {
         "taskmanager.memory.network.min" -> "1G",
         "metrics.reporter.prom.host" -> "localhost",
         "taskmanager.memory.jvm-metaspace.size" -> "512m",
-        "metrics.reporter.prom.port" -> "9250-9260",
+        "metrics.reporter.prom.port" -> "9250-9299",
         "metrics.reporter.statsd.interval" -> "60 SECONDS",
         "taskmanager.memory.process.size" -> "64G",
         "state.checkpoint-storage" -> "filesystem",

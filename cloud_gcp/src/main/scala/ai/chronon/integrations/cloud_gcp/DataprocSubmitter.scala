@@ -347,11 +347,12 @@ class DataprocSubmitter(jobControllerClient: JobControllerClient,
       "state.checkpoint-storage" -> "filesystem",
       "rest.flamegraph.enabled" -> "true",
       // wire up prometheus reporter - prom reporter plays well with Google ops agent that can be installed in DataProc
-      // as we can have a couple of containers on a given node, we use a port range
+      // Each JobManager and TaskManager JVM binds its own node-local port. Keep this range wide
+      // enough for clusters that colocate many Flink containers on the same Dataproc worker.
       "metrics.reporters" -> "prom",
       "metrics.reporter.prom.factory.class" -> "org.apache.flink.metrics.prometheus.PrometheusReporterFactory",
       "metrics.reporter.prom.host" -> "localhost",
-      "metrics.reporter.prom.port" -> "9250-9260",
+      "metrics.reporter.prom.port" -> "9250-9299",
       "metrics.reporter.statsd.interval" -> "60 SECONDS",
       "state.backend.type" -> "rocksdb",
       "state.backend.incremental" -> "true",
