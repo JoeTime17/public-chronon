@@ -225,7 +225,7 @@ class SawtoothAggregator(aggregations: Seq[Aggregation], inputSchema: Seq[(Strin
       }
 
       // clone and finalize without intermediate collections
-      val result = Array.fill[Any](windowedAggregator.length)(null)
+      val result = windowedAggregator.finalize(windowedAggregator.init)
       var i = 0
       while (i < windowedAggregator.length) {
         val colAgg = windowedAggregator.columnAggregators(i)
